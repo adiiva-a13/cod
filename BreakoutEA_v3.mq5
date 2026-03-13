@@ -17,22 +17,21 @@ input double BE_Activation  = 1.2;     // Activare Break-Even (x risc)
 input group "=== FILTRU RANGE ==="
 input double MinPoints      = 1000.0;  // Range minim (puncte _Point) - DAX: 10pts×100
 input double MaxPoints      = 8000.0;  // Range maxim (puncte _Point) - DAX: 80pts×100
-input group "=== TIMP (ORA LOCALA A TA) ==="
-input int    RangeStartHour = 9;       // Ora start colectare range (ORA LOCALA)
+input group "=== TIMP (ORA SERVER METATRADER) ==="
+input int    RangeStartHour = 10;      // Ora start colectare range (ORA SERVER MT5)
 input int    RangeStartMin  = 45;      // Minut start
-input int    RangeEndHour   = 10;      // Ora final colectare range (ORA LOCALA)
+input int    RangeEndHour   = 11;      // Ora final colectare range (ORA SERVER MT5)
 input int    RangeEndMin    = 0;       // Minut final
-input int    EntryEndHour   = 12;      // Ora limita intrare noi pozitii (ORA LOCALA)
-input int    ExitHour       = 14;      // Ora inchidere fortata (ORA LOCALA)
+input int    EntryEndHour   = 13;      // Ora limita intrare noi pozitii (ORA SERVER MT5)
+input int    ExitHour       = 15;      // Ora inchidere fortata (ORA SERVER MT5)
 input int    ExitMin        = 0;
 input group "=== FUS ORAR ==="
-input int    ServerOffsetWinter = 1;   // Server - Ora ta IARNA (ex: +1)
-input int    ServerOffsetSummer = 1;   // Server - Ora ta VARA  (ex: +1)
+input int    ServerOffsetWinter = 0;   // Offset 0 = orele de mai sus sunt direct ora server
+input int    ServerOffsetSummer = 0;   // Offset 0 = orele de mai sus sunt direct ora server
 // ─── Ghid configurare ───────────────────────────────────────────────
-// Daca Market Watch arata cu 1h mai mult decat laptopul tau:
-//   Broker EU (schimba ora odata cu tine):  Iarna=+1  Vara=+1
-//   Broker UTC fix (nu schimba ora):        Iarna=+1  Vara=+2  (vara diferenta creste!)
-// Verificare: pornesti EA si in tab Experts apare ora server + offsetul aplicat.
+// Orele introduse mai sus sunt ORA SERVER din Market Watch (MT5).
+// Offsetul este 0 deoarece nu mai facem conversie locala->server.
+// Daca vrei sa revii la ore locale, seteaza offsetul corespunzator brokerului.
 // ────────────────────────────────────────────────────────────────────
 input group "=== ZILE ACTIVE ==="
 input bool Mon = true;
