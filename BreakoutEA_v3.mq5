@@ -219,13 +219,14 @@ void CalcSVP()
    TimeCurrent(dt);
    datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
    datetime range_start  = today + srv_start_h * 3600 + RangeStartMin * 60;
-   datetime range_end_dt = today + srv_end_h   * 3600 + RangeEndMin   * 60;
+   // -1 secunda pentru a evita bara deschisa exact la limita ferestrei
+   datetime range_end_dt = today + srv_end_h   * 3600 + RangeEndMin   * 60 - 1;
    MqlRates r[];
    ArraySetAsSeries(r, false);
    int copied = CopyRates(_Symbol, PERIOD_M1, range_start, range_end_dt, r);
    if(copied <= 0)
    {
-      Print("⚠️ SVP: nu s-au putut copia barele 9:45-10:00.");
+      Print("⚠️ SVP: bare M1 inca indisponibile, retentativa la tick urmator.");
       return;
    }
    double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
@@ -301,11 +302,12 @@ double GetStructuralSL_Long()
    double structural_low = g_val;
    for(int i = 0; i < copied; i++)
       if(r[i].low < structural_low) structural_low = r[i].low;
-   double sl = structural_low - SL_Buffer_Pts * _Point;
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   double sl  = structural_low - buf;
    if(structural_low < g_val)
-      PrintFormat("📍 BUY SL structural: LL=%.5f (sub VAL=%.5f) → SL=%.5f", structural_low, g_val, sl);
+      PrintFormat("📍 BUY SL structural: LL=%.5f (sub VAL=%.5f) → SL=%.5f (buf=%.1f pts)", structural_low, g_val, sl, buf / _Point);
    else
-      PrintFormat("📍 BUY SL default: VAL=%.5f → SL=%.5f", g_val, sl);
+      PrintFormat("📍 BUY SL default: VAL=%.5f → SL=%.5f (buf=%.1f pts)", g_val, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 double GetStructuralSL_Short()
@@ -321,33 +323,46 @@ double GetStructuralSL_Short()
    double structural_high = g_vah;
    for(int i = 0; i < copied; i++)
       if(r[i].high > structural_high) structural_high = r[i].high;
-   double sl = structural_high + SL_Buffer_Pts * _Point;
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   double sl  = structural_high + buf;
    if(structural_high > g_vah)
-      PrintFormat("📍 SELL SL structural: LH=%.5f (peste VAH=%.5f) → SL=%.5f", structural_high, g_vah, sl);
+      PrintFormat("📍 SELL SL structural: LH=%.5f (peste VAH=%.5f) → SL=%.5f (buf=%.1f pts)", structural_high, g_vah, sl, buf / _Point);
    else
-      PrintFormat("📍 SELL SL default: VAH=%.5f → SL=%.5f", g_vah, sl);
+      PrintFormat("📍 SELL SL default: VAH=%.5f → SL=%.5f (buf=%.1f pts)", g_vah, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 // ─────────────────────────────────────────────
-// 8. COLECTARE RANGE (toate barele din fereastra)
+// 8. COLECTARE RANGE - finalizata DUPA inchiderea ferestrei (10:00 local)
 // ─────────────────────────────────────────────
 void CollectRange()
 {
-   int srv_start_h = ToServerHour(RangeStartHour);
-   int srv_end_h   = ToServerHour(RangeEndHour);
-   int range_start_time = srv_start_h * 100 + RangeStartMin;
-   int range_end_time   = srv_end_h   * 100 + RangeEndMin;
+   if(g_range_set) return;
+
+   int srv_start_h    = ToServerHour(RangeStartHour);
+   int srv_end_h      = ToServerHour(RangeEndHour);
+   int range_end_time = srv_end_h * 100 + RangeEndMin;
+
    MqlDateTime dt;
    TimeCurrent(dt);
    int curTime = dt.hour * 100 + dt.min;
-   if(curTime < range_start_time || curTime >= range_end_time) return;
-   if(g_range_set) return;
-   int minutes_elapsed = (dt.hour - srv_start_h) * 60 + (dt.min - RangeStartMin) + 1;
-   if(minutes_elapsed <= 0) minutes_elapsed = 1;
+
+   // Colecteaza range-ul DOAR dupa ce fereastra s-a inchis complet
+   if(curTime < range_end_time) return;
+
+   datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
+   datetime range_start  = today + srv_start_h * 3600 + RangeStartMin * 60;
+   // -1 secunda pentru a evita bara deschisa exact la limita ferestrei
+   datetime range_end_dt = today + srv_end_h   * 3600 + RangeEndMin   * 60 - 1;
+
    MqlRates r[];
-   ArraySetAsSeries(r, true);
-   int copied = CopyRates(_Symbol, PERIOD_M1, 0, minutes_elapsed + 1, r);
-   if(copied <= 0) return;
+   ArraySetAsSeries(r, false);
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_start, range_end_dt, r);
+   if(copied <= 0)
+   {
+      Print("⚠️ Range: bare M1 inca indisponibile, retentativa la tick urmator.");
+      return;
+   }
+
    g_hi = r[0].high;
    g_lo = r[0].low;
    for(int i = 1; i < copied; i++)
@@ -355,9 +370,9 @@ void CollectRange()
       if(r[i].high > g_hi) g_hi = r[i].high;
       if(r[i].low  < g_lo) g_lo = r[i].low;
    }
-   if(!g_range_set)
-      PrintFormat("📐 Range activ: Hi=%.5f Lo=%.5f | Range=%.1f puncte", g_hi, g_lo, (g_hi - g_lo) / _Point);
    g_range_set = true;
+   PrintFormat("📐 Range finalizat: Hi=%.5f Lo=%.5f | Range=%.1f puncte | Bare: %d",
+               g_hi, g_lo, (g_hi - g_lo) / _Point, copied);
 }
 // ─────────────────────────────────────────────
 // 9. TRIMITERE ORDIN cu calcul lot bazat pe ContractSize
@@ -718,8 +733,8 @@ void OnTick()
    }
    // --- Colecteaza range-ul ---
    CollectRange();
-   // --- Calculeaza SVP dupa inchiderea range-ului ---
-   if(g_range_set && !g_svp_set && curTime >= range_end)
+   // --- Calculeaza SVP imediat dupa ce range-ul e finalizat ---
+   if(g_range_set && !g_svp_set)
       CalcSVP();
    // --- Manage Break-Even ---
    ManageBreakEven();
