@@ -18,12 +18,12 @@ input group "=== FILTRU RANGE ==="
 input double MinPoints      = 1000.0;  // Range minim (puncte _Point) - DAX: 10pts×100
 input double MaxPoints      = 8000.0;  // Range maxim (puncte _Point) - DAX: 80pts×100
 input group "=== TIMP (ORA SERVER METATRADER) ==="
-input int    RangeStartHour = 10;      // Ora start colectare range (ORA SERVER MT5)
+input int    RangeStartHour = 9;       // Ora start colectare range (ORA SERVER MT5)
 input int    RangeStartMin  = 45;      // Minut start
-input int    RangeEndHour   = 11;      // Ora final colectare range (ORA SERVER MT5)
+input int    RangeEndHour   = 10;      // Ora final colectare range (ORA SERVER MT5)
 input int    RangeEndMin    = 0;       // Minut final
-input int    EntryEndHour   = 13;      // Ora limita intrare noi pozitii (ORA SERVER MT5)
-input int    ExitHour       = 15;      // Ora inchidere fortata (ORA SERVER MT5)
+input int    EntryEndHour   = 12;      // Ora limita intrare noi pozitii (ORA SERVER MT5)
+input int    ExitHour       = 14;      // Ora inchidere fortata (ORA SERVER MT5)
 input int    ExitMin        = 0;
 input group "=== FUS ORAR ==="
 input int    ServerOffsetWinter = 0;   // Offset 0 = orele de mai sus sunt direct ora server
