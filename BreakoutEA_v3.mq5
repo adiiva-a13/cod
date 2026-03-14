@@ -207,7 +207,7 @@ double CalcWeeklyVWAP()
    return vwap_val;
 }
 // ─────────────────────────────────────────────
-// 6. CALCUL SVP (Session Volume Profile 9:45-10:00)
+// 6. CALCUL SVP (Session Volume Profile 10:00-10:15)
 // ─────────────────────────────────────────────
 void CalcSVP()
 {
@@ -331,7 +331,7 @@ double GetStructuralSL_Short()
    return NormalizeDouble(sl, _Digits);
 }
 // ─────────────────────────────────────────────
-// 8. COLECTARE RANGE - finalizata DUPA inchiderea ferestrei (10:00 local)
+// 8. COLECTARE RANGE - finalizata DUPA inchiderea ferestrei (10:15 server)
 // ─────────────────────────────────────────────
 void CollectRange()
 {
@@ -748,13 +748,13 @@ void OnTick()
                  && g_svp_set
                  && (g_hi > 0 && g_lo > 0)
                  && (g_vah > 0 && g_val > 0)
-                 && curTime >= range_end
+                 && curTime > range_end
                  && curTime < entry_end
                  && !g_traded_today
                  && CountMyPositions() == 0
                  && !IsSystemHalted();
    static datetime last_skip_log = 0;
-   if(!can_trade && !g_traded_today && curTime >= range_end && curTime < entry_end && today != last_skip_log)
+   if(!can_trade && !g_traded_today && curTime > range_end && curTime < entry_end && today != last_skip_log)
    {
       last_skip_log = today;
       PrintFormat("❓ Zi netraduta %s | range_set:%s | hi:%.2f lo:%.2f | halted:%s | positions:%d",
