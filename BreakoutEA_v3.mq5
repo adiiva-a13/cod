@@ -25,6 +25,13 @@ input int    RangeEndMin    = 15;      // Minut final
 input int    EntryEndHour   = 12;      // Ora limita intrare noi pozitii (ORA SERVER MT5)
 input int    ExitHour       = 14;      // Ora inchidere fortata (ORA SERVER MT5)
 input int    ExitMin        = 0;
+input group "=== SESIUNEA 2 (optional) ==="
+input bool   EnableSession2 = false;   // Activa a doua sesiune de tranzactionare
+input int    R2StartHour    = 16;      // Ora start range sesiunea 2 (ORA SERVER MT5)
+input int    R2StartMin     = 30;      // Minut start range sesiunea 2
+input int    R2EndHour      = 16;      // Ora final range sesiunea 2 (ORA SERVER MT5)
+input int    R2EndMin       = 45;      // Minut final range sesiunea 2
+input int    Entry2EndHour  = 18;      // Ora limita intrare sesiunea 2 (ORA SERVER MT5)
 input group "=== FUS ORAR ==="
 input int    ServerOffsetWinter = 0;   // Offset 0 = orele de mai sus sunt direct ora server
 input int    ServerOffsetSummer = 0;   // Offset 0 = orele de mai sus sunt direct ora server
@@ -75,6 +82,20 @@ int      g_setup_dir    = 0;
 bool     g_high_vol     = false;
 // State machine breakout: 1=spart sus (g_hi), -1=spart jos (g_lo), 0=niciuna
 int      g_breakout_dir = 0;
+// ─────────────────────────────────────────────
+// 2b. VARIABILE SESIUNEA 2
+// ─────────────────────────────────────────────
+double   g_hi2           = 0;
+double   g_lo2           = 0;
+bool     g_range_set2    = false;
+bool     g_traded_s2     = false;
+double   g_vah2          = 0;
+double   g_val2          = 0;
+double   g_poc2          = 0;
+bool     g_svp_set2      = false;
+int      g_setup_dir2    = 0;
+bool     g_high_vol2     = false;
+int      g_breakout_dir2 = 0;
 // ─────────────────────────────────────────────
 // 3. FUNCTII FUS ORAR SI DST
 // ─────────────────────────────────────────────
@@ -498,6 +519,260 @@ void CollectRange()
                g_hi, g_lo, (g_hi - g_lo) / _Point, copied);
 }
 // ─────────────────────────────────────────────
+// 8b. SL SESIUNEA 2 (foloseste g_poc2 / g_vah2 / g_val2 si R2End*)
+// ─────────────────────────────────────────────
+double GetRetestSL_Long2()
+{
+   int srv_end_h = ToServerHour(R2EndHour);
+   MqlDateTime dt;
+   TimeCurrent(dt);
+   datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
+   datetime range_end_dt = today + srv_end_h * 3600 + R2EndMin * 60;
+   MqlRates r[];
+   ArraySetAsSeries(r, false);
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   double last_swing_low = -DBL_MAX;
+   bool   found          = false;
+   for(int i = copied - 2; i >= 1; i--)
+   {
+      if(r[i].low < r[i-1].low && r[i].low < r[i+1].low && r[i].low < g_poc2)
+      { last_swing_low = r[i].low; found = true; break; }
+   }
+   double sl_ref = found ? last_swing_low : g_poc2;
+   double sl     = sl_ref - buf;
+   if(found)
+      PrintFormat("📍 [S2] BUY SL: swing low=%.5f (< POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_low, g_poc2, sl, buf/_Point);
+   else
+      PrintFormat("📍 [S2] BUY SL: POC=%.5f (niciun swing low sub POC) → SL=%.5f (buf=%.1f pts)", g_poc2, sl, buf/_Point);
+   return NormalizeDouble(sl, _Digits);
+}
+double GetRetestSL_Short2()
+{
+   int srv_end_h = ToServerHour(R2EndHour);
+   MqlDateTime dt;
+   TimeCurrent(dt);
+   datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
+   datetime range_end_dt = today + srv_end_h * 3600 + R2EndMin * 60;
+   MqlRates r[];
+   ArraySetAsSeries(r, false);
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   double last_swing_high = DBL_MAX;
+   bool   found           = false;
+   for(int i = copied - 2; i >= 1; i--)
+   {
+      if(r[i].high > r[i-1].high && r[i].high > r[i+1].high && r[i].high > g_poc2)
+      { last_swing_high = r[i].high; found = true; break; }
+   }
+   double sl_ref = found ? last_swing_high : g_poc2;
+   double sl     = sl_ref + buf;
+   if(found)
+      PrintFormat("📍 [S2] SELL SL: swing high=%.5f (> POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_high, g_poc2, sl, buf/_Point);
+   else
+      PrintFormat("📍 [S2] SELL SL: POC=%.5f (niciun swing high peste POC) → SL=%.5f (buf=%.1f pts)", g_poc2, sl, buf/_Point);
+   return NormalizeDouble(sl, _Digits);
+}
+double GetNormalSL_Long2()
+{
+   int srv_end_h = ToServerHour(R2EndHour);
+   MqlDateTime dt;
+   TimeToStruct(TimeCurrent(), dt);
+   datetime range_end_dt = StringToTime(StringFormat("%04d.%02d.%02d %02d:%02d",
+                            dt.year, dt.mon, dt.day, srv_end_h, R2EndMin));
+   int start_shift = iBarShift(_Symbol, PERIOD_M1, range_end_dt, false);
+   if(start_shift < 2) start_shift = 50;
+   MqlRates r[];
+   ArraySetAsSeries(r, true);
+   int count = MathMin(start_shift + 1, 200);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   if(CopyRates(_Symbol, PERIOD_M1, 1, count, r) < 3)
+      return NormalizeDouble(g_val2 - buf, _Digits);
+   double last_swing_low = 0;
+   bool   found = false;
+   for(int i = 1; i < (int)ArraySize(r) - 1; i++)
+   {
+      if(r[i].low < r[i-1].low && r[i].low < r[i+1].low && r[i].low < g_val2)
+      { last_swing_low = r[i].low; found = true; break; }
+   }
+   double sl_ref = found ? last_swing_low : g_val2;
+   double sl     = sl_ref - buf;
+   if(found)
+      PrintFormat("📍 [S2] BUY(Normal) SL: swing low=%.5f (< VAL=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_low, g_val2, sl, buf/_Point);
+   else
+      PrintFormat("📍 [S2] BUY(Normal) SL: VAL=%.5f (niciun swing sub VAL) → SL=%.5f (buf=%.1f pts)", g_val2, sl, buf/_Point);
+   return NormalizeDouble(sl, _Digits);
+}
+double GetNormalSL_Short2()
+{
+   int srv_end_h = ToServerHour(R2EndHour);
+   MqlDateTime dt;
+   TimeToStruct(TimeCurrent(), dt);
+   datetime range_end_dt = StringToTime(StringFormat("%04d.%02d.%02d %02d:%02d",
+                            dt.year, dt.mon, dt.day, srv_end_h, R2EndMin));
+   int start_shift = iBarShift(_Symbol, PERIOD_M1, range_end_dt, false);
+   if(start_shift < 2) start_shift = 50;
+   MqlRates r[];
+   ArraySetAsSeries(r, true);
+   int count = MathMin(start_shift + 1, 200);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   if(CopyRates(_Symbol, PERIOD_M1, 1, count, r) < 3)
+      return NormalizeDouble(g_vah2 + buf, _Digits);
+   double last_swing_high = 0;
+   bool   found = false;
+   for(int i = 1; i < (int)ArraySize(r) - 1; i++)
+   {
+      if(r[i].high > r[i-1].high && r[i].high > r[i+1].high && r[i].high > g_vah2)
+      { last_swing_high = r[i].high; found = true; break; }
+   }
+   double sl_ref = found ? last_swing_high : g_vah2;
+   double sl     = sl_ref + buf;
+   if(found)
+      PrintFormat("📍 [S2] SELL(Normal) SL: swing high=%.5f (> VAH=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_high, g_vah2, sl, buf/_Point);
+   else
+      PrintFormat("📍 [S2] SELL(Normal) SL: VAH=%.5f (niciun swing peste VAH) → SL=%.5f (buf=%.1f pts)", g_vah2, sl, buf/_Point);
+   return NormalizeDouble(sl, _Digits);
+}
+// ─────────────────────────────────────────────
+// 9b. COLECTARE RANGE + SVP SESIUNEA 2
+// ─────────────────────────────────────────────
+void CollectRange2()
+{
+   if(g_range_set2) return;
+
+   int srv_start_h    = ToServerHour(R2StartHour);
+   int srv_end_h      = ToServerHour(R2EndHour);
+   int range_end_time = srv_end_h * 100 + R2EndMin;
+
+   MqlDateTime dt;
+   TimeCurrent(dt);
+   int curTime = dt.hour * 100 + dt.min;
+
+   if(curTime < range_end_time) return;
+
+   datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
+   datetime range_start  = today + srv_start_h * 3600 + R2StartMin * 60;
+   datetime range_end_dt = today + srv_end_h   * 3600 + R2EndMin   * 60 - 1;
+
+   MqlRates r[];
+   ArraySetAsSeries(r, false);
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_start, range_end_dt, r);
+   if(copied <= 0)
+   {
+      Print("⚠️ [S2] Range: bare M1 inca indisponibile, retentativa la tick urmator.");
+      return;
+   }
+
+   g_hi2 = r[0].high;
+   g_lo2 = r[0].low;
+   for(int i = 1; i < copied; i++)
+   {
+      if(r[i].high > g_hi2) g_hi2 = r[i].high;
+      if(r[i].low  < g_lo2) g_lo2 = r[i].low;
+   }
+   g_range_set2 = true;
+   PrintFormat("📐 [S2] Range finalizat: Hi=%.5f Lo=%.5f | Range=%.1f puncte | Bare: %d",
+               g_hi2, g_lo2, (g_hi2 - g_lo2) / _Point, copied);
+}
+
+void CalcSVP2()
+{
+   if(g_svp_set2) return;
+   int srv_start_h = ToServerHour(R2StartHour);
+   int srv_end_h   = ToServerHour(R2EndHour);
+   MqlDateTime dt;
+   TimeCurrent(dt);
+   datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
+   datetime range_start  = today + srv_start_h * 3600 + R2StartMin * 60;
+   datetime range_end_dt = today + srv_end_h   * 3600 + R2EndMin   * 60 - 1;
+   MqlRates r[];
+   ArraySetAsSeries(r, false);
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_start, range_end_dt, r);
+   if(copied <= 0)
+   {
+      Print("⚠️ [S2] SVP: bare M1 inca indisponibile, retentativa la tick urmator.");
+      return;
+   }
+   double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   if(tick_size <= 0) return;
+   double hi = r[0].high, lo = r[0].low;
+   for(int i = 1; i < copied; i++)
+   {
+      if(r[i].high > hi) hi = r[i].high;
+      if(r[i].low  < lo) lo = r[i].low;
+   }
+   int levels = (int)MathRound((hi - lo) / tick_size) + 1;
+   if(levels <= 0 || levels > 50000) { Print("⚠️ [S2] SVP: prea multe nivele (", levels, "), skip."); return; }
+   double vol_at[];
+   ArrayResize(vol_at, levels);
+   ArrayInitialize(vol_at, 0);
+   double total_vol = 0;
+   for(int i = 0; i < copied; i++)
+   {
+      int lo_idx = (int)MathRound((r[i].low  - lo) / tick_size);
+      int hi_idx = (int)MathRound((r[i].high - lo) / tick_size);
+      if(hi_idx >= levels) hi_idx = levels - 1;
+      int span   = hi_idx - lo_idx + 1;
+      if(span < 1) span = 1;
+      double vol_per = (double)r[i].tick_volume / span;
+      for(int j = lo_idx; j <= hi_idx; j++)
+      {
+         vol_at[j] += vol_per;
+         total_vol  += vol_per;
+      }
+   }
+   int poc_idx = 0;
+   for(int i = 1; i < levels; i++)
+      if(vol_at[i] > vol_at[poc_idx]) poc_idx = i;
+   g_poc2 = lo + poc_idx * tick_size;
+   double target   = total_vol * ValueAreaPct / 100.0;
+   double accum    = vol_at[poc_idx];
+   int    vah_idx  = poc_idx;
+   int    val_idx  = poc_idx;
+   while(accum < target)
+   {
+      double next_up   = (vah_idx + 1 < levels) ? vol_at[vah_idx + 1] : 0;
+      double next_down = (val_idx  - 1 >= 0)    ? vol_at[val_idx  - 1] : 0;
+      if(next_up == 0 && next_down == 0) break;
+      if(next_up >= next_down && vah_idx + 1 < levels)
+         { vah_idx++; accum += vol_at[vah_idx]; }
+      else if(val_idx - 1 >= 0)
+         { val_idx--;  accum += vol_at[val_idx];  }
+      else
+         { vah_idx++; accum += vol_at[vah_idx]; }
+   }
+   g_vah2     = NormalizeDouble(lo + vah_idx * tick_size, _Digits);
+   g_val2     = NormalizeDouble(lo + val_idx  * tick_size, _Digits);
+   g_svp_set2 = true;
+   PrintFormat("📊 [S2] SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f",
+               g_poc2, g_vah2, g_val2, copied, total_vol);
+   double range_mid = (g_hi2 + g_lo2) / 2.0;
+   bool poc_up = (g_poc2 > range_mid);
+   bool val_up = (g_val2 > range_mid);
+   bool vah_up = (g_vah2 > range_mid);
+   if(val_up && vah_up && poc_up)
+   {
+      g_high_vol2  = true;
+      g_setup_dir2 = -1;
+      PrintFormat("🔥 [S2] HIGH VOL SELL | VAL+POC+VAH in jumatatea SUPERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_hi2=%.5f | SL via POC",
+                  g_val2, g_poc2, g_vah2, g_hi2);
+   }
+   else if(!val_up && !vah_up && !poc_up)
+   {
+      g_high_vol2  = true;
+      g_setup_dir2 = 1;
+      PrintFormat("🔥 [S2] HIGH VOL BUY  | VAL+POC+VAH in jumatatea INFERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_lo2=%.5f | SL via POC",
+                  g_val2, g_poc2, g_vah2, g_lo2);
+   }
+   else
+   {
+      g_high_vol2  = false;
+      g_setup_dir2 = 0;
+      PrintFormat("📍 [S2] NORMAL RANGE | VA traverseaza mijlocul | VAL=%.5f POC=%.5f VAH=%.5f Mid=%.5f | SL via VAH/VAL | Astept breakout",
+                  g_val2, g_poc2, g_vah2, range_mid);
+   }
+}
+// ─────────────────────────────────────────────
 // 9. TRIMITERE ORDIN cu calcul lot bazat pe ContractSize
 // ─────────────────────────────────────────────
 bool SendOrder(ENUM_ORDER_TYPE type, double entry, double sl, double tp)
@@ -777,6 +1052,11 @@ int OnInit()
                ts, tv, cs, pv);
    PrintFormat("📋 Range filter | Min=%.1f pts | Max=%.1f pts | RiskMoney=$%.0f | La SL=20pts → lot≈%.2f",
                MinPoints, MaxPoints, RiskMoney, (pv > 0 ? RiskMoney / (20.0 * pv) : 0));
+   if(EnableSession2)
+      PrintFormat("📅 [S2] Fereastra SERVER:  Range %02d:%02d-%02d:%02d | Entry pana %02d:00",
+                  ToServerHour(R2StartHour), R2StartMin,
+                  ToServerHour(R2EndHour),   R2EndMin,
+                  ToServerHour(Entry2EndHour));
    // Restaureaza g_traded_today dupa restart
    datetime today = StringToTime(TimeToString(TimeCurrent(), TIME_DATE));
    if(HistorySelect(today, TimeCurrent()))
@@ -790,7 +1070,27 @@ int OnInit()
          if(HistoryDealGetInteger(ticket, DEAL_ENTRY) != DEAL_ENTRY_IN) continue;
          g_last_trade   = today;
          g_traded_today = true;
-         Print("⚠️ EA restartat: tranzactie detectata azi, intrare blocata.");
+         Print("⚠️ EA restartat: tranzactie [S1] detectata azi, intrare S1 blocata.");
+         break;
+      }
+   }
+   // Restaureaza g_traded_s2 dupa restart
+   if(EnableSession2 && HistorySelect(today, TimeCurrent()))
+   {
+      datetime r2_end_dt = today + ToServerHour(R2EndHour) * 3600 + R2EndMin * 60;
+      int total = HistoryDealsTotal();
+      for(int i = total - 1; i >= 0; i--)
+      {
+         ulong ticket = HistoryDealGetTicket(i);
+         if(ticket == 0) continue;
+         if(HistoryDealGetInteger(ticket, DEAL_MAGIC) != MagicNumber) continue;
+         if(HistoryDealGetInteger(ticket, DEAL_ENTRY) != DEAL_ENTRY_IN) continue;
+         datetime deal_time = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
+         if(deal_time >= r2_end_dt)
+         {
+            g_traded_s2 = true;
+            Print("⚠️ EA restartat: tranzactie [S2] detectata azi, intrare S2 blocata.");
+         }
          break;
       }
    }
@@ -862,6 +1162,18 @@ void OnTick()
       g_setup_dir    = 0;
       g_high_vol     = false;
       g_breakout_dir = 0;
+      // Reset sesiunea 2
+      g_hi2           = 0;
+      g_lo2           = 0;
+      g_range_set2    = false;
+      g_traded_s2     = false;
+      g_vah2          = 0;
+      g_val2          = 0;
+      g_poc2          = 0;
+      g_svp_set2      = false;
+      g_setup_dir2    = 0;
+      g_high_vol2     = false;
+      g_breakout_dir2 = 0;
       last_reset_day = today;
       Print("🔄 Reset range + SVP pentru ziua noua: ", TimeToString(today, TIME_DATE));
       bool dst    = IsEuropeanDST(TimeCurrent());
@@ -895,6 +1207,13 @@ void OnTick()
    // --- Calculeaza SVP imediat dupa ce range-ul e finalizat ---
    if(g_range_set && !g_svp_set)
       CalcSVP();
+   // --- Sesiunea 2 (optional) ---
+   if(EnableSession2)
+   {
+      CollectRange2();
+      if(g_range_set2 && !g_svp_set2)
+         CalcSVP2();
+   }
    // --- Manage Break-Even ---
    ManageBreakEven();
    // ── LOGICA DE INTRARE ──────────────────────
@@ -1070,6 +1389,147 @@ void OnTick()
                      diff_pts, entry, sl, g_vah, tp, real_risk/_Point);
          g_traded_today = true;
          if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp)) g_traded_today = false;
+      }
+   }
+
+   // ══════════════════════════════════════════════════════════════
+   // LOGICA SESIUNEA 2
+   // ══════════════════════════════════════════════════════════════
+   if(!EnableSession2) return;
+
+   int range_end2 = ToServerHour(R2EndHour)    * 100 + R2EndMin;
+   int entry_end2 = ToServerHour(Entry2EndHour) * 100;
+
+   bool can_trade2 = day_ok
+                  && g_range_set2
+                  && g_svp_set2
+                  && (g_hi2 > 0 && g_lo2 > 0)
+                  && (g_vah2 > 0 && g_val2 > 0)
+                  && curTime > range_end2
+                  && curTime < entry_end2
+                  && !g_traded_s2
+                  && CountMyPositions() == 0
+                  && !IsSystemHalted();
+
+   if(!can_trade2) return;
+
+   // Verifica range valid sesiunea 2
+   double diff2     = g_hi2 - g_lo2;
+   double diff_pts2 = diff2 / _Point;
+   if(diff_pts2 < MinPoints || diff_pts2 > MaxPoints)
+   {
+      static datetime last_range_dbg2 = 0;
+      if(TimeCurrent() - last_range_dbg2 >= 3600)
+      {
+         PrintFormat("⚠️ [S2] Range invalid: %.1f puncte (min:%.1f max:%.1f) - skip",
+                     diff_pts2, MinPoints, MaxPoints);
+         last_range_dbg2 = TimeCurrent();
+      }
+      return;
+   }
+
+   if(g_breakout_dir2 == 0)
+   {
+      MqlRates rb2[];
+      ArraySetAsSeries(rb2, true);
+      if(CopyRates(_Symbol, PERIOD_M1, 1, 1, rb2) < 1) return;
+
+      bool broke_up2   = (rb2[0].close > g_hi2);
+      bool broke_down2 = (rb2[0].close < g_lo2);
+
+      if(g_high_vol2)
+      {
+         if(g_setup_dir2 == -1 && broke_up2)
+         {
+            g_breakout_dir2 = 1;
+            PrintFormat("📈 [S2] BREAKOUT SUS g_hi2=%.5f (bara inchisa=%.5f) | HIGH VOL SELL – astept retest", g_hi2, rb2[0].close);
+         }
+         else if(g_setup_dir2 == 1 && broke_down2)
+         {
+            g_breakout_dir2 = -1;
+            PrintFormat("📉 [S2] BREAKOUT JOS g_lo2=%.5f (bara inchisa=%.5f) | HIGH VOL BUY – astept retest", g_lo2, rb2[0].close);
+         }
+      }
+      else
+      {
+         if(broke_up2)
+         {
+            g_breakout_dir2 = 1;
+            PrintFormat("📈 [S2] BREAKOUT SUS g_hi2=%.5f (bara inchisa=%.5f) | NORMAL BUY – astept retest", g_hi2, rb2[0].close);
+         }
+         else if(broke_down2)
+         {
+            g_breakout_dir2 = -1;
+            PrintFormat("📉 [S2] BREAKOUT JOS g_lo2=%.5f (bara inchisa=%.5f) | NORMAL SELL – astept retest", g_lo2, rb2[0].close);
+         }
+      }
+      return;
+   }
+
+   if(g_breakout_dir2 == 1)
+   {
+      if(bid > g_hi2) return;
+
+      if(g_high_vol2)
+      {
+         if(UseVWAP && ask >= g_vwap) return;
+         double entry     = bid;
+         double sl        = GetRetestSL_Short2();
+         double real_risk = MathAbs(sl - entry);
+         double tp        = entry - (real_risk * RRRatio);
+         if(real_risk <= 0 || tp >= entry || sl <= entry)
+         { Print("⚠️ [S2] SELL(HighVol): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 [S2] SELL Retest HIGH VOL | Range:%.2fpts | Entry:%.5f | SL:%.5f(POC=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts2, entry, sl, g_poc2, tp, real_risk/_Point);
+         g_traded_s2 = true;
+         if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp)) g_traded_s2 = false;
+      }
+      else
+      {
+         if(UseVWAP && bid < g_vwap) return;
+         double entry     = ask;
+         double sl        = GetNormalSL_Long2();
+         double real_risk = MathAbs(entry - sl);
+         double tp        = entry + (real_risk * RRRatio);
+         if(real_risk <= 0 || tp <= entry || sl >= entry)
+         { Print("⚠️ [S2] BUY(Normal): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 [S2] BUY Retest NORMAL | Range:%.2fpts | Entry:%.5f | SL:%.5f(VAL=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts2, entry, sl, g_val2, tp, real_risk/_Point);
+         g_traded_s2 = true;
+         if(!SendOrder(ORDER_TYPE_BUY, entry, sl, tp)) g_traded_s2 = false;
+      }
+   }
+   else
+   {
+      if(ask < g_lo2) return;
+
+      if(g_high_vol2)
+      {
+         if(UseVWAP && bid < g_vwap) return;
+         double entry     = ask;
+         double sl        = GetRetestSL_Long2();
+         double real_risk = MathAbs(entry - sl);
+         double tp        = entry + (real_risk * RRRatio);
+         if(real_risk <= 0 || tp <= entry || sl >= entry)
+         { Print("⚠️ [S2] BUY(HighVol): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 [S2] BUY Retest HIGH VOL | Range:%.2fpts | Entry:%.5f | SL:%.5f(POC=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts2, entry, sl, g_poc2, tp, real_risk/_Point);
+         g_traded_s2 = true;
+         if(!SendOrder(ORDER_TYPE_BUY, entry, sl, tp)) g_traded_s2 = false;
+      }
+      else
+      {
+         if(UseVWAP && ask >= g_vwap) return;
+         double entry     = bid;
+         double sl        = GetNormalSL_Short2();
+         double real_risk = MathAbs(sl - entry);
+         double tp        = entry - (real_risk * RRRatio);
+         if(real_risk <= 0 || tp >= entry || sl <= entry)
+         { Print("⚠️ [S2] SELL(Normal): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 [S2] SELL Retest NORMAL | Range:%.2fpts | Entry:%.5f | SL:%.5f(VAH=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts2, entry, sl, g_vah2, tp, real_risk/_Point);
+         g_traded_s2 = true;
+         if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp)) g_traded_s2 = false;
       }
    }
 }
