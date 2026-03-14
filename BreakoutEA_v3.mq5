@@ -32,6 +32,8 @@ input int    R2StartMin     = 30;      // Minut start range sesiunea 2
 input int    R2EndHour      = 16;      // Ora final range sesiunea 2 (ORA SERVER MT5)
 input int    R2EndMin       = 45;      // Minut final range sesiunea 2
 input int    Entry2EndHour  = 18;      // Ora limita intrare sesiunea 2 (ORA SERVER MT5)
+input int    ExitHour2      = 18;      // Ora inchidere fortata sesiunea 2 (ORA SERVER MT5)
+input int    ExitMin2       = 30;      // Minut inchidere fortata sesiunea 2
 input group "=== FUS ORAR ==="
 input int    ServerOffsetWinter = 0;   // Offset 0 = orele de mai sus sunt direct ora server
 input int    ServerOffsetSummer = 0;   // Offset 0 = orele de mai sus sunt direct ora server
@@ -1147,6 +1149,7 @@ void OnTick()
    TimeCurrent(dt);
    int curTime = dt.hour * 100 + dt.min;
    int exitTime  = ToServerHour(ExitHour)      * 100 + ExitMin;
+   int exitTime2 = EnableSession2 ? (ToServerHour(ExitHour2) * 100 + ExitMin2) : exitTime;
    int entry_end = ToServerHour(EntryEndHour)  * 100;
    int range_end = ToServerHour(RangeEndHour)  * 100 + RangeEndMin;
    datetime today = StringToTime(TimeToString(TimeCurrent(), TIME_DATE));
@@ -1193,10 +1196,16 @@ void OnTick()
    {
       if(CountMyPositions() > 0)
       {
-         Print("⏰ Ora de exit atinsa (", ToServerHour(ExitHour), ":", ExitMin, " server) - inchid pozitii.");
-         CloseAllPositions();
+         bool in_s2_window = EnableSession2 && curTime < exitTime2;
+         if(!in_s2_window)
+         {
+            Print("⏰ Ora de exit atinsa (", ToServerHour(ExitHour), ":", ExitMin, " server) - inchid pozitii.");
+            CloseAllPositions();
+         }
       }
-      return;
+      // Oprim total doar daca sesiunea 2 e inactiva sau am trecut si de exit-ul S2
+      if(!EnableSession2 || curTime >= exitTime2)
+         return;
    }
    // --- Calculeaza VWAP o data pe bara noua (doar daca e activ) ---
    datetime current_bar = iTime(_Symbol, _Period, 0);
