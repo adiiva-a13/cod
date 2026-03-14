@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //|  BreakoutEA_v3.mq5                                               |
-//|  Versiune v3 - SL la mijlocul range-ului, RRR 2.0,              |
+//|  Versiune v3 - Entry la RETEST, SL bazat pe POC,                |
 //|  Circuit Breaker auto-reset, fix reset range zilnic,            |
 //|  DST auto-detect, fus orar configurabil                         |
 //+------------------------------------------------------------------+
@@ -68,6 +68,8 @@ double   g_vah          = 0;
 double   g_val          = 0;
 double   g_poc          = 0;
 bool     g_svp_set      = false;
+// Directia setup bazata pe pozitia POC: 1=BUY, -1=SELL, 0=neutru
+int      g_setup_dir    = 0;
 // ─────────────────────────────────────────────
 // 3. FUNCTII FUS ORAR SI DST
 // ─────────────────────────────────────────────
@@ -284,11 +286,32 @@ void CalcSVP()
    g_svp_set = true;
    PrintFormat("📊 SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f",
                g_poc, g_vah, g_val, copied, total_vol);
+   // Determina directia setup bazata pe pozitia POC fata de mijlocul range-ului
+   double range_mid = (g_hi + g_lo) / 2.0;
+   if(g_poc > range_mid)
+   {
+      g_setup_dir = -1;
+      PrintFormat("📍 Setup: SELL | POC (%.5f) in jumatatea SUPERIOARA | Mid: %.5f | Retest la g_hi=%.5f",
+                  g_poc, range_mid, g_hi);
+   }
+   else if(g_poc < range_mid)
+   {
+      g_setup_dir = 1;
+      PrintFormat("📍 Setup: BUY  | POC (%.5f) in jumatatea INFERIOARA | Mid: %.5f | Retest la g_lo=%.5f",
+                  g_poc, range_mid, g_lo);
+   }
+   else
+   {
+      g_setup_dir = 0;
+      PrintFormat("📍 Setup: NEUTRU | POC (%.5f) exact la mijloc (%.5f) - nicio tranzactie.", g_poc, range_mid);
+   }
 }
 // ─────────────────────────────────────────────
-// 7. SL STRUCTURAL (LL sub VAL / LH peste VAH)
+// 7. SL BAZAT PE POC (retest entry)
+//    BUY:  SL sub POC, sau sub cel mai mic low de dupa range daca e sub POC
+//    SELL: SL peste POC, sau peste cel mai mare high de dupa range daca e peste POC
 // ─────────────────────────────────────────────
-double GetStructuralSL_Long()
+double GetRetestSL_Long()
 {
    int srv_end_h = ToServerHour(RangeEndHour);
    MqlDateTime dt;
@@ -298,18 +321,20 @@ double GetStructuralSL_Long()
    MqlRates r[];
    ArraySetAsSeries(r, false);
    int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
-   double structural_low = g_val;
+   // Cel mai mic low format dupa inchiderea range-ului
+   double lowest_low = g_poc;
    for(int i = 0; i < copied; i++)
-      if(r[i].low < structural_low) structural_low = r[i].low;
-   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
-   double sl  = structural_low - buf;
-   if(structural_low < g_val)
-      PrintFormat("📍 BUY SL structural: LL=%.5f (sub VAL=%.5f) → SL=%.5f (buf=%.1f pts)", structural_low, g_val, sl, buf / _Point);
+      if(r[i].low < lowest_low) lowest_low = r[i].low;
+   double buf    = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   double sl_ref = (lowest_low < g_poc) ? lowest_low : g_poc;
+   double sl     = sl_ref - buf;
+   if(lowest_low < g_poc)
+      PrintFormat("📍 BUY SL: low post-range=%.5f (< POC=%.5f) → SL=%.5f (buf=%.1f pts)", lowest_low, g_poc, sl, buf / _Point);
    else
-      PrintFormat("📍 BUY SL default: VAL=%.5f → SL=%.5f (buf=%.1f pts)", g_val, sl, buf / _Point);
+      PrintFormat("📍 BUY SL: POC=%.5f (niciun low sub POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
-double GetStructuralSL_Short()
+double GetRetestSL_Short()
 {
    int srv_end_h = ToServerHour(RangeEndHour);
    MqlDateTime dt;
@@ -319,15 +344,17 @@ double GetStructuralSL_Short()
    MqlRates r[];
    ArraySetAsSeries(r, false);
    int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
-   double structural_high = g_vah;
+   // Cel mai mare high format dupa inchiderea range-ului
+   double highest_high = g_poc;
    for(int i = 0; i < copied; i++)
-      if(r[i].high > structural_high) structural_high = r[i].high;
-   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
-   double sl  = structural_high + buf;
-   if(structural_high > g_vah)
-      PrintFormat("📍 SELL SL structural: LH=%.5f (peste VAH=%.5f) → SL=%.5f (buf=%.1f pts)", structural_high, g_vah, sl, buf / _Point);
+      if(r[i].high > highest_high) highest_high = r[i].high;
+   double buf    = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   double sl_ref = (highest_high > g_poc) ? highest_high : g_poc;
+   double sl     = sl_ref + buf;
+   if(highest_high > g_poc)
+      PrintFormat("📍 SELL SL: high post-range=%.5f (> POC=%.5f) → SL=%.5f (buf=%.1f pts)", highest_high, g_poc, sl, buf / _Point);
    else
-      PrintFormat("📍 SELL SL default: VAH=%.5f → SL=%.5f (buf=%.1f pts)", g_vah, sl, buf / _Point);
+      PrintFormat("📍 SELL SL: POC=%.5f (niciun high peste POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 // ─────────────────────────────────────────────
@@ -702,6 +729,7 @@ void OnTick()
       g_val          = 0;
       g_poc          = 0;
       g_svp_set      = false;
+      g_setup_dir    = 0;
       last_reset_day = today;
       Print("🔄 Reset range + SVP pentru ziua noua: ", TimeToString(today, TIME_DATE));
       bool dst    = IsEuropeanDST(TimeCurrent());
@@ -779,36 +807,42 @@ void OnTick()
       }
       return;
    }
+   // Fara setup valid (POC la mijloc) - nicio tranzactie
+   if(g_setup_dir == 0) return;
+
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   // ── Confirmare breakout pe ConfirmBars bare M1 consecutive ──
+
+   // ── Detectare RETEST pe ConfirmBars bare M1 consecutive ──
+   // BUY setup (POC in jumatatea inferioara): asteptam retest la g_lo (low <= g_lo)
+   // SELL setup (POC in jumatatea superioara): asteptam retest la g_hi (high >= g_hi)
    bool do_buy  = false;
    bool do_sell = false;
-   if(ConfirmBars == 0)
+   int  bars_check = MathMax(ConfirmBars, 1);
+   MqlRates rm1[];
+   ArraySetAsSeries(rm1, true);
+   if(CopyRates(_Symbol, PERIOD_M1, 1, bars_check, rm1) < bars_check) return;
+
+   if(g_setup_dir == 1) // BUY: retest la baza range-ului
    {
-      do_buy  = (ask > g_hi && (!UseVWAP || ask > g_vwap));
-      do_sell = (bid < g_lo && (!UseVWAP || bid < g_vwap));
+      bool retest_ok = true;
+      for(int i = 0; i < bars_check; i++)
+         if(rm1[i].low > g_lo) { retest_ok = false; break; }
+      do_buy = retest_ok && (!UseVWAP || bid > g_vwap);
    }
-   else
+   else // SELL: retest la varful range-ului
    {
-      MqlRates rm1[];
-      ArraySetAsSeries(rm1, true);
-      if(CopyRates(_Symbol, PERIOD_M1, 1, ConfirmBars, rm1) < ConfirmBars) return;
-      int confirm_buy  = 0;
-      int confirm_sell = 0;
-      for(int i = 0; i < ConfirmBars; i++)
-      {
-         if(rm1[i].close > g_hi && (!UseVWAP || rm1[i].close > g_vwap)) confirm_buy++;
-         if(rm1[i].close < g_lo && (!UseVWAP || rm1[i].close < g_vwap)) confirm_sell++;
-      }
-      do_buy  = (confirm_buy  >= ConfirmBars);
-      do_sell = (confirm_sell >= ConfirmBars);
+      bool retest_ok = true;
+      for(int i = 0; i < bars_check; i++)
+         if(rm1[i].high < g_hi) { retest_ok = false; break; }
+      do_sell = retest_ok && (!UseVWAP || ask < g_vwap);
    }
-   // ── BUY Breakout ──
+
+   // ── BUY Retest ──
    if(do_buy)
    {
       double entry     = ask;
-      double sl        = GetStructuralSL_Long();
+      double sl        = GetRetestSL_Long();
       double real_risk = MathAbs(entry - sl);
       double tp        = entry + (real_risk * RRRatio);
       if(real_risk <= 0 || tp <= entry || sl >= entry)
@@ -816,17 +850,17 @@ void OnTick()
          Print("⚠️ BUY: valori invalide SL/TP (SL>=entry?), skip. Entry=", entry, " SL=", sl);
          return;
       }
-      PrintFormat("📊 BUY Confirmat (%d bare) | Range: %.2f pts | Entry: %.5f | SL: %.5f (VAL=%.5f) | TP: %.5f | Risc: %.2f pts",
-                  ConfirmBars, diff_pts, entry, sl, g_val, tp, real_risk / _Point);
+      PrintFormat("📊 BUY Retest (%d bare) | Range: %.2f pts | Entry: %.5f | SL: %.5f (POC=%.5f) | TP: %.5f | Risc: %.2f pts",
+                  bars_check, diff_pts, entry, sl, g_poc, tp, real_risk / _Point);
       g_traded_today = true;
       if(!SendOrder(ORDER_TYPE_BUY, entry, sl, tp))
          g_traded_today = false;
    }
-   // ── SELL Breakout ──
+   // ── SELL Retest ──
    else if(do_sell)
    {
       double entry     = bid;
-      double sl        = GetStructuralSL_Short();
+      double sl        = GetRetestSL_Short();
       double real_risk = MathAbs(sl - entry);
       double tp        = entry - (real_risk * RRRatio);
       if(real_risk <= 0 || tp >= entry || sl <= entry)
@@ -834,8 +868,8 @@ void OnTick()
          Print("⚠️ SELL: valori invalide SL/TP (SL<=entry?), skip. Entry=", entry, " SL=", sl);
          return;
       }
-      PrintFormat("📊 SELL Confirmat (%d bare) | Range: %.2f pts | Entry: %.5f | SL: %.5f (VAH=%.5f) | TP: %.5f | Risc: %.2f pts",
-                  ConfirmBars, diff_pts, entry, sl, g_vah, tp, real_risk / _Point);
+      PrintFormat("📊 SELL Retest (%d bare) | Range: %.2f pts | Entry: %.5f | SL: %.5f (POC=%.5f) | TP: %.5f | Risc: %.2f pts",
+                  bars_check, diff_pts, entry, sl, g_poc, tp, real_risk / _Point);
       g_traded_today = true;
       if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp))
          g_traded_today = false;
