@@ -68,8 +68,13 @@ double   g_vah          = 0;
 double   g_val          = 0;
 double   g_poc          = 0;
 bool     g_svp_set      = false;
-// Directia setup bazata pe pozitia POC: 1=BUY, -1=SELL, 0=neutru
+// Directia setup: 1=BUY, -1=SELL, 0=normal range (din breakout)
 int      g_setup_dir    = 0;
+// Regim volatilitate: true = VAL+POC+VAH in aceeasi jumatate (SL via POC)
+//                     false = normal range (SL via VAH/VAL)
+bool     g_high_vol     = false;
+// State machine breakout: 1=spart sus (g_hi), -1=spart jos (g_lo), 0=niciuna
+int      g_breakout_dir = 0;
 // ─────────────────────────────────────────────
 // 3. FUNCTII FUS ORAR SI DST
 // ─────────────────────────────────────────────
@@ -286,26 +291,33 @@ void CalcSVP()
    g_svp_set = true;
    PrintFormat("📊 SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f",
                g_poc, g_vah, g_val, copied, total_vol);
-   // Determina directia setup bazata pe pozitia VAL+VAH fata de mijlocul range-ului
-   // POC se foloseste DOAR pentru calculul SL
+   // ── Detecta regimul de volatilitate si directia setup ──
+   // HIGH VOL: VAL + POC + VAH toate in aceeasi jumatate → SL via POC
+   // NORMAL:   NU sunt toate in aceeasi jumatate → SL via VAH/VAL, directia din breakout
    double range_mid = (g_hi + g_lo) / 2.0;
-   if(g_val > range_mid && g_vah > range_mid)
+   bool poc_up = (g_poc > range_mid);
+   bool val_up = (g_val > range_mid);
+   bool vah_up = (g_vah > range_mid);
+   if(val_up && vah_up && poc_up)
    {
-      g_setup_dir = -1;
-      PrintFormat("📍 Setup: SELL | Value Area in jumatatea SUPERIOARA | VAL=%.5f VAH=%.5f Mid=%.5f | Retest la g_hi=%.5f",
-                  g_val, g_vah, range_mid, g_hi);
+      g_high_vol  = true;
+      g_setup_dir = -1; // SELL: asteptam spargere sus + retest g_hi → short
+      PrintFormat("🔥 HIGH VOL SELL | VAL+POC+VAH in jumatatea SUPERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_hi=%.5f | SL via POC",
+                  g_val, g_poc, g_vah, g_hi);
    }
-   else if(g_val < range_mid && g_vah < range_mid)
+   else if(!val_up && !vah_up && !poc_up)
    {
-      g_setup_dir = 1;
-      PrintFormat("📍 Setup: BUY  | Value Area in jumatatea INFERIOARA | VAL=%.5f VAH=%.5f Mid=%.5f | Retest la g_lo=%.5f",
-                  g_val, g_vah, range_mid, g_lo);
+      g_high_vol  = true;
+      g_setup_dir = 1; // BUY: asteptam spargere jos + retest g_lo → long
+      PrintFormat("🔥 HIGH VOL BUY  | VAL+POC+VAH in jumatatea INFERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_lo=%.5f | SL via POC",
+                  g_val, g_poc, g_vah, g_lo);
    }
    else
    {
-      g_setup_dir = 0;
-      PrintFormat("📍 Setup: NEUTRU | Value Area traverseaza mijlocul (VAL=%.5f VAH=%.5f Mid=%.5f) - skip.",
-                  g_val, g_vah, range_mid);
+      g_high_vol  = false;
+      g_setup_dir = 0; // directia se determina la momentul breakout-ului
+      PrintFormat("📍 NORMAL RANGE | VA traverseaza mijlocul | VAL=%.5f POC=%.5f VAH=%.5f Mid=%.5f | SL via VAH/VAL | Astept breakout",
+                  g_val, g_poc, g_vah, range_mid);
    }
 }
 // ─────────────────────────────────────────────
@@ -378,7 +390,72 @@ double GetRetestSL_Short()
    return NormalizeDouble(sl, _Digits);
 }
 // ─────────────────────────────────────────────
-// 8. COLECTARE RANGE - finalizata DUPA inchiderea ferestrei (10:15 server)
+// 8. SL NORMAL RANGE (bazat pe VAH/VAL)
+//    BUY (breakout sus + retest g_hi): SL sub VAL sau sub cel mai recent low < VAL
+//    SELL (breakout jos + retest g_lo): SL peste VAH sau peste cel mai recent high > VAH
+// ─────────────────────────────────────────────
+double GetNormalSL_Long()
+{
+   int srv_end_h = ToServerHour(RangeEndHour);
+   MqlDateTime dt;
+   TimeToStruct(TimeCurrent(), dt);
+   datetime range_end_dt = StringToTime(StringFormat("%04d.%02d.%02d %02d:%02d",
+                            dt.year, dt.mon, dt.day, srv_end_h, RangeEndMin));
+   int start_shift = iBarShift(_Symbol, PERIOD_M1, range_end_dt, false);
+   if(start_shift < 2) start_shift = 50;
+   MqlRates r[];
+   ArraySetAsSeries(r, true);
+   int count = MathMin(start_shift + 1, 200);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   if(CopyRates(_Symbol, PERIOD_M1, 1, count, r) < 3)
+      return NormalizeDouble(g_val - buf, _Digits);
+   double last_swing_low = 0;
+   bool   found = false;
+   for(int i = 1; i < (int)ArraySize(r) - 1; i++)
+   {
+      if(r[i].low < r[i-1].low && r[i].low < r[i+1].low && r[i].low < g_val)
+      { last_swing_low = r[i].low; found = true; break; }
+   }
+   double sl_ref = found ? last_swing_low : g_val;
+   double sl     = sl_ref - buf;
+   if(found)
+      PrintFormat("📍 BUY(Normal) SL: swing low=%.5f (< VAL=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_low, g_val, sl, buf/_Point);
+   else
+      PrintFormat("📍 BUY(Normal) SL: VAL=%.5f (niciun swing sub VAL) → SL=%.5f (buf=%.1f pts)", g_val, sl, buf/_Point);
+   return NormalizeDouble(sl, _Digits);
+}
+double GetNormalSL_Short()
+{
+   int srv_end_h = ToServerHour(RangeEndHour);
+   MqlDateTime dt;
+   TimeToStruct(TimeCurrent(), dt);
+   datetime range_end_dt = StringToTime(StringFormat("%04d.%02d.%02d %02d:%02d",
+                            dt.year, dt.mon, dt.day, srv_end_h, RangeEndMin));
+   int start_shift = iBarShift(_Symbol, PERIOD_M1, range_end_dt, false);
+   if(start_shift < 2) start_shift = 50;
+   MqlRates r[];
+   ArraySetAsSeries(r, true);
+   int count = MathMin(start_shift + 1, 200);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   if(CopyRates(_Symbol, PERIOD_M1, 1, count, r) < 3)
+      return NormalizeDouble(g_vah + buf, _Digits);
+   double last_swing_high = 0;
+   bool   found = false;
+   for(int i = 1; i < (int)ArraySize(r) - 1; i++)
+   {
+      if(r[i].high > r[i-1].high && r[i].high > r[i+1].high && r[i].high > g_vah)
+      { last_swing_high = r[i].high; found = true; break; }
+   }
+   double sl_ref = found ? last_swing_high : g_vah;
+   double sl     = sl_ref + buf;
+   if(found)
+      PrintFormat("📍 SELL(Normal) SL: swing high=%.5f (> VAH=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_high, g_vah, sl, buf/_Point);
+   else
+      PrintFormat("📍 SELL(Normal) SL: VAH=%.5f (niciun swing peste VAH) → SL=%.5f (buf=%.1f pts)", g_vah, sl, buf/_Point);
+   return NormalizeDouble(sl, _Digits);
+}
+// ─────────────────────────────────────────────
+// 9. COLECTARE RANGE - finalizata DUPA inchiderea ferestrei (10:15 server)
 // ─────────────────────────────────────────────
 void CollectRange()
 {
@@ -750,6 +827,8 @@ void OnTick()
       g_poc          = 0;
       g_svp_set      = false;
       g_setup_dir    = 0;
+      g_high_vol     = false;
+      g_breakout_dir = 0;
       last_reset_day = today;
       Print("🔄 Reset range + SVP pentru ziua noua: ", TimeToString(today, TIME_DATE));
       bool dst    = IsEuropeanDST(TimeCurrent());
@@ -827,72 +906,138 @@ void OnTick()
       }
       return;
    }
-   // Fara setup valid (POC la mijloc) - nicio tranzactie
-   if(g_setup_dir == 0) return;
-
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
 
-   // ── Detectare RETEST pe ConfirmBars bare M1 consecutive ──
-   // BUY setup (POC in jumatatea inferioara): asteptam retest la g_lo (low <= g_lo)
-   // SELL setup (POC in jumatatea superioara): asteptam retest la g_hi (high >= g_hi)
-   bool do_buy  = false;
-   bool do_sell = false;
-   int  bars_check = MathMax(ConfirmBars, 1);
-   MqlRates rm1[];
-   ArraySetAsSeries(rm1, true);
-   if(CopyRates(_Symbol, PERIOD_M1, 1, bars_check, rm1) < bars_check) return;
+   // ═══════════════════════════════════════════════════════════════
+   // LOGICA UNIFICATA: Breakout (1 bara confirmare) + Retest entry
+   //
+   // STEP 1 – Detectare breakout pe ultima bara inchisa (M1 bar[1])
+   // ─────────────────────────────────────────────────────────────
+   // HIGH VOL SELL (g_setup_dir==-1): astept bara inchisa PESTE g_hi
+   // HIGH VOL BUY  (g_setup_dir== 1): astept bara inchisa SUB  g_lo
+   // NORMAL        (g_setup_dir== 0): accept oricare directie
+   //
+   // STEP 2 – Retest (pretul revine la g_hi sau g_lo)
+   //   Chiar daca bara de retest inchide inauntrul range-ului → INTRA
+   //
+   // SL:
+   //   HIGH VOL → GetRetestSL_Long/Short (bazat pe POC)
+   //   NORMAL   → GetNormalSL_Long/Short (bazat pe VAH/VAL)
+   // ═══════════════════════════════════════════════════════════════
 
-   if(g_setup_dir == 1) // BUY: retest la baza range-ului
+   if(g_breakout_dir == 0)
    {
-      bool retest_ok = true;
-      for(int i = 0; i < bars_check; i++)
-         if(rm1[i].low > g_lo) { retest_ok = false; break; }
-      do_buy = retest_ok && (!UseVWAP || bid > g_vwap);
-   }
-   else // SELL: retest la varful range-ului
-   {
-      bool retest_ok = true;
-      for(int i = 0; i < bars_check; i++)
-         if(rm1[i].high < g_hi) { retest_ok = false; break; }
-      do_sell = retest_ok && (!UseVWAP || ask < g_vwap);
+      // ── STEP 1: Verifica daca ultima bara inchisa a spart range-ul ──
+      MqlRates rb[];
+      ArraySetAsSeries(rb, true);
+      if(CopyRates(_Symbol, PERIOD_M1, 1, 1, rb) < 1) return;
+
+      bool broke_up   = (rb[0].close > g_hi);
+      bool broke_down = (rb[0].close < g_lo);
+
+      if(g_high_vol)
+      {
+         // HIGH VOL SELL: asteptam spargere sus (bara inchisa > g_hi) → vom SELL la retest
+         if(g_setup_dir == -1 && broke_up)
+         {
+            g_breakout_dir = 1;
+            PrintFormat("📈 BREAKOUT SUS g_hi=%.5f (bara inchisa=%.5f) | HIGH VOL SELL – astept retest", g_hi, rb[0].close);
+         }
+         // HIGH VOL BUY: asteptam spargere jos (bara inchisa < g_lo) → vom BUY la retest
+         else if(g_setup_dir == 1 && broke_down)
+         {
+            g_breakout_dir = -1;
+            PrintFormat("📉 BREAKOUT JOS g_lo=%.5f (bara inchisa=%.5f) | HIGH VOL BUY – astept retest", g_lo, rb[0].close);
+         }
+      }
+      else // NORMAL RANGE: accept oricare directie
+      {
+         if(broke_up)
+         {
+            g_breakout_dir = 1;
+            PrintFormat("📈 BREAKOUT SUS g_hi=%.5f (bara inchisa=%.5f) | NORMAL BUY – astept retest", g_hi, rb[0].close);
+         }
+         else if(broke_down)
+         {
+            g_breakout_dir = -1;
+            PrintFormat("📉 BREAKOUT JOS g_lo=%.5f (bara inchisa=%.5f) | NORMAL SELL – astept retest", g_lo, rb[0].close);
+         }
+      }
+      return; // nu intra pana nu vine retestul
    }
 
-   // ── BUY Retest ──
-   if(do_buy)
+   // ── STEP 2: Retest – pretul a revenit la nivelul spart ──
+   // g_breakout_dir == 1: spart SUS → retest = pretul coboara la g_hi
+   // g_breakout_dir == -1: spart JOS → retest = pretul urca la g_lo
+
+   if(g_breakout_dir == 1) // spart PESTE g_hi
    {
-      double entry     = ask;
-      double sl        = GetRetestSL_Long();
-      double real_risk = MathAbs(entry - sl);
-      double tp        = entry + (real_risk * RRRatio);
-      if(real_risk <= 0 || tp <= entry || sl >= entry)
+      // Retest: bid a revenit la g_hi (indiferent daca bara inchide inauntru)
+      if(bid > g_hi) return; // inca nu s-a retest
+
+      if(g_high_vol) // HIGH VOL SELL: vand la retest g_hi
       {
-         Print("⚠️ BUY: valori invalide SL/TP (SL>=entry?), skip. Entry=", entry, " SL=", sl);
-         return;
+         if(UseVWAP && ask >= g_vwap) return; // filtru VWAP
+         double entry     = bid;
+         double sl        = GetRetestSL_Short();
+         double real_risk = MathAbs(sl - entry);
+         double tp        = entry - (real_risk * RRRatio);
+         if(real_risk <= 0 || tp >= entry || sl <= entry)
+         { Print("⚠️ SELL(HighVol): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 SELL Retest HIGH VOL | Range:%.2fpts | Entry:%.5f | SL:%.5f(POC=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts, entry, sl, g_poc, tp, real_risk/_Point);
+         g_traded_today = true;
+         if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp)) g_traded_today = false;
       }
-      PrintFormat("📊 BUY Retest (%d bare) | Range: %.2f pts | Entry: %.5f | SL: %.5f (POC=%.5f) | TP: %.5f | Risc: %.2f pts",
-                  bars_check, diff_pts, entry, sl, g_poc, tp, real_risk / _Point);
-      g_traded_today = true;
-      if(!SendOrder(ORDER_TYPE_BUY, entry, sl, tp))
-         g_traded_today = false;
+      else // NORMAL BUY: cumpar la retest g_hi (suport dupa breakout sus)
+      {
+         if(UseVWAP && bid < g_vwap) return; // filtru VWAP
+         double entry     = ask;
+         double sl        = GetNormalSL_Long();
+         double real_risk = MathAbs(entry - sl);
+         double tp        = entry + (real_risk * RRRatio);
+         if(real_risk <= 0 || tp <= entry || sl >= entry)
+         { Print("⚠️ BUY(Normal): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 BUY Retest NORMAL | Range:%.2fpts | Entry:%.5f | SL:%.5f(VAL=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts, entry, sl, g_val, tp, real_risk/_Point);
+         g_traded_today = true;
+         if(!SendOrder(ORDER_TYPE_BUY, entry, sl, tp)) g_traded_today = false;
+      }
    }
-   // ── SELL Retest ──
-   else if(do_sell)
+   else // g_breakout_dir == -1: spart SUB g_lo
    {
-      double entry     = bid;
-      double sl        = GetRetestSL_Short();
-      double real_risk = MathAbs(sl - entry);
-      double tp        = entry - (real_risk * RRRatio);
-      if(real_risk <= 0 || tp >= entry || sl <= entry)
+      // Retest: ask a revenit la g_lo (indiferent daca bara inchide inauntru)
+      if(ask < g_lo) return; // inca nu s-a retest
+
+      if(g_high_vol) // HIGH VOL BUY: cumpar la retest g_lo
       {
-         Print("⚠️ SELL: valori invalide SL/TP (SL<=entry?), skip. Entry=", entry, " SL=", sl);
-         return;
+         if(UseVWAP && bid < g_vwap) return; // filtru VWAP
+         double entry     = ask;
+         double sl        = GetRetestSL_Long();
+         double real_risk = MathAbs(entry - sl);
+         double tp        = entry + (real_risk * RRRatio);
+         if(real_risk <= 0 || tp <= entry || sl >= entry)
+         { Print("⚠️ BUY(HighVol): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 BUY Retest HIGH VOL | Range:%.2fpts | Entry:%.5f | SL:%.5f(POC=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts, entry, sl, g_poc, tp, real_risk/_Point);
+         g_traded_today = true;
+         if(!SendOrder(ORDER_TYPE_BUY, entry, sl, tp)) g_traded_today = false;
       }
-      PrintFormat("📊 SELL Retest (%d bare) | Range: %.2f pts | Entry: %.5f | SL: %.5f (POC=%.5f) | TP: %.5f | Risc: %.2f pts",
-                  bars_check, diff_pts, entry, sl, g_poc, tp, real_risk / _Point);
-      g_traded_today = true;
-      if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp))
-         g_traded_today = false;
+      else // NORMAL SELL: vand la retest g_lo (rezistenta dupa breakout jos)
+      {
+         if(UseVWAP && ask >= g_vwap) return; // filtru VWAP
+         double entry     = bid;
+         double sl        = GetNormalSL_Short();
+         double real_risk = MathAbs(sl - entry);
+         double tp        = entry - (real_risk * RRRatio);
+         if(real_risk <= 0 || tp >= entry || sl <= entry)
+         { Print("⚠️ SELL(Normal): SL/TP invalide. Entry=", entry, " SL=", sl); return; }
+         PrintFormat("📊 SELL Retest NORMAL | Range:%.2fpts | Entry:%.5f | SL:%.5f(VAH=%.5f) | TP:%.5f | Risc:%.2fpts",
+                     diff_pts, entry, sl, g_vah, tp, real_risk/_Point);
+         g_traded_today = true;
+         if(!SendOrder(ORDER_TYPE_SELL, entry, sl, tp)) g_traded_today = false;
+      }
    }
 }
 //+------------------------------------------------------------------+
