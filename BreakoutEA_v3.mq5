@@ -51,7 +51,8 @@ input int    MaxConsecLosses = 3;      // Pierderi consecutive inainte de oprire
 input int    CB_PauseDays    = 2;      // Zile pauza automata dupa activare
 input int    LookbackDays    = 7;      // Zile lookback pentru circuit breaker
 input group "=== SESSION VOLUME PROFILE (SVP) ==="
-input double ValueAreaPct   = 70.0;   // Value Area (% din volum total)
+input double ValueAreaPct   = 68.0;   // Value Area (% din volum total)
+input int    RowSizeTicks   = 10;     // Marimea unui row SVP (in tick-uri)
 input double SL_Buffer_Pts  = 10.0;   // Buffer SL in puncte (dupa VAL/VAH/LL/LH)
 input group "=== CONFIRMARE BREAKOUT ==="
 input int    ConfirmBars    = 2;       // Bare M1 consecutive de confirmare
@@ -258,6 +259,7 @@ void CalcSVP()
    }
    double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    if(tick_size <= 0) return;
+   double row_size  = tick_size * MathMax(RowSizeTicks, 1);
    // Gaseste extremele range-ului SVP
    double hi = r[0].high, lo = r[0].low;
    for(int i = 1; i < copied; i++)
@@ -265,7 +267,7 @@ void CalcSVP()
       if(r[i].high > hi) hi = r[i].high;
       if(r[i].low  < lo) lo = r[i].low;
    }
-   int levels = (int)MathRound((hi - lo) / tick_size) + 1;
+   int levels = (int)MathRound((hi - lo) / row_size) + 1;
    if(levels <= 0 || levels > 50000) { Print("⚠️ SVP: prea multe nivele (", levels, "), skip."); return; }
    double vol_at[];
    ArrayResize(vol_at, levels);
@@ -273,8 +275,8 @@ void CalcSVP()
    double total_vol = 0;
    for(int i = 0; i < copied; i++)
    {
-      int lo_idx = (int)MathRound((r[i].low  - lo) / tick_size);
-      int hi_idx = (int)MathRound((r[i].high - lo) / tick_size);
+      int lo_idx = (int)MathRound((r[i].low  - lo) / row_size);
+      int hi_idx = (int)MathRound((r[i].high - lo) / row_size);
       if(hi_idx >= levels) hi_idx = levels - 1;
       int span   = hi_idx - lo_idx + 1;
       if(span < 1) span = 1;
@@ -289,7 +291,7 @@ void CalcSVP()
    int poc_idx = 0;
    for(int i = 1; i < levels; i++)
       if(vol_at[i] > vol_at[poc_idx]) poc_idx = i;
-   g_poc = lo + poc_idx * tick_size;
+   g_poc = lo + poc_idx * row_size;
    // Expandeaza de la POC pana la ValueAreaPct% din volum total
    double target   = total_vol * ValueAreaPct / 100.0;
    double accum    = vol_at[poc_idx];
@@ -307,11 +309,11 @@ void CalcSVP()
       else
          { vah_idx++; accum += vol_at[vah_idx]; }
    }
-   g_vah     = NormalizeDouble(lo + vah_idx * tick_size, _Digits);
-   g_val     = NormalizeDouble(lo + val_idx  * tick_size, _Digits);
+   g_vah     = NormalizeDouble(lo + vah_idx * row_size, _Digits);
+   g_val     = NormalizeDouble(lo + val_idx  * row_size, _Digits);
    g_svp_set = true;
-   PrintFormat("📊 SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f",
-               g_poc, g_vah, g_val, copied, total_vol);
+   PrintFormat("📊 SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f | RowSize: %.5f",
+               g_poc, g_vah, g_val, copied, total_vol, row_size);
    // ── Detecta regimul de volatilitate si directia setup ──
    // HIGH VOL: VAL + POC + VAH toate in aceeasi jumatate → SL via POC
    // NORMAL:   NU sunt toate in aceeasi jumatate → SL via VAH/VAL, directia din breakout
@@ -695,13 +697,14 @@ void CalcSVP2()
    }
    double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    if(tick_size <= 0) return;
+   double row_size  = tick_size * MathMax(RowSizeTicks, 1);
    double hi = r[0].high, lo = r[0].low;
    for(int i = 1; i < copied; i++)
    {
       if(r[i].high > hi) hi = r[i].high;
       if(r[i].low  < lo) lo = r[i].low;
    }
-   int levels = (int)MathRound((hi - lo) / tick_size) + 1;
+   int levels = (int)MathRound((hi - lo) / row_size) + 1;
    if(levels <= 0 || levels > 50000) { Print("⚠️ [S2] SVP: prea multe nivele (", levels, "), skip."); return; }
    double vol_at[];
    ArrayResize(vol_at, levels);
@@ -709,8 +712,8 @@ void CalcSVP2()
    double total_vol = 0;
    for(int i = 0; i < copied; i++)
    {
-      int lo_idx = (int)MathRound((r[i].low  - lo) / tick_size);
-      int hi_idx = (int)MathRound((r[i].high - lo) / tick_size);
+      int lo_idx = (int)MathRound((r[i].low  - lo) / row_size);
+      int hi_idx = (int)MathRound((r[i].high - lo) / row_size);
       if(hi_idx >= levels) hi_idx = levels - 1;
       int span   = hi_idx - lo_idx + 1;
       if(span < 1) span = 1;
@@ -724,7 +727,7 @@ void CalcSVP2()
    int poc_idx = 0;
    for(int i = 1; i < levels; i++)
       if(vol_at[i] > vol_at[poc_idx]) poc_idx = i;
-   g_poc2 = lo + poc_idx * tick_size;
+   g_poc2 = lo + poc_idx * row_size;
    double target   = total_vol * ValueAreaPct / 100.0;
    double accum    = vol_at[poc_idx];
    int    vah_idx  = poc_idx;
@@ -741,11 +744,11 @@ void CalcSVP2()
       else
          { vah_idx++; accum += vol_at[vah_idx]; }
    }
-   g_vah2     = NormalizeDouble(lo + vah_idx * tick_size, _Digits);
-   g_val2     = NormalizeDouble(lo + val_idx  * tick_size, _Digits);
+   g_vah2     = NormalizeDouble(lo + vah_idx * row_size, _Digits);
+   g_val2     = NormalizeDouble(lo + val_idx  * row_size, _Digits);
    g_svp_set2 = true;
-   PrintFormat("📊 [S2] SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f",
-               g_poc2, g_vah2, g_val2, copied, total_vol);
+   PrintFormat("📊 [S2] SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f | RowSize: %.5f",
+               g_poc2, g_vah2, g_val2, copied, total_vol, row_size);
    double range_mid = (g_hi2 + g_lo2) / 2.0;
    bool poc_up = (g_poc2 > range_mid);
    bool val_up = (g_val2 > range_mid);
