@@ -833,6 +833,21 @@ bool SendOrder(ENUM_ORDER_TYPE type, double entry, double sl, double tp)
    double vol_min  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
    double vol_max  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
    double vol_step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   // FIX: Daca lot_calc > MaxLotLimit, SL-ul e prea strans.
+   // Cu lot taiat la MaxLotLimit, fiecare punct muta mult mai mult decat RiskMoney
+   // → orice slipaj sau miscare normala a pietei produce pierderi de 3-10x RiskMoney.
+   if(lot_calc > MaxLotLimit)
+   {
+      double sl_pts = real_risk_price / _Point;
+      double sl_minim_pts = (RiskMoney / (MaxLotLimit * point_value)) / _Point;
+      PrintFormat("❌ SL prea strans: lot necesar=%.1f > MaxLotLimit=%.0f | "
+                  "SL la %.1f puncte | SL minim recomandat: %.1f puncte | "
+                  "Tranzactie ANULATA – risc slipaj excesiv!",
+                  lot_calc, MaxLotLimit, sl_pts, sl_minim_pts);
+      PrintFormat("💡 Solutie: mareste SL_Buffer_Pts la minim %.0f sau reduce MaxLotLimit.",
+                  sl_minim_pts * 0.5); // sugestie buffer = 50% din distanta minima
+      return false;
+   }
    double lot_before_cap = lot_calc;
    double lot = MathFloor(lot_calc / vol_step) * vol_step;
    lot = MathMax(lot, vol_min);
