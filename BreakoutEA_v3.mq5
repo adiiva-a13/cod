@@ -319,19 +319,18 @@ double GetRetestSL_Long()
    datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
    datetime range_end_dt = today + srv_end_h * 3600 + RangeEndMin * 60;
    MqlRates r[];
-   ArraySetAsSeries(r, false);
-   int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
-   // Cel mai mic low format dupa inchiderea range-ului
-   double lowest_low = g_poc;
-   for(int i = 0; i < copied; i++)
-      if(r[i].low < lowest_low) lowest_low = r[i].low;
-   double buf    = MathMax(SL_Buffer_Pts, 20.0) * _Point;
-   double sl_ref = (lowest_low < g_poc) ? lowest_low : g_poc;
-   double sl     = sl_ref - buf;
-   if(lowest_low < g_poc)
-      PrintFormat("📍 BUY SL: low post-range=%.5f (< POC=%.5f) → SL=%.5f (buf=%.1f pts)", lowest_low, g_poc, sl, buf / _Point);
+   ArraySetAsSeries(r, true);
+   // Bara 1 = ultima bara inchisa (bara de retest)
+   int copied = CopyRates(_Symbol, PERIOD_M1, 1, 1, r);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   // Ultimul low format dupa inchiderea range-ului = low-ul barei de retest
+   double last_low = (copied > 0) ? r[0].low : g_poc;
+   double sl_ref   = (last_low < g_poc) ? last_low : g_poc;
+   double sl       = sl_ref - buf;
+   if(last_low < g_poc)
+      PrintFormat("📍 BUY SL: ultimul low=%.5f (< POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_low, g_poc, sl, buf / _Point);
    else
-      PrintFormat("📍 BUY SL: POC=%.5f (niciun low sub POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
+      PrintFormat("📍 BUY SL: POC=%.5f (ultimul low >= POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 double GetRetestSL_Short()
@@ -342,19 +341,18 @@ double GetRetestSL_Short()
    datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
    datetime range_end_dt = today + srv_end_h * 3600 + RangeEndMin * 60;
    MqlRates r[];
-   ArraySetAsSeries(r, false);
-   int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
-   // Cel mai mare high format dupa inchiderea range-ului
-   double highest_high = g_poc;
-   for(int i = 0; i < copied; i++)
-      if(r[i].high > highest_high) highest_high = r[i].high;
-   double buf    = MathMax(SL_Buffer_Pts, 20.0) * _Point;
-   double sl_ref = (highest_high > g_poc) ? highest_high : g_poc;
-   double sl     = sl_ref + buf;
-   if(highest_high > g_poc)
-      PrintFormat("📍 SELL SL: high post-range=%.5f (> POC=%.5f) → SL=%.5f (buf=%.1f pts)", highest_high, g_poc, sl, buf / _Point);
+   ArraySetAsSeries(r, true);
+   // Bara 1 = ultima bara inchisa (bara de retest)
+   int copied = CopyRates(_Symbol, PERIOD_M1, 1, 1, r);
+   double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
+   // Ultimul high format dupa inchiderea range-ului = high-ul barei de retest
+   double last_high = (copied > 0) ? r[0].high : g_poc;
+   double sl_ref    = (last_high > g_poc) ? last_high : g_poc;
+   double sl        = sl_ref + buf;
+   if(last_high > g_poc)
+      PrintFormat("📍 SELL SL: ultimul high=%.5f (> POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_high, g_poc, sl, buf / _Point);
    else
-      PrintFormat("📍 SELL SL: POC=%.5f (niciun high peste POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
+      PrintFormat("📍 SELL SL: POC=%.5f (ultimul high <= POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 // ─────────────────────────────────────────────
