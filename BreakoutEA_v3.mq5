@@ -308,8 +308,8 @@ void CalcSVP()
 }
 // ─────────────────────────────────────────────
 // 7. SL BAZAT PE POC (retest entry)
-//    BUY:  SL sub POC, sau sub cel mai mic low de dupa range daca e sub POC
-//    SELL: SL peste POC, sau peste cel mai mare high de dupa range daca e peste POC
+//    SELL: SL peste ultimul swing high de dupa range care depaseste POC, altfel peste POC
+//    BUY:  SL sub ultimul swing low de dupa range care e sub POC, altfel sub POC
 // ─────────────────────────────────────────────
 double GetRetestSL_Long()
 {
@@ -319,18 +319,28 @@ double GetRetestSL_Long()
    datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
    datetime range_end_dt = today + srv_end_h * 3600 + RangeEndMin * 60;
    MqlRates r[];
-   ArraySetAsSeries(r, true);
-   // Bara 1 = ultima bara inchisa (bara de retest)
-   int copied = CopyRates(_Symbol, PERIOD_M1, 1, 1, r);
+   ArraySetAsSeries(r, false); // r[0]=cel mai vechi, r[copied-1]=cel mai nou
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
    double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
-   // Ultimul low format dupa inchiderea range-ului = low-ul barei de retest
-   double last_low = (copied > 0) ? r[0].low : g_poc;
-   double sl_ref   = (last_low < g_poc) ? last_low : g_poc;
-   double sl       = sl_ref - buf;
-   if(last_low < g_poc)
-      PrintFormat("📍 BUY SL: ultimul low=%.5f (< POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_low, g_poc, sl, buf / _Point);
+   // Cauta ultimul (cel mai recent) swing low sub POC
+   // Swing low la bara i: low[i] < low[i-1] && low[i] < low[i+1]
+   double last_swing_low = -DBL_MAX;
+   bool   found          = false;
+   for(int i = copied - 2; i >= 1; i--)
+   {
+      if(r[i].low < r[i-1].low && r[i].low < r[i+1].low && r[i].low < g_poc)
+      {
+         last_swing_low = r[i].low;
+         found = true;
+         break; // cel mai recent → oprim
+      }
+   }
+   double sl_ref = found ? last_swing_low : g_poc;
+   double sl     = sl_ref - buf;
+   if(found)
+      PrintFormat("📍 BUY SL: ultimul swing low=%.5f (< POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_low, g_poc, sl, buf / _Point);
    else
-      PrintFormat("📍 BUY SL: POC=%.5f (ultimul low >= POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
+      PrintFormat("📍 BUY SL: POC=%.5f (niciun swing low sub POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 double GetRetestSL_Short()
@@ -341,18 +351,28 @@ double GetRetestSL_Short()
    datetime today        = StringToTime(StringFormat("%04d.%02d.%02d 00:00", dt.year, dt.mon, dt.day));
    datetime range_end_dt = today + srv_end_h * 3600 + RangeEndMin * 60;
    MqlRates r[];
-   ArraySetAsSeries(r, true);
-   // Bara 1 = ultima bara inchisa (bara de retest)
-   int copied = CopyRates(_Symbol, PERIOD_M1, 1, 1, r);
+   ArraySetAsSeries(r, false); // r[0]=cel mai vechi, r[copied-1]=cel mai nou
+   int copied = CopyRates(_Symbol, PERIOD_M1, range_end_dt, TimeCurrent(), r);
    double buf = MathMax(SL_Buffer_Pts, 20.0) * _Point;
-   // Ultimul high format dupa inchiderea range-ului = high-ul barei de retest
-   double last_high = (copied > 0) ? r[0].high : g_poc;
-   double sl_ref    = (last_high > g_poc) ? last_high : g_poc;
-   double sl        = sl_ref + buf;
-   if(last_high > g_poc)
-      PrintFormat("📍 SELL SL: ultimul high=%.5f (> POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_high, g_poc, sl, buf / _Point);
+   // Cauta ultimul (cel mai recent) swing high peste POC
+   // Swing high la bara i: high[i] > high[i-1] && high[i] > high[i+1]
+   double last_swing_high = DBL_MAX;
+   bool   found           = false;
+   for(int i = copied - 2; i >= 1; i--)
+   {
+      if(r[i].high > r[i-1].high && r[i].high > r[i+1].high && r[i].high > g_poc)
+      {
+         last_swing_high = r[i].high;
+         found = true;
+         break; // cel mai recent → oprim
+      }
+   }
+   double sl_ref = found ? last_swing_high : g_poc;
+   double sl     = sl_ref + buf;
+   if(found)
+      PrintFormat("📍 SELL SL: ultimul swing high=%.5f (> POC=%.5f) → SL=%.5f (buf=%.1f pts)", last_swing_high, g_poc, sl, buf / _Point);
    else
-      PrintFormat("📍 SELL SL: POC=%.5f (ultimul high <= POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
+      PrintFormat("📍 SELL SL: POC=%.5f (niciun swing high peste POC) → SL=%.5f (buf=%.1f pts)", g_poc, sl, buf / _Point);
    return NormalizeDouble(sl, _Digits);
 }
 // ─────────────────────────────────────────────
