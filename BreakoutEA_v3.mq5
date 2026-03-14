@@ -286,24 +286,26 @@ void CalcSVP()
    g_svp_set = true;
    PrintFormat("📊 SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f",
                g_poc, g_vah, g_val, copied, total_vol);
-   // Determina directia setup bazata pe pozitia POC fata de mijlocul range-ului
+   // Determina directia setup bazata pe pozitia VAL+VAH fata de mijlocul range-ului
+   // POC se foloseste DOAR pentru calculul SL
    double range_mid = (g_hi + g_lo) / 2.0;
-   if(g_poc > range_mid)
+   if(g_val > range_mid && g_vah > range_mid)
    {
       g_setup_dir = -1;
-      PrintFormat("📍 Setup: SELL | POC (%.5f) in jumatatea SUPERIOARA | Mid: %.5f | Retest la g_hi=%.5f",
-                  g_poc, range_mid, g_hi);
+      PrintFormat("📍 Setup: SELL | Value Area in jumatatea SUPERIOARA | VAL=%.5f VAH=%.5f Mid=%.5f | Retest la g_hi=%.5f",
+                  g_val, g_vah, range_mid, g_hi);
    }
-   else if(g_poc < range_mid)
+   else if(g_val < range_mid && g_vah < range_mid)
    {
       g_setup_dir = 1;
-      PrintFormat("📍 Setup: BUY  | POC (%.5f) in jumatatea INFERIOARA | Mid: %.5f | Retest la g_lo=%.5f",
-                  g_poc, range_mid, g_lo);
+      PrintFormat("📍 Setup: BUY  | Value Area in jumatatea INFERIOARA | VAL=%.5f VAH=%.5f Mid=%.5f | Retest la g_lo=%.5f",
+                  g_val, g_vah, range_mid, g_lo);
    }
    else
    {
       g_setup_dir = 0;
-      PrintFormat("📍 Setup: NEUTRU | POC (%.5f) exact la mijloc (%.5f) - nicio tranzactie.", g_poc, range_mid);
+      PrintFormat("📍 Setup: NEUTRU | Value Area traverseaza mijlocul (VAL=%.5f VAH=%.5f Mid=%.5f) - skip.",
+                  g_val, g_vah, range_mid);
    }
 }
 // ─────────────────────────────────────────────
