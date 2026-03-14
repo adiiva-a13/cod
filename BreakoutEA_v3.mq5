@@ -502,6 +502,38 @@ void CollectRange()
 // ─────────────────────────────────────────────
 bool SendOrder(ENUM_ORDER_TYPE type, double entry, double sl, double tp)
 {
+   // Verifica si ajusteaza SL/TP pentru minimum stop level al brokerului
+   int stops_level = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+   if(stops_level > 0)
+   {
+      double min_dist = (stops_level + 5) * _Point; // +5 puncte buffer extra
+      if(type == ORDER_TYPE_SELL)
+      {
+         if(sl < entry + min_dist)
+         {
+            PrintFormat("⚠️ SL prea aproape (StopLevel=%d pts). Ajustez SL: %.5f → %.5f", stops_level, sl, entry + min_dist);
+            sl = NormalizeDouble(entry + min_dist, _Digits);
+         }
+         if(tp > entry - min_dist)
+         {
+            PrintFormat("⚠️ TP prea aproape (StopLevel=%d pts). Ajustez TP: %.5f → %.5f", stops_level, tp, entry - min_dist);
+            tp = NormalizeDouble(entry - min_dist, _Digits);
+         }
+      }
+      else // BUY
+      {
+         if(sl > entry - min_dist)
+         {
+            PrintFormat("⚠️ SL prea aproape (StopLevel=%d pts). Ajustez SL: %.5f → %.5f", stops_level, sl, entry - min_dist);
+            sl = NormalizeDouble(entry - min_dist, _Digits);
+         }
+         if(tp < entry + min_dist)
+         {
+            PrintFormat("⚠️ TP prea aproape (StopLevel=%d pts). Ajustez TP: %.5f → %.5f", stops_level, tp, entry + min_dist);
+            tp = NormalizeDouble(entry + min_dist, _Digits);
+         }
+      }
+   }
    double real_risk_price = MathAbs(entry - sl);
    if(real_risk_price <= 0)
    {
@@ -599,10 +631,11 @@ bool SendOrder(ENUM_ORDER_TYPE type, double entry, double sl, double tp)
    else
    {
       PrintFormat("❌ Eroare ordin: %d - %s", res.retcode, res.comment);
-      if(res.retcode == 10019 || res.retcode == 10018)
+      if(res.retcode == 10019 || res.retcode == 10018 || res.retcode == 10016)
       {
          PrintFormat("⛔ Eroare %d (%s) - ziua blocata.", res.retcode,
-                     res.retcode == 10019 ? "No Money" : "Market Closed");
+                     res.retcode == 10019 ? "No Money" :
+                     res.retcode == 10018 ? "Market Closed" : "Invalid Stops");
          return true;
       }
    }
