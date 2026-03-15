@@ -317,32 +317,33 @@ void CalcSVP()
    PrintFormat("📊 SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f | RowSize: %.5f",
                g_poc, g_vah, g_val, copied, total_vol, row_size);
    // ── Detecta regimul de volatilitate si directia setup ──
-   // HIGH VOL: VAL + POC + VAH toate in aceeasi jumatate → SL via POC
-   // NORMAL:   NU sunt toate in aceeasi jumatate → SL via VAH/VAL, directia din breakout
-   double range_mid = (g_hi + g_lo) / 2.0;
-   bool poc_up = (g_poc > range_mid);
-   bool val_up = (g_val > range_mid);
-   bool vah_up = (g_vah > range_mid);
-   if(val_up && vah_up && poc_up)
+   // HIGH VOL: VAL+POC+VAH toate peste Fib 0.618 (de la low) → SELL
+   //           VAL+POC+VAH toate sub  Fib 0.618 (de la high) → BUY
+   // NORMAL:   VA traverseaza zona Fib → directia din breakout
+   double fib_618_up   = g_lo + 0.618 * (g_hi - g_lo); // 61.8% de la low
+   double fib_618_down = g_lo + 0.382 * (g_hi - g_lo); // 38.2% de la low = 61.8% de la high
+   bool all_above_fib = (g_val > fib_618_up && g_vah > fib_618_up && g_poc > fib_618_up);
+   bool all_below_fib = (g_val < fib_618_down && g_vah < fib_618_down && g_poc < fib_618_down);
+   if(all_above_fib)
    {
       g_high_vol  = true;
-      g_setup_dir = -1; // SELL: asteptam spargere sus + retest g_hi → short
-      PrintFormat("🔥 HIGH VOL SELL | VAL+POC+VAH in jumatatea SUPERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_hi=%.5f | SL via POC",
-                  g_val, g_poc, g_vah, g_hi);
+      g_setup_dir = -1; // SELL: concentrare sus, asteptam spargere sus + retest g_hi → short
+      PrintFormat("🔥 HIGH VOL SELL | VAL+POC+VAH peste Fib 0.618=%.5f | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_hi=%.5f | SL via POC",
+                  fib_618_up, g_val, g_poc, g_vah, g_hi);
    }
-   else if(!val_up && !vah_up && !poc_up)
+   else if(all_below_fib)
    {
       g_high_vol  = true;
-      g_setup_dir = 1; // BUY: asteptam spargere jos + retest g_lo → long
-      PrintFormat("🔥 HIGH VOL BUY  | VAL+POC+VAH in jumatatea INFERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_lo=%.5f | SL via POC",
-                  g_val, g_poc, g_vah, g_lo);
+      g_setup_dir = 1; // BUY: concentrare jos, asteptam spargere jos + retest g_lo → long
+      PrintFormat("🔥 HIGH VOL BUY  | VAL+POC+VAH sub  Fib 0.618=%.5f (de la high) | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_lo=%.5f | SL via POC",
+                  fib_618_down, g_val, g_poc, g_vah, g_lo);
    }
    else
    {
       g_high_vol  = false;
       g_setup_dir = 0; // directia se determina la momentul breakout-ului
-      PrintFormat("📍 NORMAL RANGE | VA traverseaza mijlocul | VAL=%.5f POC=%.5f VAH=%.5f Mid=%.5f | SL via VAH/VAL | Astept breakout",
-                  g_val, g_poc, g_vah, range_mid);
+      PrintFormat("📍 NORMAL RANGE | VA intre Fib 0.382=%.5f si 0.618=%.5f | VAL=%.5f POC=%.5f VAH=%.5f | SL via VAH/VAL | Astept breakout",
+                  fib_618_down, fib_618_up, g_val, g_poc, g_vah);
    }
 }
 // ─────────────────────────────────────────────
@@ -751,30 +752,30 @@ void CalcSVP2()
    g_svp_set2 = true;
    PrintFormat("📊 [S2] SVP | POC: %.5f | VAH: %.5f | VAL: %.5f | Bare: %d | Vol total: %.0f | RowSize: %.5f",
                g_poc2, g_vah2, g_val2, copied, total_vol, row_size);
-   double range_mid = (g_hi2 + g_lo2) / 2.0;
-   bool poc_up = (g_poc2 > range_mid);
-   bool val_up = (g_val2 > range_mid);
-   bool vah_up = (g_vah2 > range_mid);
-   if(val_up && vah_up && poc_up)
+   double fib_618_up2   = g_lo2 + 0.618 * (g_hi2 - g_lo2);
+   double fib_618_down2 = g_lo2 + 0.382 * (g_hi2 - g_lo2);
+   bool all_above_fib2 = (g_val2 > fib_618_up2 && g_vah2 > fib_618_up2 && g_poc2 > fib_618_up2);
+   bool all_below_fib2 = (g_val2 < fib_618_down2 && g_vah2 < fib_618_down2 && g_poc2 < fib_618_down2);
+   if(all_above_fib2)
    {
       g_high_vol2  = true;
       g_setup_dir2 = -1;
-      PrintFormat("🔥 [S2] HIGH VOL SELL | VAL+POC+VAH in jumatatea SUPERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_hi2=%.5f | SL via POC",
-                  g_val2, g_poc2, g_vah2, g_hi2);
+      PrintFormat("🔥 [S2] HIGH VOL SELL | VAL+POC+VAH peste Fib 0.618=%.5f | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_hi2=%.5f | SL via POC",
+                  fib_618_up2, g_val2, g_poc2, g_vah2, g_hi2);
    }
-   else if(!val_up && !vah_up && !poc_up)
+   else if(all_below_fib2)
    {
       g_high_vol2  = true;
       g_setup_dir2 = 1;
-      PrintFormat("🔥 [S2] HIGH VOL BUY  | VAL+POC+VAH in jumatatea INFERIOARA | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_lo2=%.5f | SL via POC",
-                  g_val2, g_poc2, g_vah2, g_lo2);
+      PrintFormat("🔥 [S2] HIGH VOL BUY  | VAL+POC+VAH sub Fib 0.618=%.5f (de la high) | VAL=%.5f POC=%.5f VAH=%.5f | Retest g_lo2=%.5f | SL via POC",
+                  fib_618_down2, g_val2, g_poc2, g_vah2, g_lo2);
    }
    else
    {
       g_high_vol2  = false;
       g_setup_dir2 = 0;
-      PrintFormat("📍 [S2] NORMAL RANGE | VA traverseaza mijlocul | VAL=%.5f POC=%.5f VAH=%.5f Mid=%.5f | SL via VAH/VAL | Astept breakout",
-                  g_val2, g_poc2, g_vah2, range_mid);
+      PrintFormat("📍 [S2] NORMAL RANGE | VA intre Fib 0.382=%.5f si 0.618=%.5f | VAL=%.5f POC=%.5f VAH=%.5f | SL via VAH/VAL | Astept breakout",
+                  fib_618_down2, fib_618_up2, g_val2, g_poc2, g_vah2);
    }
 }
 // ─────────────────────────────────────────────
