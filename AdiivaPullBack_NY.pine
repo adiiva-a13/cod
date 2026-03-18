@@ -35,10 +35,10 @@ nyMin = nyH * 60 + nyM   // minuta zilei in NY
 newNYDay = ta.change(time("D", "America/New_York")) != 0
 
 // ═══════════════════════════════════════════════════════════
-//  CANDELA DE 15 MINUTE  (15:30–15:44 NY, 15 bare de 1min)
-//  Candela se inchide la 15:45 → entry incepe de la 15:46
+//  CANDELA DE 15 MINUTE  (15:30–15:45 NY, 16 bare de 1min)
+//  Candela COMPLETA la inchiderea barei 15:45 → entry incepe de la 15:46
 // ═══════════════════════════════════════════════════════════
-inCandle = nyMin >= 15 * 60 + 30 and nyMin <= 15 * 60 + 44
+inCandle = nyMin >= 15 * 60 + 30 and nyMin <= 15 * 60 + 45
 
 var float c_hi    = na
 var float c_lo    = na
@@ -74,8 +74,8 @@ eod    = nyMin >= eodMin
 if newNYDay
     triggered := false
 
-// Trigger: prima bara >= 15:45, candela construita, nu am trigerat deja
-doTrigger = not triggered and nyMin == 15 * 60 + 45 and not na(c_hi)
+// Trigger: bara 15:46 (prima bara dupa inchiderea candelei de 15min la 15:45)
+doTrigger = not triggered and nyMin == 15 * 60 + 46 and not na(c_hi)
 
 if doTrigger
     triggered := true
@@ -149,7 +149,7 @@ if eod
 // ═══════════════════════════════════════════════════════════
 //  VIZUALIZARI
 // ═══════════════════════════════════════════════════════════
-bgcolor(inCandle ? color.new(color.purple, 88) : na, title="Fereastra 15min (15:30-15:44)")
+bgcolor(inCandle ? color.new(color.purple, 88) : na, title="Fereastra 15min (15:30-15:45)")
 
 showLvl = triggered and isLiq and not na(entryPx) and not eod
 plot(showLvl ? entryPx : na, "Entry 0.00", color.new(color.white,  10), 1, plot.style_linebr)
@@ -198,7 +198,7 @@ if barstate.islast
               dir == 1      ? color.lime : color.red
 
     table.cell(tbl, 0, 0, "Adiiva PullBack",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
-    table.cell(tbl, 1, 0, "NY 15:30–15:44",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
+    table.cell(tbl, 1, 0, "NY 15:30–15:45",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
     table.cell(tbl, 0, 1, "Status",     text_color=color.gray,   text_size=size.small)
     table.cell(tbl, 1, 1, status,       text_color=sCol,         text_size=size.small)
     table.cell(tbl, 0, 2, "ATR Daily",  text_color=color.gray,   text_size=size.small)
