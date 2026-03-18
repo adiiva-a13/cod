@@ -1,0 +1,238 @@
+//@version=5
+strategy("Adiiva PullBack NY", overlay=true,
+         default_qty_type=strategy.fixed, default_qty_value=1,
+         max_bars_back=500, calc_on_every_tick=false,
+         process_orders_on_close=true,
+         commission_type=strategy.commission.cash_per_order, commission_value=0)
+
+// ═══════════════════════════════════════════════════════════
+//  INPUTS
+// ═══════════════════════════════════════════════════════════
+i_atrPct  = input.float(0.25, "ATR Liquidity Filter (ratio)", minval=0.01, step=0.01, group="Filters",
+              tooltip="Valid daca (H-L) candela 15min >= ratio × ATR(14) Daily. Ex: 0.25 = 25%")
+i_eodHour = input.int(18, "EOD Close Hour (NY)",   minval=10, maxval=23, group="Session",
+              tooltip="Inchidere fortata a pozitiei la aceasta ora (New York)")
+i_eodMin  = input.int(0,  "EOD Close Minute (NY)", minval=0,  maxval=59, group="Session")
+i_slBuf   = input.float(0.0, "SL extra buffer (price units)", minval=0, step=0.25, group="Risk",
+              tooltip="Buffer extra adaugat dincolo de nivelul SL calculat")
+
+// ═══════════════════════════════════════════════════════════
+//  TIMEFRAME GUARD – script ruleaza DOAR pe graficul M1
+// ═══════════════════════════════════════════════════════════
+if timeframe.period != "1"
+    runtime.error("⚠️ Rulati pe graficul de 1 MINUT!")
+
+// ═══════════════════════════════════════════════════════════
+//  NY TIME
+// ═══════════════════════════════════════════════════════════
+nyH   = hour(time,   "America/New_York")
+nyM   = minute(time, "America/New_York")
+nyMin = nyH * 60 + nyM   // minuta zilei in NY
+
+// ═══════════════════════════════════════════════════════════
+//  ZI NOUA NY
+// ═══════════════════════════════════════════════════════════
+newNYDay = ta.change(time("D", "America/New_York")) != 0
+
+// ═══════════════════════════════════════════════════════════
+//  CANDELA DE 15 MINUTE  (15:30–15:44 NY, 15 bare de 1min)
+//  Candela se inchide la 15:45 → entry incepe de la 15:46
+// ═══════════════════════════════════════════════════════════
+inCandle = nyMin >= 15 * 60 + 30 and nyMin <= 15 * 60 + 44
+
+var float c_hi    = na
+var float c_lo    = na
+var float c_open  = na
+var float c_close = na
+
+if newNYDay
+    c_hi    := na
+    c_lo    := na
+    c_open  := na
+    c_close := na
+
+if inCandle
+    if na(c_open)
+        c_open := open
+    c_hi    := na(c_hi) ? high : math.max(c_hi, high)
+    c_lo    := na(c_lo) ? low  : math.min(c_lo, low)
+    c_close := close   // ultima bara (15:44) = close-ul candelei de 15min
+
+// ═══════════════════════════════════════════════════════════
+//  ATR(14) DAILY
+// ═══════════════════════════════════════════════════════════
+dATR = request.security(syminfo.tickerid, "D", ta.atr(14), lookahead=barmerge.lookahead_off)
+
+// ═══════════════════════════════════════════════════════════
+//  TRIGGER  (o singura data per zi, la bara de 15:45)
+//  Plasam ordinul la 15:45 → executia posibila de la 15:46
+// ═══════════════════════════════════════════════════════════
+var bool triggered = false
+eodMin = i_eodHour * 60 + i_eodMin
+eod    = nyMin >= eodMin
+
+if newNYDay
+    triggered := false
+
+// Trigger: prima bara >= 15:45, candela construita, nu am trigerat deja
+doTrigger = not triggered and nyMin == 15 * 60 + 45 and not na(c_hi)
+
+if doTrigger
+    triggered := true
+
+// ─── Filtru lichiditate: (H-L) >= ATR(14) Daily × 25% ───
+c_range = not na(c_hi) ? c_hi - c_lo : na
+isLiq   = not na(c_range) and not na(dATR) and dATR > 0 and
+          c_range >= i_atrPct * dATR
+
+// Directia candelei
+c_bull = not na(c_close) and not na(c_open) and c_close >= c_open
+c_bear = not na(c_close) and not na(c_open) and c_close <  c_open
+
+// ═══════════════════════════════════════════════════════════
+//  FIBONACCI LEVELS
+//  ──────────────────────────────────────────────────────────
+//  Candela BEARISH (rosie) → fib sus→jos (High→Low)
+//    0.00  = Low  (c_lo)  ← entry LONG
+//   -0.19  = c_lo - 0.19 × range  ← SL (sub Low)
+//    0.382 = c_lo + 0.382 × range ← TP (spre High)
+//
+//  Candela BULLISH (verde) → fib jos→sus (Low→High)
+//    0.00  = High (c_hi)  ← entry SHORT
+//   -0.19  = c_hi + 0.19 × range  ← SL (peste High)
+//    0.382 = c_hi - 0.382 × range ← TP (spre Low)
+// ═══════════════════════════════════════════════════════════
+var float entryPx = na
+var float slPx    = na
+var float tpPx    = na
+var int   dir     = 0   // 1 = Long, -1 = Short
+
+if newNYDay
+    entryPx := na
+    slPx    := na
+    tpPx    := na
+    dir     := 0
+
+if doTrigger and isLiq
+    if c_bear
+        entryPx := c_lo
+        slPx    := c_lo  - 0.19 * c_range - i_slBuf
+        tpPx    := c_lo  + 0.382 * c_range
+        dir     := 1
+    else if c_bull
+        entryPx := c_hi
+        slPx    := c_hi  + 0.19 * c_range + i_slBuf
+        tpPx    := c_hi  - 0.382 * c_range
+        dir     := -1
+
+// ═══════════════════════════════════════════════════════════
+//  PLASARE ORDINE LIMITA
+//  Plasate la bara 15:45 → executia incepe de la bara 15:46
+//  Order tip LIMIT: se executa cand pretul atinge entryPx
+// ═══════════════════════════════════════════════════════════
+if doTrigger and isLiq and not na(entryPx)
+    if dir == 1
+        strategy.entry("Long",  strategy.long,  limit=entryPx, comment="PB ↑ 0.00")
+        strategy.exit ("XL",    "Long",  stop=slPx, limit=tpPx)
+    else if dir == -1
+        strategy.entry("Short", strategy.short, limit=entryPx, comment="PB ↓ 0.00")
+        strategy.exit ("XS",    "Short", stop=slPx, limit=tpPx)
+
+// ═══════════════════════════════════════════════════════════
+//  EOD: inchidere fortata + anulare ordine neexecutate
+// ═══════════════════════════════════════════════════════════
+if eod
+    strategy.cancel_all()
+    if strategy.position_size != 0
+        strategy.close_all(comment="EOD")
+
+// ═══════════════════════════════════════════════════════════
+//  VIZUALIZARI
+// ═══════════════════════════════════════════════════════════
+bgcolor(inCandle ? color.new(color.purple, 88) : na, title="Fereastra 15min (15:30-15:44)")
+
+showLvl = triggered and isLiq and not na(entryPx) and not eod
+plot(showLvl ? entryPx : na, "Entry 0.00", color.new(color.white,  10), 1, plot.style_linebr)
+plot(showLvl ? slPx    : na, "SL –0.19",  color.new(color.red,    10), 1, plot.style_linebr)
+plot(showLvl ? tpPx    : na, "TP 0.382",  color.new(color.lime,   10), 1, plot.style_linebr)
+
+// Range candelei de 15min
+var line rHLine = na
+var line rLLine = na
+if doTrigger and isLiq
+    if not na(rHLine)
+        line.delete(rHLine)
+    if not na(rLLine)
+        line.delete(rLLine)
+    rHLine := line.new(bar_index - 15, c_hi, bar_index + 60, c_hi,
+                       color=color.new(color.blue, 20), width=1, style=line.style_dashed)
+    rLLine := line.new(bar_index - 15, c_lo, bar_index + 60, c_lo,
+                       color=color.new(color.blue, 20), width=1, style=line.style_dashed)
+
+// Markere pe bara de trigger
+plotshape(doTrigger and isLiq and c_bear,  "Setup Long",       shape.triangleup,   location.belowbar,
+          color.new(color.lime,   0), size=size.normal, title="Setup Long (candela rosie)")
+plotshape(doTrigger and isLiq and c_bull,  "Setup Short",      shape.triangledown, location.abovebar,
+          color.new(color.red,    0), size=size.normal, title="Setup Short (candela verde)")
+plotshape(doTrigger and not isLiq,         "Candela invalida", shape.xcross,       location.abovebar,
+          color.new(color.gray,  30), size=size.small,  title="Sub filtru ATR")
+
+// ═══════════════════════════════════════════════════════════
+//  INFO TABLE
+// ═══════════════════════════════════════════════════════════
+var table tbl = table.new(position.top_right, 2, 9,
+     bgcolor=color.new(color.black, 70),
+     border_color=color.gray, border_width=1,
+     frame_color=color.gray,  frame_width=1)
+
+if barstate.islast
+    atrPct = not na(c_range) and not na(dATR) and dATR > 0 ?
+             c_range / dATR * 100.0 : na
+    status  = not triggered    ? "Asteapta 15:30 NY" :
+              not isLiq        ? "SKIP – sub ATR (" +
+                                  (not na(atrPct) ? str.tostring(atrPct, "#.1") + "%" : "—") + ")" :
+              dir == 1         ? "LONG setup (candela rosie ↓)" :
+              dir == -1        ? "SHORT setup (candela verde ↑)" : "—"
+    sCol    = not triggered ? color.gray :
+              not isLiq     ? color.orange :
+              dir == 1      ? color.lime : color.red
+
+    table.cell(tbl, 0, 0, "Adiiva PullBack",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
+    table.cell(tbl, 1, 0, "NY 15:30–15:44",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
+    table.cell(tbl, 0, 1, "Status",     text_color=color.gray,   text_size=size.small)
+    table.cell(tbl, 1, 1, status,       text_color=sCol,         text_size=size.small)
+    table.cell(tbl, 0, 2, "ATR Daily",  text_color=color.gray,   text_size=size.small)
+    table.cell(tbl, 1, 2, not na(dATR)     ? str.tostring(dATR,     "#.##") : "—",
+               text_color=color.white, text_size=size.small)
+    table.cell(tbl, 0, 3, "Min necesar ATR×25%", text_color=color.gray, text_size=size.small)
+    table.cell(tbl, 1, 3, not na(dATR)     ? str.tostring(dATR * i_atrPct, "#.##") : "—",
+               text_color=color.orange, text_size=size.small)
+    table.cell(tbl, 0, 4, "C15 Range",  text_color=color.gray,   text_size=size.small)
+    table.cell(tbl, 1, 4, not na(c_range)  ? str.tostring(c_range,  "#.##") + (isLiq ? " ✓" : " ✗") : "—",
+               text_color=isLiq ? color.lime : color.red, text_size=size.small)
+    table.cell(tbl, 0, 5, "Entry 0.00", text_color=color.gray,   text_size=size.small)
+    table.cell(tbl, 1, 5, not na(entryPx)  ? str.tostring(entryPx,  "#.##") : "—",
+               text_color=color.white, text_size=size.small)
+    table.cell(tbl, 0, 6, "SL –0.19",   text_color=color.red,    text_size=size.small)
+    table.cell(tbl, 1, 6, not na(slPx)    ? str.tostring(slPx,    "#.##") : "—",
+               text_color=color.red,   text_size=size.small)
+    table.cell(tbl, 0, 7, "TP  0.382",  text_color=color.lime,   text_size=size.small)
+    table.cell(tbl, 1, 7, not na(tpPx)    ? str.tostring(tpPx,    "#.##") : "—",
+               text_color=color.lime,  text_size=size.small)
+    table.cell(tbl, 0, 8, "EOD Close",  text_color=color.gray,   text_size=size.small)
+    table.cell(tbl, 1, 8, str.tostring(i_eodHour) + ":" +
+               (i_eodMin < 10 ? "0" : "") + str.tostring(i_eodMin) + " NY",
+               text_color=color.orange, text_size=size.small)
+
+// ═══════════════════════════════════════════════════════════
+//  ALERTE
+// ═══════════════════════════════════════════════════════════
+alertcondition(doTrigger and isLiq and c_bear,
+               "PullBack LONG setup",
+               "Adiiva PB: LONG setup activ | Entry: {{close}} | Asteapta retest 15:46+")
+alertcondition(doTrigger and isLiq and c_bull,
+               "PullBack SHORT setup",
+               "Adiiva PB: SHORT setup activ | Entry: {{close}} | Asteapta retest 15:46+")
+alertcondition(doTrigger and not isLiq,
+               "Candela invalida – skip",
+               "Adiiva PB: candela 15min sub filtrul ATR(14)×25% – nu tranzactionam azi")
