@@ -1,0 +1,327 @@
+//@version=5
+strategy("AdiivaBreakout NQ", overlay=true,
+         default_qty_type=strategy.fixed, default_qty_value=1,
+         max_bars_back=300, calc_on_every_tick=false,
+         process_orders_on_close=true,
+         commission_type=strategy.commission.cash_per_order, commission_value=0)
+// ═══════════════════════════════════════════════════════════
+//  INPUTS
+// ═══════════════════════════════════════════════════════════
+i_vaPercent    = input.float(68.0, "Value Area %",       minval=1, maxval=99, step=1, group="Volume Profile (SVP)")
+i_ticksPerRow  = input.int(10,    "Row Size (ticks)",  minval=1,                      group="Volume Profile (SVP)",
+                 tooltip="Marimea unui row in ticks (rowSize = ticks × syminfo.mintick)")
+i_slBuf     = input.float(0.0,  "SL Buffer (pts)", minval=0.0, step=0.25,            group="Risk",
+              tooltip="Extra buffer in points added beyond the calculated SL level")
+i_rrRatio   = input.float(1.0,  "Take Profit (R multiple)", minval=0.1, step=0.1,   group="Risk",
+              tooltip="TP = entry ± risk × acest multiplu  (1.0 = 1:1 R:R)")
+i_beR       = input.float(0.8,  "Break-Even trigger (R)",   minval=0.0, step=0.1,   group="Risk",
+              tooltip="Muta SL la entry cand pretul atinge aceasta fractie din risc (0 = dezactivat)")
+i_entryEndHour = input.int(11,  "Entry cutoff Hour (NY)",   minval=9,  maxval=18,    group="Session",
+                 tooltip="No new entries after this hour (New York time)")
+i_entryEndMin  = input.int(0,   "Entry cutoff Minute (NY)", minval=0,  maxval=59,    group="Session")
+i_eodHour      = input.int(16,  "EOD Close Hour (NY)",      minval=9,  maxval=22,    group="Session",
+                 tooltip="Force-close all positions at this hour (New York time)")
+i_eodMin       = input.int(0,   "EOD Close Minute (NY)",    minval=0,  maxval=59,    group="Session")
+// ═══════════════════════════════════════════════════════════
+//  TIMEFRAME GUARD – script must run on 1-minute chart
+// ═══════════════════════════════════════════════════════════
+if timeframe.period != "1"
+    runtime.error("⚠️ Acest script functioneaza DOAR pe graficul de 1 MINUT!")
+// ═══════════════════════════════════════════════════════════
+//  NEW YORK TIME  (auto-adjusts for US & EU DST transitions)
+// ═══════════════════════════════════════════════════════════
+nyH = hour(time,   "America/New_York")
+nyM = minute(time, "America/New_York")
+// ═══════════════════════════════════════════════════════════
+//  NEW DAY + RANGE WINDOW FLAG
+// ═══════════════════════════════════════════════════════════
+newDay  = ta.change(dayofmonth) != 0
+inRange = nyH == 9 and nyM >= 30 and nyM <= 45
+// ═══════════════════════════════════════════════════════════
+//  RANGE HIGH / LOW  (09:30 – 09:45 NY)
+// ═══════════════════════════════════════════════════════════
+var float rH     = na
+var float rL     = na
+var bool  rReady = false
+if newDay
+    rH     := na
+    rL     := na
+    rReady := false
+if inRange
+    rH := na(rH) ? high : math.max(rH, high)
+    rL := na(rL) ? low  : math.min(rL, low)
+// ═══════════════════════════════════════════════════════════
+//  RANGE-JUST-ENDED  – one-shot, robust la gap-uri CME
+//  Se declanseaza pe prima bara valida dupa fereastra de range
+// ═══════════════════════════════════════════════════════════
+var bool _rangeEndDone = false
+if newDay
+    _rangeEndDone := false
+rangeJustEnd = not _rangeEndDone and not na(rH) and not inRange and
+               ((nyH == 9 and nyM >= 46) or (nyH > 9 and nyH < i_eodHour))
+if rangeJustEnd
+    _rangeEndDone := true
+// ═══════════════════════════════════════════════════════════
+//  TIME FLAGS  (all expressed in NY time)
+// ═══════════════════════════════════════════════════════════
+tradeActive  = (nyH == 9 and nyM >= 46) or
+               (nyH > 9 and (nyH < i_eodHour or (nyH == i_eodHour and nyM < i_eodMin)))
+entryAllowed = tradeActive and
+               (nyH < i_entryEndHour or (nyH == i_entryEndHour and nyM < i_entryEndMin))
+eod          = nyH == i_eodHour and nyM >= i_eodMin
+if rangeJustEnd and not na(rH)
+    rReady := true
+// ═══════════════════════════════════════════════════════════
+//  VOLUME PROFILE – stocam OHLCV pentru fiecare bara din range
+//  Metodologie SVP Custom Up/Down: distributie UNIFORMA
+//  pe toate rowurile acoperite de bara (low → high)
+// ═══════════════════════════════════════════════════════════
+var array<float> _barH  = array.new_float(0)
+var array<float> _barL  = array.new_float(0)
+var array<float> _barV  = array.new_float(0)
+var array<int>   _barUp = array.new_int(0)   // 1 = bara bullish, 0 = bearish
+if newDay
+    array.clear(_barH)
+    array.clear(_barL)
+    array.clear(_barV)
+    array.clear(_barUp)
+if inRange
+    array.push(_barH,  high)
+    array.push(_barL,  low)
+    array.push(_barV,  volume)
+    array.push(_barUp, close >= open ? 1 : 0)
+// ═══════════════════════════════════════════════════════════
+//  VP CALCULATION – distributie uniforma (identic SVP Up/Down)
+//  Fiecare bara imparte volumul egal pe TOATE rowurile pe
+//  care le acopera, nu doar pe typical-price row
+// ═══════════════════════════════════════════════════════════
+var float poc  = na
+var float vah  = na
+var float val  = na
+var bool  vpOk = false
+if newDay
+    poc  := na
+    vah  := na
+    val  := na
+    vpOk := false
+if rangeJustEnd and not vpOk and not na(rH) and rH != rL
+    rowSize  = i_ticksPerRow * syminfo.mintick
+    gridBase = math.floor(rL / rowSize) * rowSize   // aliniere la grid absolut (ca TradingView SVP)
+    rows     = math.max(2, int(math.ceil((rH - gridBase) / rowSize)))
+    volBins  = array.new_float(rows, 0.0)
+    n = array.size(_barH)
+    for i = 0 to n - 1
+        bH  = math.min(array.get(_barH, i), rH)
+        bL  = math.max(array.get(_barL, i), rL)
+        bV  = array.get(_barV, i)
+        if bH <= bL
+            continue
+        loBin = math.max(0, math.min(rows - 1, int(math.floor((bL - gridBase) / rowSize))))
+        hiBin = math.max(0, math.min(rows - 1, int(math.floor((bH - gridBase) / rowSize))))
+        nBins = hiBin - loBin + 1
+        vpp   = bV / nBins
+        for b = loBin to hiBin
+            array.set(volBins, b, array.get(volBins, b) + vpp)
+    maxVol = array.max(volBins)
+    pocBin = array.indexof(volBins, maxVol)
+    poc   := gridBase + (pocBin + 0.5) * rowSize
+    totalVol = array.sum(volBins)
+    vaTarget = totalVol * i_vaPercent / 100.0
+    vaLo  = pocBin
+    vaHi  = pocBin
+    vaVol = maxVol
+    for _i = 0 to rows - 1
+        if vaVol >= vaTarget or (vaHi >= rows - 1 and vaLo <= 0)
+            break
+        addUp   = vaHi < rows - 1 ? array.get(volBins, vaHi + 1) : 0.0
+        addDown = vaLo > 0         ? array.get(volBins, vaLo - 1) : 0.0
+        if addUp >= addDown
+            vaHi  += 1
+            vaVol += addUp
+        else
+            vaLo  -= 1
+            vaVol += addDown
+    vah  := gridBase + (vaHi + 1) * rowSize
+    val  := gridBase + vaLo * rowSize
+    vpOk := true
+// ═══════════════════════════════════════════════════════════
+//  POST-RANGE EXTREMES  (for volatile SL)
+// ═══════════════════════════════════════════════════════════
+var float prH = na
+var float prL = na
+if newDay
+    prH := na
+    prL := na
+if tradeActive and vpOk
+    if high > vah
+        prH := na(prH) ? high : math.max(prH, high)
+    if low < val
+        prL := na(prL) ? low  : math.min(prL, low)
+// ═══════════════════════════════════════════════════════════
+//  VOLATILITY FLAG
+// ═══════════════════════════════════════════════════════════
+halfRange  = not na(rH) and not na(rL) ? (rH + rL) / 2.0 : na
+allInUpper = vpOk and not na(halfRange) and val >= halfRange
+allInLower = vpOk and not na(halfRange) and vah <= halfRange
+isVolatile = allInUpper or allInLower
+// ═══════════════════════════════════════════════════════════
+//  BREAKOUT STATE MACHINE
+// ═══════════════════════════════════════════════════════════
+var int  state     = 0
+var bool tradeDone = false
+if newDay
+    state     := 0
+    tradeDone := false
+bool brkUpConf = state == 0 and not tradeDone and entryAllowed and rReady and close > rH
+bool brkDnConf = state == 0 and not tradeDone and entryAllowed and rReady and close < rL
+if brkUpConf
+    state := 1
+if brkDnConf
+    state := 2
+bool retestLong  = state == 1 and entryAllowed and close >= rL and close <= rH
+bool retestShort = state == 2 and entryAllowed and close >= rL and close <= rH
+// ═══════════════════════════════════════════════════════════
+//  DYNAMIC SL TRACKING  (low sub VAL / high peste VAH in wait)
+//  In timp ce asteptam retestul, daca pretul face un low sub VAL
+//  (pt long) sau un high peste VAH (pt short), retinem acel nivel
+//  ca referinta pentru SL la intrare – da un SL mai strans.
+// ═══════════════════════════════════════════════════════════
+var float waitLow  = na   // cel mai mic low sub VAL in state == 1
+var float waitHigh = na   // cel mai mare high peste VAH in state == 2
+if newDay
+    waitLow  := na
+    waitHigh := na
+if state == 1 and vpOk and tradeActive and not na(val)
+    if low < val
+        waitLow := low   // ultimul low sub VAL (cel mai recent, nu minimul)
+if state == 2 and vpOk and tradeActive and not na(vah)
+    if high > vah
+        waitHigh := high  // ultimul high peste VAH (cel mai recent, nu maximul)
+// ═══════════════════════════════════════════════════════════
+//  STOP LOSS LOGIC
+// ═══════════════════════════════════════════════════════════
+slForLong() =>
+    float sl = na
+    if not na(waitLow)
+        sl := waitLow - i_slBuf          // SL sub ultimul low sub VAL (post-breakout)
+    else if not na(prL)
+        sl := prL - i_slBuf              // SL sub cel mai mic low sub VAL (inclusiv pre-breakout)
+    else
+        sl := not na(val) ? val - i_slBuf : rL - i_slBuf
+    sl
+slForShort() =>
+    float sl = na
+    if not na(waitHigh)
+        sl := waitHigh + i_slBuf         // SL peste ultimul high peste VAH (post-breakout)
+    else if not na(prH)
+        sl := prH + i_slBuf              // SL peste cel mai mare high peste VAH (inclusiv pre-breakout)
+    else
+        sl := not na(vah) ? vah + i_slBuf : rH + i_slBuf
+    sl
+// ═══════════════════════════════════════════════════════════
+//  TRADE TRACKING  (entry price + risk pentru BE / TP)
+// ═══════════════════════════════════════════════════════════
+var float entryPx = na   // pretul de intrare
+var float riskAmt = na   // distanta absoluta entry → SL
+var bool  beDone  = false
+if newDay
+    entryPx := na
+    riskAmt := na
+    beDone  := false
+// ═══════════════════════════════════════════════════════════
+//  TRADE ENTRIES  (1:1 TP + BE la i_beR × R)
+// ═══════════════════════════════════════════════════════════
+if retestLong and strategy.position_size == 0
+    sl       = slForLong()
+    entryPx := close
+    riskAmt := close - sl
+    beDone  := false
+    tp       = close + riskAmt * i_rrRatio
+    strategy.entry("Long",   strategy.long,  comment="RT ↑")
+    strategy.exit ("Exit L", "Long",  stop=sl, limit=tp)
+    state     := 0
+    tradeDone := true
+    waitLow   := na   // reset dupa intrare
+if retestShort and strategy.position_size == 0
+    sl       = slForShort()
+    entryPx := close
+    riskAmt := sl - close
+    beDone  := false
+    tp       = close - riskAmt * i_rrRatio
+    strategy.entry("Short",  strategy.short, comment="RT ↓")
+    strategy.exit ("Exit S", "Short", stop=sl, limit=tp)
+    state     := 0
+    tradeDone := true
+    waitHigh  := na   // reset dupa intrare
+// ═══════════════════════════════════════════════════════════
+//  BREAK-EVEN  – muta SL la entry cand pretul atinge i_beR × R
+// ═══════════════════════════════════════════════════════════
+if i_beR > 0 and not beDone and not na(entryPx) and not na(riskAmt)
+    if strategy.position_size > 0
+        if high >= entryPx + i_beR * riskAmt
+            strategy.exit("Exit L", "Long",  stop=entryPx, limit=entryPx + riskAmt * i_rrRatio)
+            beDone := true
+    if strategy.position_size < 0
+        if low <= entryPx - i_beR * riskAmt
+            strategy.exit("Exit S", "Short", stop=entryPx, limit=entryPx - riskAmt * i_rrRatio)
+            beDone := true
+// End-of-day close
+if eod and strategy.position_size != 0
+    strategy.close_all(comment="EOD")
+    state := 0
+// ═══════════════════════════════════════════════════════════
+//  VISUALS
+// ═══════════════════════════════════════════════════════════
+bgcolor(inRange ? color.new(color.blue, 88) : na, title="Range Window")
+rHshow = rReady or tradeActive ? rH : na
+rLshow = rReady or tradeActive ? rL : na
+plot(rHshow, "Range High", color.new(color.blue, 15), 2)
+plot(rLshow, "Range Low",  color.new(color.blue, 15), 2)
+plot(vpOk ? vah : na, "VAH", color.new(color.lime,   10), 2)
+plot(vpOk ? poc : na, "POC", color.new(color.yellow, 10), 2, plot.style_circles)
+plot(vpOk ? val : na, "VAL", color.new(color.red,    10), 2)
+bgcolor(isVolatile and tradeActive ? color.new(color.orange, 92) : na, title="Volatile Mode")
+plotshape(brkUpConf,   "Confirm ↑",   shape.triangleup,   location.belowbar, color.new(color.lime,  0), size=size.small, title="Breakout Up")
+plotshape(brkDnConf,   "Confirm ↓",   shape.triangledown, location.abovebar, color.new(color.red,   0), size=size.small, title="Breakout Down")
+plotshape(retestLong,  "Retest Long", shape.circle,       location.belowbar, color.new(color.green, 0), size=size.tiny,  title="Retest Long")
+plotshape(retestShort, "Retest Short",shape.circle,       location.abovebar, color.new(color.orange,0), size=size.tiny,  title="Retest Short")
+// ═══════════════════════════════════════════════════════════
+//  INFO TABLE
+// ═══════════════════════════════════════════════════════════
+var table infoT = table.new(position.top_right, 2, 9, bgcolor=color.new(color.black, 70), border_color=color.gray, border_width=1, frame_color=color.gray, frame_width=1)
+if barstate.islast
+    // Calculeaza ora Romania (Europe/Bucharest) pentru 09:30-09:45 NY
+    roH1 = hour(time, "Europe/Bucharest")
+    roM1 = minute(time, "Europe/Bucharest")
+    nyH1 = hour(time, "America/New_York")
+    nyM1 = minute(time, "America/New_York")
+    offsetH = roH1 - nyH1 + (roM1 >= nyM1 ? 0 : -1)
+    svpStart = "0" + str.tostring(9 + offsetH) + ":30"
+    svpEnd   = "0" + str.tostring(9 + offsetH) + ":45"
+    table.cell(infoT, 0, 0, "AVEM Range Strategy",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 50))
+    table.cell(infoT, 1, 0, "09:30–09:45 NY",        text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 50))
+    table.cell(infoT, 0, 8, "SVP Romania",  text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 8, svpStart + "–" + svpEnd, text_color=color.orange, text_size=size.small)
+    table.cell(infoT, 0, 1, "Range H",  text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 1, not na(rH)  ? str.tostring(rH,  "#.##") : "—", text_color=color.white, text_size=size.small)
+    table.cell(infoT, 0, 2, "Range L",  text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 2, not na(rL)  ? str.tostring(rL,  "#.##") : "—", text_color=color.white, text_size=size.small)
+    table.cell(infoT, 0, 3, "VAH",      text_color=color.lime,   text_size=size.small)
+    table.cell(infoT, 1, 3, not na(vah) ? str.tostring(vah, "#.##") : "—", text_color=color.lime,  text_size=size.small)
+    table.cell(infoT, 0, 4, "POC",      text_color=color.yellow, text_size=size.small)
+    table.cell(infoT, 1, 4, not na(poc) ? str.tostring(poc, "#.##") : "—", text_color=color.yellow,text_size=size.small)
+    table.cell(infoT, 0, 5, "VAL",      text_color=color.red,    text_size=size.small)
+    table.cell(infoT, 1, 5, not na(val) ? str.tostring(val, "#.##") : "—", text_color=color.red,   text_size=size.small)
+    table.cell(infoT, 0, 6, "Mode",     text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 6, isVolatile  ? "VOLATILE" : "NORMAL",
+               text_color=isVolatile ? color.orange : color.green, text_size=size.small)
+    table.cell(infoT, 0, 7, "R:R / BE", text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 7, "1:" + str.tostring(i_rrRatio, "#.#") + " / BE@" + str.tostring(i_beR, "#.#") + "R",
+               text_color=color.white, text_size=size.small)
+// ═══════════════════════════════════════════════════════════
+//  ALERTS
+// ═══════════════════════════════════════════════════════════
+alertcondition(retestLong,  "LONG Entry",  "AVEM ↑ Long retest entry @ {{close}}")
+alertcondition(retestShort, "SHORT Entry", "AVEM ↓ Short retest entry @ {{close}}")
+alertcondition(brkUpConf,   "Breakout UP confirmed",   "AVEM: Range broken UP – wait for retest")
+alertcondition(brkDnConf,   "Breakout DOWN confirmed", "AVEM: Range broken DOWN – wait for retest")
