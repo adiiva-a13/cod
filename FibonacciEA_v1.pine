@@ -9,7 +9,7 @@
 //    • Entry 1   : zona 0.750-0.786  |  SL dincolo de 0.886
 //    • Entry 2   : nivel 0.886       |  SL dincolo de 1.0
 //    • TP        : RR 1:2 (configurabil)
-//    • Sesiune   : 15:00-19:00 ora server  |  Max 2 trades/zi
+//    • Sesiune   : 11:00-16:00 UTC (13:00-18:00 ora Romaniei EET)  |  Max 2 trades/zi
 //
 //  Ruleaza pe timeframe M1 (sau orice TF sub 1H).
 // ============================================================
@@ -47,8 +47,8 @@ max_sw_pct  = input.float(3.0,  "Range maxim swing (%)",         group=G_SWG,  m
 ema_4h_len  = input.int(200,    "EMA 4H Period",                 group=G_TRD,  minval=10)
 ema_1h_len  = input.int(50,     "EMA 1H Period",                 group=G_TRD,  minval=5)
 
-sess_start  = input.int(15,     "Ora start sesiune (server)",    group=G_SES,  minval=0,  maxval=23)
-sess_end    = input.int(19,     "Ora sfarsit sesiune (server)",  group=G_SES,  minval=1,  maxval=24)
+sess_start  = input.int(11,     "Ora start sesiune UTC (13:00 RO)",  group=G_SES,  minval=0,  maxval=23)
+sess_end    = input.int(16,     "Ora sfarsit sesiune UTC (18:00 RO)", group=G_SES,  minval=1,  maxval=24)
 max_daily   = input.int(2,      "Max tranzactii/zi",             group=G_SES,  minval=1)
 
 // ============================================================
