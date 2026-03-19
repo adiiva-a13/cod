@@ -435,10 +435,16 @@ var box bx_zone = box.new(na, na, na, na,
                           border_color = color.new(color.orange, 50),
                           border_width = 1)
 
+// ── Linii TP (Entry 1 si Entry 2) ─────────────────────────
+var line ln_tp1 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.lime, 20), style=line.style_dashed, width=1)
+var line ln_tp2 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.lime, 40), style=line.style_dashed, width=1)
+
 // ── Etichete nivele ────────────────────────────────────────
 var label lbl_750 = label.new(na, na, "", color=color.new(color.orange, 80), textcolor=color.orange, style=label.style_label_left, size=size.tiny)
 var label lbl_786 = label.new(na, na, "", color=color.new(color.orange, 80), textcolor=color.orange, style=label.style_label_left, size=size.tiny)
 var label lbl_886 = label.new(na, na, "", color=color.new(color.red,    80), textcolor=color.red,    style=label.style_label_left, size=size.tiny)
+var label lbl_tp1 = label.new(na, na, "", color=color.new(color.lime,   80), textcolor=color.lime,   style=label.style_label_left, size=size.tiny)
+var label lbl_tp2 = label.new(na, na, "", color=color.new(color.lime,   80), textcolor=color.lime,   style=label.style_label_left, size=size.tiny)
 
 // Actualizeaza liniile si box-ul cand exista un setup valid
 if not na(g_hi) and not na(g_lo)
@@ -470,7 +476,30 @@ if not na(g_hi) and not na(g_lo)
     box.set_lefttop    (bx_zone, bar_index - look, z_top)
     box.set_rightbottom(bx_zone, bar_index + 30,   z_bot)
 
-    // Etichete
+    // TP lines (vizibile doar daca exista trade activ)
+    if not na(v_e1_tp)
+        line.set_xy1(ln_tp1, bar_index - look, v_e1_tp)
+        line.set_xy2(ln_tp1, bar_index,        v_e1_tp)
+        label.set_xy  (lbl_tp1, bar_index + 1, v_e1_tp)
+        label.set_text(lbl_tp1, "TP1 " + str.tostring(v_e1_tp, "#.#####"))
+    else
+        line.set_xy1(ln_tp1, na, na)
+        line.set_xy2(ln_tp1, na, na)
+        label.set_xy  (lbl_tp1, na, na)
+        label.set_text(lbl_tp1, "")
+
+    if not na(v_e2_tp)
+        line.set_xy1(ln_tp2, bar_index - look, v_e2_tp)
+        line.set_xy2(ln_tp2, bar_index,        v_e2_tp)
+        label.set_xy  (lbl_tp2, bar_index + 1, v_e2_tp)
+        label.set_text(lbl_tp2, "TP2 " + str.tostring(v_e2_tp, "#.#####"))
+    else
+        line.set_xy1(ln_tp2, na, na)
+        line.set_xy2(ln_tp2, na, na)
+        label.set_xy  (lbl_tp2, na, na)
+        label.set_text(lbl_tp2, "")
+
+    // Etichete Fibonacci
     label.set_xy  (lbl_750, bar_index + 1, f_750v)
     label.set_text(lbl_750, "0.750")
     label.set_xy  (lbl_786, bar_index + 1, f_786v)
