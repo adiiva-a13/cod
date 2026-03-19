@@ -70,8 +70,9 @@ f_lvl(dir, hi, lo, lvl) => dir == 1 ? hi - lvl*(hi-lo) : lo + lvl*(hi-lo)
                [ta.ema(close, ema_1h_len), close],
                lookahead = barmerge.lookahead_off)
 
-trend_dir = c4h > ema4h and c1h > ema1h ? 1 :
-            c4h < ema4h and c1h < ema1h ? -1 : 0
+_up   = c4h > ema4h and c1h > ema1h
+_down = c4h < ema4h and c1h < ema1h
+trend_dir = _up ? 1 : _down ? -1 : 0
 
 // ============================================================
 // 4. SESSION FILTER
@@ -212,9 +213,7 @@ setup_changed = false
 buf_p = sl_buf_tck * syminfo.mintick
 
 if not na(sw_hi) and not na(sw_lo)
-    changed = na(g_hi) or g_dir != trend_dir or
-              math.abs(sw_hi - g_hi) > syminfo.mintick or
-              math.abs(sw_lo - g_lo) > syminfo.mintick
+    changed = na(g_hi) or g_dir != trend_dir or math.abs(sw_hi - g_hi) > syminfo.mintick or math.abs(sw_lo - g_lo) > syminfo.mintick
     if changed
         g_hi          := sw_hi
         g_lo          := sw_lo
@@ -380,14 +379,13 @@ var table tbl = table.new(position.top_right, 1, 4,
                            border_color = color.new(color.gray, 60),
                            border_width = 1)
 
-trend_clr  = trend_dir ==  1 ? color.lime :
-             trend_dir == -1 ? color.red  : color.gray
-trend_txt  = trend_dir ==  1 ? "▲ UPTREND  (4H+1H)" :
-             trend_dir == -1 ? "▼ DOWNTREND (4H+1H)" : "─ NEUTRU (conflict)"
+trend_clr  = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
+trend_txt  = trend_dir ==  1 ? "▲ UPTREND  (4H+1H)" : trend_dir == -1 ? "▼ DOWNTREND (4H+1H)" : "─ NEUTRU (conflict)"
 sess_txt   = in_sess ? "✅ Sesiune activa" : "⏸ Afara sesiune"
-fib_txt    = not na(g_hi) ? (g_dir == 1 ? "BUY" : "SELL") +
-             " | Hi: " + str.tostring(g_hi, "#.##") +
-             " Lo: "   + str.tostring(g_lo, "#.##") : "— fara setup —"
+_fib_dir   = g_dir == 1 ? "BUY" : "SELL"
+_fib_hi    = str.tostring(g_hi, "#.##")
+_fib_lo    = str.tostring(g_lo, "#.##")
+fib_txt    = not na(g_hi) ? _fib_dir + " | Hi: " + _fib_hi + " Lo: " + _fib_lo : "— fara setup —"
 trade_txt  = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
 
 table.cell(tbl, 0, 0, trend_txt,  text_color=trend_clr,         text_size=size.small)
