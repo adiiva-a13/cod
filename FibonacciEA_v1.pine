@@ -19,7 +19,7 @@
 // ============================================================
 //@version=5
 strategy(
-  title             = "FibonacciEA v1 – Retracement 0.786/0.886",
+  title             = "AdiivaGold",
   overlay           = true,
   initial_capital   = 10000,
   default_qty_type  = strategy.cash,
