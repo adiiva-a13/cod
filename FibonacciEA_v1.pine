@@ -507,6 +507,38 @@ if not na(g_hi) and not na(g_lo)
     label.set_xy  (lbl_886, bar_index + 1, f_886v)
     label.set_text(lbl_886, "0.886")
 
+// ── Entry markers ─────────────────────────────────────────
+e1_just_entered = e1_done and not e1_done[1]
+e2_just_entered = e2_done and not e2_done[1]
+
+if e1_just_entered
+    _dir_txt = v_e1_dir == 1 ? "▲ E1 BUY" : "▼ E1 SELL"
+    _clr     = v_e1_dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10)
+    _style   = v_e1_dir == 1 ? label.style_label_up : label.style_label_down
+    _y       = v_e1_dir == 1 ? low : high
+    label.new(bar_index, _y, _dir_txt + "\n" + str.tostring(v_e1_entry, "#.#####"),
+              color=_clr, textcolor=color.white, style=_style, size=size.small)
+
+if e2_just_entered
+    _dir_txt = v_e2_dir == 1 ? "▲ E2 BUY" : "▼ E2 SELL"
+    _clr     = v_e2_dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10)
+    _style   = v_e2_dir == 1 ? label.style_label_up : label.style_label_down
+    _y       = v_e2_dir == 1 ? low : high
+    label.new(bar_index, _y, _dir_txt + "\n" + str.tostring(v_e2_entry, "#.#####"),
+              color=_clr, textcolor=color.white, style=_style, size=size.small)
+
+// ── Exit markers ──────────────────────────────────────────
+var int prev_closed = 0
+if strategy.closedtrades > prev_closed
+    _idx      = strategy.closedtrades - 1
+    _ex_price = strategy.closedtrades.exit_price(_idx)
+    _ex_prof  = strategy.closedtrades.profit(_idx)
+    _ex_clr   = _ex_prof >= 0 ? color.new(color.lime, 10) : color.new(color.red, 10)
+    _ex_txt   = _ex_prof >= 0 ? "✓ TP  " + str.tostring(_ex_price, "#.#####") : "✗ SL  " + str.tostring(_ex_price, "#.#####")
+    _ex_style = _ex_prof >= 0 ? label.style_label_down : label.style_label_up
+    label.new(bar_index, _ex_price, _ex_txt, color=_ex_clr, textcolor=color.white, style=_ex_style, size=size.small)
+    prev_closed := strategy.closedtrades
+
 // ── Status table ─────────────────────────────────────────
 var table tbl = table.new(position.top_right, 1, 5,
                            bgcolor      = color.new(color.black, 75),
