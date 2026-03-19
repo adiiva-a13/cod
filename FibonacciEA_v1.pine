@@ -7,7 +7,7 @@
 //    • Setup     : swing M1 de 1-3%, detectat prin pivot high/low
 //    • Entry 1   : zona 0.750-0.786  |  SL dincolo de 0.886
 //    • Entry 2   : nivel 0.886       |  SL dincolo de 1.0
-//    • TP        : RR 1:2 (configurabil)
+//    • TP        : RR 1:2  |  BE automat la 1:1 (SL mutat la entry)
 //    • Sesiune   : 2 ferestre cu schimbare automata ora (DST)
 //                  Dimineata – London open  : 08:00 UTC iarna / 07:00 UTC vara
 //                                            (10:00 RO iarna = 10:00 RO vara – mereu la fel!)
@@ -248,12 +248,29 @@ var int   g_dir   = 0
 var bool  e1_done = false
 var bool  e2_done = false
 
+// Break Even tracking (per trade)
+var float v_e1_entry = na
+var float v_e1_sl    = na
+var float v_e1_tp    = na
+var int   v_e1_dir   = 0
+var bool  v_e1_be    = false
+
+var float v_e2_entry = na
+var float v_e2_sl    = na
+var float v_e2_tp    = na
+var int   v_e2_dir   = 0
+var bool  v_e2_be    = false
+
 if is_new_day
-    g_hi    := na
-    g_lo    := na
-    g_dir   := 0
-    e1_done := false
-    e2_done := false
+    g_hi       := na
+    g_lo       := na
+    g_dir      := 0
+    e1_done    := false
+    e2_done    := false
+    v_e1_entry := na
+    v_e1_be    := false
+    v_e2_entry := na
+    v_e2_be    := false
 
 setup_changed = false
 buf_p = sl_buf_tck * syminfo.mintick
@@ -308,23 +325,31 @@ if can_trade
     // ── ENTRY 1: zona 0.750-0.786 ──────────────────────────────
     if not e1_done
         if g_dir == 1
-            // BUY: f_786 (mai jos) <= close <= f_750 (mai sus)
             if close <= f_750 and close >= f_786
                 sl_1  = f_886 - buf_p
                 risk1 = math.abs(close - sl_1)
                 tp_1  = close + risk1 * rr_ratio
                 strategy.entry("E1L", strategy.long,  comment="E1 BUY  0.786")
                 strategy.exit ("E1Lx", "E1L", stop=sl_1, limit=tp_1)
+                v_e1_entry := close
+                v_e1_sl    := sl_1
+                v_e1_tp    := tp_1
+                v_e1_dir   := 1
+                v_e1_be    := false
                 e1_done    := true
                 day_trades := day_trades + 1
         else
-            // SELL: f_750 (mai jos) <= close <= f_786 (mai sus)
             if close >= f_750 and close <= f_786
                 sl_1  = f_886 + buf_p
                 risk1 = math.abs(sl_1 - close)
                 tp_1  = close - risk1 * rr_ratio
                 strategy.entry("E1S", strategy.short, comment="E1 SELL 0.786")
                 strategy.exit ("E1Sx", "E1S", stop=sl_1, limit=tp_1)
+                v_e1_entry := close
+                v_e1_sl    := sl_1
+                v_e1_tp    := tp_1
+                v_e1_dir   := -1
+                v_e1_be    := false
                 e1_done    := true
                 day_trades := day_trades + 1
 
@@ -337,6 +362,11 @@ if can_trade
                 tp_2  = close + risk2 * rr_ratio
                 strategy.entry("E2L", strategy.long,  comment="E2 BUY  0.886")
                 strategy.exit ("E2Lx", "E2L", stop=sl_2, limit=tp_2)
+                v_e2_entry := close
+                v_e2_sl    := sl_2
+                v_e2_tp    := tp_2
+                v_e2_dir   := 1
+                v_e2_be    := false
                 e2_done    := true
                 day_trades := day_trades + 1
         else
@@ -346,11 +376,39 @@ if can_trade
                 tp_2  = close - risk2 * rr_ratio
                 strategy.entry("E2S", strategy.short, comment="E2 SELL 0.886")
                 strategy.exit ("E2Sx", "E2S", stop=sl_2, limit=tp_2)
+                v_e2_entry := close
+                v_e2_sl    := sl_2
+                v_e2_tp    := tp_2
+                v_e2_dir   := -1
+                v_e2_be    := false
                 e2_done    := true
                 day_trades := day_trades + 1
 
 // ============================================================
-// 10. VIZUALIZARE
+// 10. BREAK EVEN la 1:1
+//     Cand pretul atinge nivelul 1:1 (risk = profit), SL se muta
+//     la pretul de entry. TP-ul la 2:1 ramane neschimbat.
+// ============================================================
+if not na(v_e1_entry) and not v_e1_be
+    _be1_lvl = v_e1_entry + v_e1_dir * math.abs(v_e1_entry - v_e1_sl)
+    _be1_hit = v_e1_dir == 1 ? high >= _be1_lvl : low <= _be1_lvl
+    if _be1_hit
+        _id1 = v_e1_dir == 1 ? "E1Lx" : "E1Sx"
+        _fr1 = v_e1_dir == 1 ? "E1L"  : "E1S"
+        strategy.exit(_id1, _fr1, stop=v_e1_entry, limit=v_e1_tp, comment="BE E1")
+        v_e1_be := true
+
+if not na(v_e2_entry) and not v_e2_be
+    _be2_lvl = v_e2_entry + v_e2_dir * math.abs(v_e2_entry - v_e2_sl)
+    _be2_hit = v_e2_dir == 1 ? high >= _be2_lvl : low <= _be2_lvl
+    if _be2_hit
+        _id2 = v_e2_dir == 1 ? "E2Lx" : "E2Sx"
+        _fr2 = v_e2_dir == 1 ? "E2L"  : "E2S"
+        strategy.exit(_id2, _fr2, stop=v_e2_entry, limit=v_e2_tp, comment="BE E2")
+        v_e2_be := true
+
+// ============================================================
+// 11. VIZUALIZARE
 // ============================================================
 
 // ── Fundal sesiuni (London=albastru, NY=verde) ──────────────
