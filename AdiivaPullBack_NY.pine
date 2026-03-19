@@ -10,6 +10,16 @@ strategy("Adiiva PullBack NY", overlay=true,
 // ═══════════════════════════════════════════════════════════
 i_atrPct  = input.float(0.25, "ATR Liquidity Filter (ratio)", minval=0.01, step=0.01, group="Filters",
               tooltip="Valid daca (H-L) candela 15min >= ratio × ATR(14) Daily. Ex: 0.25 = 25%")
+
+i_cStartH = input.int(9,  "Candela Start – Ora (NY)",    minval=0, maxval=23, group="Candela Range NY",
+              tooltip="Ora de inceput a candelei de referinta (NY time). Default: 9 = 09:xx")
+i_cStartM = input.int(30, "Candela Start – Minut (NY)",  minval=0, maxval=59, group="Candela Range NY",
+              tooltip="Minutul de inceput al candelei. Default: 30 → 09:30 NY")
+i_cEndH   = input.int(9,  "Candela End – Ora (NY)",      minval=0, maxval=23, group="Candela Range NY",
+              tooltip="Ora de sfarsit a candelei (inclusiv). Default: 9 = 09:xx")
+i_cEndM   = input.int(45, "Candela End – Minut (NY)",    minval=0, maxval=59, group="Candela Range NY",
+              tooltip="Minutul de sfarsit al candelei. Default: 45 → 09:45 NY")
+
 i_eodHour = input.int(18, "EOD Close Hour (NY)",   minval=10, maxval=23, group="Session",
               tooltip="Inchidere fortata a pozitiei la aceasta ora (New York)")
 i_eodMin  = input.int(0,  "EOD Close Minute (NY)", minval=0,  maxval=59, group="Session")
@@ -40,7 +50,11 @@ newNYDay = ta.change(time("D", "America/New_York")) != 0
 //  AUTOMAT: scriptul foloseste "America/New_York" → se ajusteaza singur
 //  la orice schimbare de ora (EST↔EDT), indiferent de ora locala
 // ═══════════════════════════════════════════════════════════
-inCandle = nyMin >= 9 * 60 + 30 and nyMin <= 9 * 60 + 45
+cStartMin = i_cStartH * 60 + i_cStartM
+cEndMin   = i_cEndH   * 60 + i_cEndM
+trigMin   = cEndMin + 1   // bara imediat dupa inchiderea candelei
+
+inCandle = nyMin >= cStartMin and nyMin <= cEndMin
 
 var float c_hi    = na
 var float c_lo    = na
@@ -76,8 +90,8 @@ eod    = nyMin >= eodMin
 if newNYDay
     triggered := false
 
-// Trigger: bara 09:46 (prima bara dupa inchiderea candelei de 15min la 09:45)
-doTrigger = not triggered and nyMin == 9 * 60 + 46 and not na(c_hi)
+// Trigger: prima bara dupa inchiderea candelei (cEndMin + 1)
+doTrigger = not triggered and nyMin == trigMin and not na(c_hi)
 
 if doTrigger
     triggered := true
@@ -151,7 +165,7 @@ if eod
 // ═══════════════════════════════════════════════════════════
 //  VIZUALIZARI
 // ═══════════════════════════════════════════════════════════
-bgcolor(inCandle ? color.new(color.purple, 88) : na, title="Fereastra 15min (09:30-09:45 NY)")
+bgcolor(inCandle ? color.new(color.purple, 88) : na, title="Fereastra Candela NY")
 
 showLvl = triggered and isLiq and not na(entryPx) and not eod
 plot(showLvl ? entryPx : na, "Entry 0.00", color.new(color.white,  10), 1, plot.style_linebr)
@@ -190,17 +204,19 @@ var table tbl = table.new(position.top_right, 2, 9,
 if barstate.islast
     atrPct = not na(c_range) and not na(dATR) and dATR > 0 ?
              c_range / dATR * 100.0 : na
-    status  = not triggered    ? "Asteapta 15:30 NY" :
-              not isLiq        ? "SKIP – sub ATR (" +
-                                  (not na(atrPct) ? str.tostring(atrPct, "#.1") + "%" : "—") + ")" :
-              dir == 1         ? "LONG setup (candela rosie ↓)" :
-              dir == -1        ? "SHORT setup (candela verde ↑)" : "—"
+    cLabel  = str.tostring(i_cStartH) + ":" + (i_cStartM < 10 ? "0" : "") + str.tostring(i_cStartM) +
+              "–" + str.tostring(i_cEndH) + ":" + (i_cEndM < 10 ? "0" : "") + str.tostring(i_cEndM) + " NY"
+    status  = not triggered ? "Asteapta " + cLabel :
+              not isLiq     ? "SKIP – sub ATR (" +
+                               (not na(atrPct) ? str.tostring(atrPct, "#.1") + "%" : "—") + ")" :
+              dir == 1      ? "LONG setup (candela rosie ↓)" :
+              dir == -1     ? "SHORT setup (candela verde ↑)" : "—"
     sCol    = not triggered ? color.gray :
               not isLiq     ? color.orange :
               dir == 1      ? color.lime : color.red
 
     table.cell(tbl, 0, 0, "Adiiva PullBack NY Open",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
-    table.cell(tbl, 1, 0, "NY 09:30–09:45",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
+    table.cell(tbl, 1, 0, "NY " + cLabel,       text_color=color.white,  text_size=size.small, bgcolor=color.new(color.purple, 50))
     table.cell(tbl, 0, 1, "Status",     text_color=color.gray,   text_size=size.small)
     table.cell(tbl, 1, 1, status,       text_color=sCol,         text_size=size.small)
     table.cell(tbl, 0, 2, "ATR Daily",  text_color=color.gray,   text_size=size.small)
@@ -231,10 +247,10 @@ if barstate.islast
 // ═══════════════════════════════════════════════════════════
 alertcondition(doTrigger and isLiq and c_bear,
                "PullBack LONG setup",
-               "Adiiva PB: LONG setup activ | Entry: {{close}} | Asteapta retest 15:46+")
+               "Adiiva PB: LONG setup activ | Entry: {{close}} | Asteapta retest dupa candela")
 alertcondition(doTrigger and isLiq and c_bull,
                "PullBack SHORT setup",
-               "Adiiva PB: SHORT setup activ | Entry: {{close}} | Asteapta retest 15:46+")
+               "Adiiva PB: SHORT setup activ | Entry: {{close}} | Asteapta retest dupa candela")
 alertcondition(doTrigger and not isLiq,
                "Candela invalida – skip",
                "Adiiva PB: candela 15min sub filtrul ATR(14)×25% – nu tranzactionam azi")
