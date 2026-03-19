@@ -9,7 +9,12 @@
 //    • Entry 1   : zona 0.750-0.786  |  SL dincolo de 0.886
 //    • Entry 2   : nivel 0.886       |  SL dincolo de 1.0
 //    • TP        : RR 1:2 (configurabil)
-//    • Sesiune   : 11:00-16:00 UTC (13:00-18:00 ora Romaniei EET)  |  Max 2 trades/zi
+//    • Sesiune   : 2 ferestre cu schimbare automata ora (DST)
+//                  Dimineata – London open  : 08:00 UTC iarna / 07:00 UTC vara
+//                                            (10:00 RO iarna = 10:00 RO vara – mereu la fel!)
+//                  Dupa-masa – NY open      : 13:30-15:30 UTC tot anul
+//                                            (15:30 RO iarna / 16:30 RO vara)
+//                  DST auto: ultima duminica martie (start) / ultima duminica oct (sfarsit)
 //
 //  Ruleaza pe timeframe M1 (sau orice TF sub 1H).
 // ============================================================
@@ -47,9 +52,19 @@ max_sw_pct  = input.float(3.0,  "Range maxim swing (%)",         group=G_SWG,  m
 ema_4h_len  = input.int(200,    "EMA 4H Period",                 group=G_TRD,  minval=10)
 ema_1h_len  = input.int(50,     "EMA 1H Period",                 group=G_TRD,  minval=5)
 
-sess_start  = input.int(11,     "Ora start sesiune UTC (13:00 RO)",  group=G_SES,  minval=0,  maxval=23)
-sess_end    = input.int(16,     "Ora sfarsit sesiune UTC (18:00 RO)", group=G_SES,  minval=1,  maxval=24)
-max_daily   = input.int(2,      "Max tranzactii/zi",             group=G_SES,  minval=1)
+// Sesiunea 1 – London open (08:00-10:00 UTC | 10:00-12:00 RO iarna | 11:00-13:00 RO vara)
+morn_h_s    = input.int(8,  "Dimineata start ora  UTC",   group=G_SES, minval=0, maxval=23)
+morn_m_s    = input.int(0,  "Dimineata start minut",      group=G_SES, minval=0, maxval=59)
+morn_h_e    = input.int(10, "Dimineata sfarsit ora UTC",  group=G_SES, minval=0, maxval=23)
+morn_m_e    = input.int(0,  "Dimineata sfarsit minut",    group=G_SES, minval=0, maxval=59)
+
+// Sesiunea 2 – NY open (13:30-15:30 UTC | 15:30-17:30 RO iarna | 16:30-18:30 RO vara)
+aftn_h_s    = input.int(13, "Dupa-masa start ora  UTC",   group=G_SES, minval=0, maxval=23)
+aftn_m_s    = input.int(30, "Dupa-masa start minut",      group=G_SES, minval=0, maxval=59)
+aftn_h_e    = input.int(15, "Dupa-masa sfarsit ora UTC",  group=G_SES, minval=0, maxval=23)
+aftn_m_e    = input.int(30, "Dupa-masa sfarsit minut",    group=G_SES, minval=0, maxval=59)
+
+max_daily   = input.int(2,  "Max tranzactii/zi",          group=G_SES, minval=1)
 
 // ============================================================
 // 2. HELPER: pret la nivel fibonacci
@@ -75,12 +90,40 @@ _down = c4h < ema4h and c1h < ema1h
 trend_dir = _up ? 1 : _down ? -1 : 0
 
 // ============================================================
-// 4. SESSION FILTER
+// 4. DST AUTO (EU: ultima duminica martie → ultima duminica oct)
+//    Cand Romania/Londra sunt la ora de vara (EEST/BST):
+//      – London deschide la 07:00 UTC in loc de 08:00 UTC
+//      – NY open ramane 13:30 UTC (SUA schimba cu 3 sapt mai devreme)
 // ============================================================
-in_sess = hour >= sess_start and hour < sess_end
+_ts31m      = timestamp(year, 3, 31, 12, 0)
+_dow31m     = dayofweek(_ts31m)                          // 1=Sun..7=Sat
+_dst_s_day  = _dow31m == 1 ? 31 : 31 - (_dow31m - 1)    // ultima duminica martie
+
+_ts31o      = timestamp(year, 10, 31, 12, 0)
+_dow31o     = dayofweek(_ts31o)
+_dst_e_day  = _dow31o == 1 ? 31 : 31 - (_dow31o - 1)    // ultima duminica octombrie
+
+_aft_spr    = (month > 3)  or (month == 3  and dayofmonth >= _dst_s_day)
+_bef_aut    = (month < 10) or (month == 10 and dayofmonth <  _dst_e_day)
+_is_summer  = _aft_spr and _bef_aut
+
+// Decalaj ora de vara: sesiunea de dimineata incepe cu 60 min mai devreme in UTC
+_dst_off    = _is_summer ? -60 : 0
 
 // ============================================================
-// 5. DAILY RESET
+// 5. SESSION FILTER  (doua ferestre: London open + NY open)
+// ============================================================
+_cm         = hour * 60 + minute
+_morn_s     = morn_h_s * 60 + morn_m_s + _dst_off
+_morn_e     = morn_h_e * 60 + morn_m_e + _dst_off
+_aftn_s     = aftn_h_s * 60 + aftn_m_s   // NY open: 13:30 UTC tot anul
+_aftn_e     = aftn_h_e * 60 + aftn_m_e
+in_morn     = _cm >= _morn_s and _cm < _morn_e
+in_aftn     = _cm >= _aftn_s and _cm < _aftn_e
+in_sess     = in_morn or in_aftn
+
+// ============================================================
+// 6. DAILY RESET
 // ============================================================
 var int  day_trades = 0
 var int  last_date  = 0
@@ -92,7 +135,7 @@ if is_new_day
     last_date  := cur_date
 
 // ============================================================
-// 6. PIVOT HIGH / LOW STORAGE (array)
+// 7. PIVOT HIGH / LOW STORAGE (array)
 //    Stocam ultimele MAX_P pivoti detectati pe bara curenta.
 //    ph_raw / pl_raw sunt disponibile cu intarziere de piv_bars bare.
 // ============================================================
@@ -307,8 +350,9 @@ if can_trade
 // 10. VIZUALIZARE
 // ============================================================
 
-// ── Fundal sesiune ──────────────────────────────────────────
-bgcolor(in_sess ? color.new(color.blue, 95) : na, title="Sesiune activa")
+// ── Fundal sesiuni (London=albastru, NY=verde) ──────────────
+bgcolor(in_morn ? color.new(color.blue,  93) : na, title="Sesiune London")
+bgcolor(in_aftn ? color.new(color.green, 93) : na, title="Sesiune NY")
 
 // ── EMA-uri pe chart ───────────────────────────────────────
 plot(ema4h, "EMA 200 (4H)", color=color.new(color.blue,   40), linewidth=2)
@@ -374,21 +418,24 @@ if not na(g_hi) and not na(g_lo)
     label.set_text(lbl_886, "0.886")
 
 // ── Status table ─────────────────────────────────────────
-var table tbl = table.new(position.top_right, 1, 4,
+var table tbl = table.new(position.top_right, 1, 5,
                            bgcolor      = color.new(color.black, 75),
                            border_color = color.new(color.gray, 60),
                            border_width = 1)
 
 trend_clr  = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
 trend_txt  = trend_dir ==  1 ? "▲ UPTREND  (4H+1H)" : trend_dir == -1 ? "▼ DOWNTREND (4H+1H)" : "─ NEUTRU (conflict)"
-sess_txt   = in_sess ? "✅ Sesiune activa" : "⏸ Afara sesiune"
+sess_txt   = in_morn ? "🔵 London open (dimineata)" : in_aftn ? "🟢 NY open (dupa-masa)" : "⏸ Afara sesiune"
 _fib_dir   = g_dir == 1 ? "BUY" : "SELL"
 _fib_hi    = str.tostring(g_hi, "#.##")
 _fib_lo    = str.tostring(g_lo, "#.##")
 fib_txt    = not na(g_hi) ? _fib_dir + " | Hi: " + _fib_hi + " Lo: " + _fib_lo : "— fara setup —"
 trade_txt  = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
+dst_txt    = _is_summer ? "☀️ Ora vara (EEST / BST) – London 07:00 UTC" : "❄️ Ora iarna (EET / GMT) – London 08:00 UTC"
+dst_clr    = _is_summer ? color.yellow : color.new(color.white, 40)
 
-table.cell(tbl, 0, 0, trend_txt,  text_color=trend_clr,         text_size=size.small)
-table.cell(tbl, 0, 1, sess_txt,   text_color=color.white,       text_size=size.small)
-table.cell(tbl, 0, 2, fib_txt,    text_color=color.orange,      text_size=size.small)
-table.cell(tbl, 0, 3, trade_txt,  text_color=color.white,       text_size=size.small)
+table.cell(tbl, 0, 0, trend_txt,  text_color=trend_clr,    text_size=size.small)
+table.cell(tbl, 0, 1, sess_txt,   text_color=color.white,  text_size=size.small)
+table.cell(tbl, 0, 2, fib_txt,    text_color=color.orange, text_size=size.small)
+table.cell(tbl, 0, 3, trade_txt,  text_color=color.white,  text_size=size.small)
+table.cell(tbl, 0, 4, dst_txt,    text_color=dst_clr,      text_size=size.tiny)
