@@ -507,25 +507,50 @@ if not na(g_hi) and not na(g_lo)
     label.set_xy  (lbl_886, bar_index + 1, f_886v)
     label.set_text(lbl_886, "0.886")
 
-// ── Entry markers ─────────────────────────────────────────
+// ── Entry markers + linii persistente Entry/SL/TP ─────────
 e1_just_entered = e1_done and not e1_done[1]
 e2_just_entered = e2_done and not e2_done[1]
 
+f_draw_trade_lines(entry_p, sl_p, tp_p, dir, lbl_txt) =>
+    _entry_clr = color.new(color.white,  10)
+    _sl_clr    = color.new(color.red,    10)
+    _tp_clr    = color.new(color.lime,   10)
+    _x1        = bar_index
+    // Linie Entry
+    _le = line.new(_x1, entry_p, _x1 + 1, entry_p,
+                   extend=extend.right, color=_entry_clr,
+                   style=line.style_solid, width=1)
+    label.new(_x1, entry_p, "ENTRY " + str.tostring(entry_p, "#.#####"),
+              color=color.new(color.white, 70), textcolor=_entry_clr,
+              style=label.style_label_right, size=size.tiny)
+    // Linie SL
+    _ls = line.new(_x1, sl_p, _x1 + 1, sl_p,
+                   extend=extend.right, color=_sl_clr,
+                   style=line.style_solid, width=1)
+    label.new(_x1, sl_p, "SL " + str.tostring(sl_p, "#.#####"),
+              color=color.new(color.red, 70), textcolor=_sl_clr,
+              style=label.style_label_right, size=size.tiny)
+    // Linie TP
+    _lt = line.new(_x1, tp_p, _x1 + 1, tp_p,
+                   extend=extend.right, color=_tp_clr,
+                   style=line.style_dashed, width=1)
+    label.new(_x1, tp_p, "TP " + str.tostring(tp_p, "#.#####"),
+              color=color.new(color.lime, 70), textcolor=_tp_clr,
+              style=label.style_label_right, size=size.tiny)
+    // Label entry pe lumanare
+    _btn_clr = dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10)
+    _btn_sty = dir == 1 ? label.style_label_up : label.style_label_down
+    _btn_y   = dir == 1 ? low : high
+    label.new(_x1, _btn_y, lbl_txt + "\n" + str.tostring(entry_p, "#.#####"),
+              color=_btn_clr, textcolor=color.white, style=_btn_sty, size=size.small)
+
 if e1_just_entered
-    _dir_txt = v_e1_dir == 1 ? "▲ E1 BUY" : "▼ E1 SELL"
-    _clr     = v_e1_dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10)
-    _style   = v_e1_dir == 1 ? label.style_label_up : label.style_label_down
-    _y       = v_e1_dir == 1 ? low : high
-    label.new(bar_index, _y, _dir_txt + "\n" + str.tostring(v_e1_entry, "#.#####"),
-              color=_clr, textcolor=color.white, style=_style, size=size.small)
+    _txt = v_e1_dir == 1 ? "▲ E1 BUY" : "▼ E1 SELL"
+    f_draw_trade_lines(v_e1_entry, v_e1_sl, v_e1_tp, v_e1_dir, _txt)
 
 if e2_just_entered
-    _dir_txt = v_e2_dir == 1 ? "▲ E2 BUY" : "▼ E2 SELL"
-    _clr     = v_e2_dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10)
-    _style   = v_e2_dir == 1 ? label.style_label_up : label.style_label_down
-    _y       = v_e2_dir == 1 ? low : high
-    label.new(bar_index, _y, _dir_txt + "\n" + str.tostring(v_e2_entry, "#.#####"),
-              color=_clr, textcolor=color.white, style=_style, size=size.small)
+    _txt = v_e2_dir == 1 ? "▲ E2 BUY" : "▼ E2 SELL"
+    f_draw_trade_lines(v_e2_entry, v_e2_sl, v_e2_tp, v_e2_dir, _txt)
 
 // ── Exit markers ──────────────────────────────────────────
 var int prev_closed = 0
