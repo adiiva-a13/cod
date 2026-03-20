@@ -1,21 +1,16 @@
 // ============================================================
-//  FibonacciEA v1  –  TradingView Pine Script v5
+//  FibonacciEA v2  –  TradingView Pine Script v5
 //  Strategie Fibonacci Retracement
 //
 //  Logica:
 //    • Directie  : VWAP Weekly (pret > VWAP = UP, pret < VWAP = DOWN)
-//    • Setup     : swing de minim 1%, fara limita superioara, detectat prin pivot high/low
+//    • Fibonacci : UP  → swing de la LOW la HIGH, intrare la retrasare 0.75-0.786
+//                  DOWN → swing de la HIGH la LOW, intrare la bounce 0.75-0.786
 //    • Entry 1   : zona 0.750-0.786  |  SL dincolo de 0.886
 //    • Entry 2   : nivel 0.886       |  SL dincolo de 1.0
 //    • TP        : RR 1:2  |  BE automat la 1:1 (SL mutat la entry)
-//    • Sesiune   : 2 ferestre cu schimbare automata ora (DST)
-//                  Dimineata – London open  : 08:00 UTC iarna / 07:00 UTC vara
-//                                            (10:00 RO iarna = 10:00 RO vara – mereu la fel!)
-//                  Dupa-masa – NY open      : 13:30-15:30 UTC tot anul
-//                                            (15:30 RO iarna / 16:30 RO vara)
-//                  DST auto: ultima duminica martie (start) / ultima duminica oct (sfarsit)
-//
-//  Ruleaza pe timeframe M1 (sau orice TF sub 1H).
+//    • Linii     : dispar automat cand trade-ul se inchide (TP/SL atins)
+//    • Fix       : fib reset automat la schimbarea trendului
 // ============================================================
 //@version=5
 strategy(
@@ -33,54 +28,44 @@ strategy(
 // ============================================================
 var string G_RISK = "Risk Management"
 var string G_FIB  = "Fibonacci Nivele"
-var string G_SWG  = "Swing Detectie (M1)"
+var string G_SWG  = "Swing Detectie"
 var string G_SES  = "Sesiune"
 
-rr_ratio    = input.float(2.0,  "RR Ratio",                      group=G_RISK, minval=0.5,  step=0.5)
+rr_ratio   = input.float(2.0,   "RR Ratio",                group=G_RISK, minval=0.5,  step=0.5)
+fib_e1_bot = input.float(0.750, "Entry 1 – nivel inferior",group=G_FIB,  step=0.001)
+fib_e1_top = input.float(0.786, "Entry 1 – nivel superior",group=G_FIB,  step=0.001)
+fib_e2     = input.float(0.886, "Entry 2 – nivel",         group=G_FIB,  step=0.001)
+sl_buf_tck = input.int(20,      "Buffer SL (ticks)",       group=G_FIB,  minval=1)
 
-fib_e1_bot  = input.float(0.750,"Entry 1 – nivel inferior (%)",  group=G_FIB,  step=0.001)
-fib_e1_top  = input.float(0.786,"Entry 1 – nivel superior (%)",  group=G_FIB,  step=0.001)
-fib_e2      = input.float(0.886,"Entry 2 – nivel (%)",           group=G_FIB,  step=0.001)
-sl_buf_tck  = input.int(20,     "Buffer SL (ticks dincolo)",     group=G_FIB,  minval=1)
+piv_bars   = input.int(5,       "Pivot Bars",              group=G_SWG,  minval=2, maxval=20)
+min_sw_pct = input.float(1.0,   "Range minim swing (%)",   group=G_SWG,  minval=0.1, step=0.1)
+max_sw_pct = input.float(100.0, "Range maxim swing (%)",   group=G_SWG,  minval=0.5, step=0.5)
 
-piv_bars    = input.int(5,      "Pivot Bars (confirmare)",       group=G_SWG,  minval=2, maxval=20)
-min_sw_pct  = input.float(1.0,  "Range minim swing (%)",         group=G_SWG,  minval=0.1, step=0.1)
-max_sw_pct  = input.float(100.0, "Range maxim swing (%)",         group=G_SWG,  minval=0.5, step=0.5)
-
-// Sesiunea 1 – London open (08:00-10:00 UTC | 10:00-12:00 RO iarna | 11:00-13:00 RO vara)
-morn_h_s    = input.int(8,  "Dimineata start ora  UTC",   group=G_SES, minval=0, maxval=23)
-morn_m_s    = input.int(0,  "Dimineata start minut",      group=G_SES, minval=0, maxval=59)
-morn_h_e    = input.int(10, "Dimineata sfarsit ora UTC",  group=G_SES, minval=0, maxval=23)
-morn_m_e    = input.int(0,  "Dimineata sfarsit minut",    group=G_SES, minval=0, maxval=59)
-
-// Sesiunea 2 – NY open (13:30-15:30 UTC | 15:30-17:30 RO iarna | 16:30-18:30 RO vara)
-aftn_h_s    = input.int(13, "Dupa-masa start ora  UTC",   group=G_SES, minval=0, maxval=23)
-aftn_m_s    = input.int(30, "Dupa-masa start minut",      group=G_SES, minval=0, maxval=59)
-aftn_h_e    = input.int(15, "Dupa-masa sfarsit ora UTC",  group=G_SES, minval=0, maxval=23)
-aftn_m_e    = input.int(30, "Dupa-masa sfarsit minut",    group=G_SES, minval=0, maxval=59)
-
-max_daily   = input.int(2,  "Max tranzactii/zi",          group=G_SES, minval=1)
+morn_h_s   = input.int(8,  "Dimineata start ora UTC",      group=G_SES, minval=0, maxval=23)
+morn_m_s   = input.int(0,  "Dimineata start minut",        group=G_SES, minval=0, maxval=59)
+morn_h_e   = input.int(10, "Dimineata sfarsit ora UTC",    group=G_SES, minval=0, maxval=23)
+morn_m_e   = input.int(0,  "Dimineata sfarsit minut",      group=G_SES, minval=0, maxval=59)
+aftn_h_s   = input.int(13, "Dupa-masa start ora UTC",      group=G_SES, minval=0, maxval=23)
+aftn_m_s   = input.int(30, "Dupa-masa start minut",        group=G_SES, minval=0, maxval=59)
+aftn_h_e   = input.int(15, "Dupa-masa sfarsit ora UTC",    group=G_SES, minval=0, maxval=23)
+aftn_m_e   = input.int(30, "Dupa-masa sfarsit minut",      group=G_SES, minval=0, maxval=59)
+max_daily  = input.int(2,  "Max tranzactii/zi",            group=G_SES, minval=1)
 
 // ============================================================
-// 2. HELPER: pret la nivel fibonacci
-//   dir= 1 (BUY):  fib_price = hi - level*(hi-lo)   [0=hi, 1=lo]
-//   dir=-1 (SELL): fib_price = lo + level*(hi-lo)   [0=lo, 1=hi]
+// 2. HELPER
 // ============================================================
+// UP  (dir=1):  fib 0 = HIGH, fib 1 = LOW  → intrare la retrasare de la high
+// DOWN (dir=-1): fib 0 = LOW,  fib 1 = HIGH → intrare la bounce de la low
 f_lvl(dir, hi, lo, lvl) => dir == 1 ? hi - lvl*(hi-lo) : lo + lvl*(hi-lo)
 
 // ============================================================
-// 3. TREND DIRECTION – VWAP Weekly
-//    Reseteaza la inceputul fiecarei saptamani (luni 00:00 UTC).
-//    UP  : close > vwap_w
-//    DOWN: close < vwap_w
-//    (pe vwap exact nu tranzactionam)
+// 3. VWAP WEEKLY
 // ============================================================
 _wk_id    = year * 100 + weekofyear
 _new_week = ta.change(_wk_id) != 0
 
 var float _pv_sum = 0.0
 var float _v_sum  = 0.0
-
 if _new_week
     _pv_sum := hlc3 * volume
     _v_sum  := volume
@@ -89,67 +74,56 @@ else
     _v_sum  += volume
 
 vwap_w    = _pv_sum / _v_sum
-
 trend_dir = close > vwap_w ? 1 : close < vwap_w ? -1 : 0
 
 // ============================================================
 // 4. DST AUTO (EU: ultima duminica martie → ultima duminica oct)
-//    Cand Romania/Londra sunt la ora de vara (EEST/BST):
-//      – London deschide la 07:00 UTC in loc de 08:00 UTC
-//      – NY open ramane 13:30 UTC (SUA schimba cu 3 sapt mai devreme)
 // ============================================================
-_ts31m      = timestamp(year, 3, 31, 12, 0)
-_dow31m     = dayofweek(_ts31m)                          // 1=Sun..7=Sat
-_dst_s_day  = _dow31m == 1 ? 31 : 31 - (_dow31m - 1)    // ultima duminica martie
-
-_ts31o      = timestamp(year, 10, 31, 12, 0)
-_dow31o     = dayofweek(_ts31o)
-_dst_e_day  = _dow31o == 1 ? 31 : 31 - (_dow31o - 1)    // ultima duminica octombrie
-
-_aft_spr    = (month > 3)  or (month == 3  and dayofmonth >= _dst_s_day)
-_bef_aut    = (month < 10) or (month == 10 and dayofmonth <  _dst_e_day)
-_is_summer  = _aft_spr and _bef_aut
-
-// Decalaj ora de vara: sesiunea de dimineata incepe cu 60 min mai devreme in UTC
-_dst_off    = _is_summer ? -60 : 0
+_ts31m     = timestamp(year, 3, 31, 12, 0)
+_dow31m    = dayofweek(_ts31m)
+_dst_s_day = _dow31m == 1 ? 31 : 31 - (_dow31m - 1)
+_ts31o     = timestamp(year, 10, 31, 12, 0)
+_dow31o    = dayofweek(_ts31o)
+_dst_e_day = _dow31o == 1 ? 31 : 31 - (_dow31o - 1)
+_aft_spr   = (month > 3)  or (month == 3  and dayofmonth >= _dst_s_day)
+_bef_aut   = (month < 10) or (month == 10 and dayofmonth <  _dst_e_day)
+_is_summer = _aft_spr and _bef_aut
+_dst_off   = _is_summer ? -60 : 0
 
 // ============================================================
-// 5. SESSION FILTER  (doua ferestre: London open + NY open)
+// 5. SESSION FILTER
 // ============================================================
-_cm         = hour * 60 + minute
-_morn_s     = morn_h_s * 60 + morn_m_s + _dst_off
-_morn_e     = morn_h_e * 60 + morn_m_e + _dst_off
-_aftn_s     = aftn_h_s * 60 + aftn_m_s   // NY open: 13:30 UTC tot anul
-_aftn_e     = aftn_h_e * 60 + aftn_m_e
-in_morn     = _cm >= _morn_s and _cm < _morn_e
-in_aftn     = _cm >= _aftn_s and _cm < _aftn_e
-in_sess     = in_morn or in_aftn
+_cm     = hour * 60 + minute
+_morn_s = morn_h_s * 60 + morn_m_s + _dst_off
+_morn_e = morn_h_e * 60 + morn_m_e + _dst_off
+_aftn_s = aftn_h_s * 60 + aftn_m_s
+_aftn_e = aftn_h_e * 60 + aftn_m_e
+in_morn = _cm >= _morn_s and _cm < _morn_e
+in_aftn = _cm >= _aftn_s and _cm < _aftn_e
+in_sess = in_morn or in_aftn
 
 // ============================================================
 // 6. DAILY RESET
 // ============================================================
-var int  day_trades = 0
-var int  last_date  = 0
-
-cur_date  = year * 10000 + month * 100 + dayofmonth
+var int day_trades = 0
+var int last_date  = 0
+cur_date   = year * 10000 + month * 100 + dayofmonth
 is_new_day = cur_date != last_date
 if is_new_day
     day_trades := 0
     last_date  := cur_date
 
 // ============================================================
-// 7. PIVOT HIGH / LOW STORAGE (array)
-//    Stocam ultimele MAX_P pivoti detectati pe bara curenta.
-//    ph_raw / pl_raw sunt disponibile cu intarziere de piv_bars bare.
+// 7. PIVOT ARRAYS
 // ============================================================
-MAX_P   = 30
-ph_raw  = ta.pivothigh(high, piv_bars, piv_bars)
-pl_raw  = ta.pivotlow (low,  piv_bars, piv_bars)
+MAX_P  = 30
+ph_raw = ta.pivothigh(high, piv_bars, piv_bars)
+pl_raw = ta.pivotlow (low,  piv_bars, piv_bars)
 
-var float[] a_ph_p = array.new_float(0)   // preturi pivot high
-var int[]   a_ph_b = array.new_int(0)     // bar_index pivot high
-var float[] a_pl_p = array.new_float(0)   // preturi pivot low
-var int[]   a_pl_b = array.new_int(0)     // bar_index pivot low
+var float[] a_ph_p = array.new_float(0)
+var int[]   a_ph_b = array.new_int(0)
+var float[] a_pl_p = array.new_float(0)
+var int[]   a_pl_b = array.new_int(0)
 
 if not na(ph_raw)
     array.unshift(a_ph_p, ph_raw)
@@ -157,7 +131,6 @@ if not na(ph_raw)
     if array.size(a_ph_p) > MAX_P
         array.pop(a_ph_p)
         array.pop(a_ph_b)
-
 if not na(pl_raw)
     array.unshift(a_pl_p, pl_raw)
     array.unshift(a_pl_b, bar_index - piv_bars)
@@ -166,18 +139,9 @@ if not na(pl_raw)
         array.pop(a_pl_b)
 
 // ============================================================
-// 7. SWING FINDER
-//
-//  BUY  (dir=1):
-//    Cel mai recent pivot HIGH + pivot LOW PRECEDENT (mai vechi).
-//    Range (hi-lo)/lo intre min_sw_pct si max_sw_pct.
-//    Pret curent sub HIGH (in retracement activ).
-//
-//  SELL (dir=-1):
-//    Cel mai recent pivot LOW + pivot HIGH PRECEDENT (mai vechi).
-//    Pret curent peste LOW (in bounce activ).
-//
-//  Returneaza [found_hi, found_lo] sau [na, na].
+// 8. SWING FINDER
+//   UP  (dir=1):  cel mai recent pivot HIGH + pivot LOW anterior
+//   DOWN (dir=-1): cel mai recent pivot LOW  + pivot HIGH anterior
 // ============================================================
 find_swing(dir) =>
     r_hi  = float(na)
@@ -186,16 +150,13 @@ find_swing(dir) =>
     max_r = max_sw_pct / 100.0
     n_ph  = array.size(a_ph_p)
     n_pl  = array.size(a_pl_p)
-
     if dir == 1 and n_ph > 0 and n_pl > 0
-        // Iteram prin pivot HIGH-uri de la cel mai recent
         done = false
         for i = 0 to n_ph - 1
             if done
                 break
             sh  = array.get(a_ph_p, i)
             shb = array.get(a_ph_b, i)
-            // Cautam pivot LOW precedent (bar_index mai mic = mai vechi)
             for j = 0 to n_pl - 1
                 sl  = array.get(a_pl_p, j)
                 slb = array.get(a_pl_b, j)
@@ -207,19 +168,14 @@ find_swing(dir) =>
                         done := true
                         break
                     if r > max_r
-                        // Swing prea mare – trecem la urmatorul pivot HIGH
                         break
-                    // r < min_r → continuam cu un LOW mai vechi (range mai mare)
-
     else if dir == -1 and n_ph > 0 and n_pl > 0
-        // Iteram prin pivot LOW-uri de la cel mai recent
         done = false
         for i = 0 to n_pl - 1
             if done
                 break
             sl  = array.get(a_pl_p, i)
             slb = array.get(a_pl_b, i)
-            // Cautam pivot HIGH precedent
             for j = 0 to n_ph - 1
                 sh  = array.get(a_ph_p, j)
                 shb = array.get(a_ph_b, j)
@@ -232,15 +188,12 @@ find_swing(dir) =>
                         break
                     if r > max_r
                         break
-
     [r_hi, r_lo]
 
 [sw_hi, sw_lo] = find_swing(trend_dir)
 
 // ============================================================
-// 8. FIB STATE MANAGEMENT
-//    Actualizeaza g_hi/g_lo cand swing-ul se schimba.
-//    Reseteaza state la zi noua sau la invalidare (pret trece de 1.0).
+// 9. FIB STATE + TRADE TRACKING
 // ============================================================
 var float g_hi    = na
 var float g_lo    = na
@@ -248,7 +201,6 @@ var int   g_dir   = 0
 var bool  e1_done = false
 var bool  e2_done = false
 
-// Break Even tracking (per trade)
 var float v_e1_entry = na
 var float v_e1_sl    = na
 var float v_e1_tp    = na
@@ -261,6 +213,17 @@ var float v_e2_tp    = na
 var int   v_e2_dir   = 0
 var bool  v_e2_be    = false
 
+// Linii active per trade (sterse cand trade-ul se inchide)
+var line  ln_e1_entry = na
+var line  ln_e1_sl    = na
+var line  ln_e1_tp    = na
+var line  ln_e2_entry = na
+var line  ln_e2_sl    = na
+var line  ln_e2_tp    = na
+
+buf_p = sl_buf_tck * syminfo.mintick
+
+// ── Reset la zi noua ────────────────────────────────────────
 if is_new_day
     g_hi       := na
     g_lo       := na
@@ -268,24 +231,44 @@ if is_new_day
     e1_done    := false
     e2_done    := false
     v_e1_entry := na
+    v_e1_sl    := na
+    v_e1_tp    := na
     v_e1_be    := false
     v_e2_entry := na
+    v_e2_sl    := na
+    v_e2_tp    := na
     v_e2_be    := false
+    line.delete(ln_e1_entry)
+    line.delete(ln_e1_sl)
+    line.delete(ln_e1_tp)
+    line.delete(ln_e2_entry)
+    line.delete(ln_e2_sl)
+    line.delete(ln_e2_tp)
+    ln_e1_entry := na
+    ln_e1_sl    := na
+    ln_e1_tp    := na
+    ln_e2_entry := na
+    ln_e2_sl    := na
+    ln_e2_tp    := na
 
-setup_changed = false
-buf_p = sl_buf_tck * syminfo.mintick
+// ── FIX: reset fib cand trendul se schimba ──────────────────
+if not na(g_hi) and trend_dir != 0 and trend_dir != g_dir
+    g_hi    := na
+    g_lo    := na
+    g_dir   := 0
+    e1_done := false
+    e2_done := false
 
+// ── Update swing ────────────────────────────────────────────
 if not na(sw_hi) and not na(sw_lo)
     changed = na(g_hi) or g_dir != trend_dir or math.abs(sw_hi - g_hi) > syminfo.mintick or math.abs(sw_lo - g_lo) > syminfo.mintick
     if changed
-        g_hi          := sw_hi
-        g_lo          := sw_lo
-        g_dir         := trend_dir
-        e1_done       := false
-        e2_done       := false
-        setup_changed := true
+        g_hi    := sw_hi
+        g_lo    := sw_lo
+        g_dir   := trend_dir
+        e1_done := false
+        e2_done := false
 else if not na(g_hi)
-    // Invalideaza daca pretul a trecut dincolo de nivelul 1.0
     if g_dir == 1 and low < g_lo - buf_p
         g_hi := na
         g_lo := na
@@ -294,100 +277,147 @@ else if not na(g_hi)
         g_lo := na
 
 // ============================================================
-// 9. ENTRY LOGIC
-//
-//  BUY  (g_dir=1):
-//    Nivele fib (masurat de la HIGH in jos):
-//      f_750 = hi - 0.750*(hi-lo)   [mai sus pe chart]
-//      f_786 = hi - 0.786*(hi-lo)   [mai jos ca f_750]
-//      f_886 = hi - 0.886*(hi-lo)   [SL entry1, nivel entry2]
-//      f_100 = lo                   [SL entry2]
-//    Entry 1: f_786 <= close <= f_750  →  SL=f_886-buf  TP=+RR*risk
-//    Entry 2: close <= f_886           →  SL=f_100-buf  TP=+RR*risk
-//
-//  SELL (g_dir=-1):
-//    Nivele fib (masurat de la LOW in sus):
-//      f_750 = lo + 0.750*(hi-lo)   [mai jos pe chart]
-//      f_786 = lo + 0.786*(hi-lo)   [mai sus ca f_750]
-//      f_886 = lo + 0.886*(hi-lo)
-//      f_100 = hi
-//    Entry 1: f_750 <= close <= f_786  →  SL=f_886+buf  TP=-RR*risk
-//    Entry 2: close >= f_886           →  SL=f_100+buf  TP=-RR*risk
+// 10. DETECTIE INCHIDERE TRADE → sterge liniile
+// ============================================================
+var int prev_closed = 0
+if strategy.closedtrades > prev_closed
+    for i = prev_closed to strategy.closedtrades - 1
+        _eid  = strategy.closedtrades.entry_id(i)
+        _prof = strategy.closedtrades.profit(i)
+        _exp  = strategy.closedtrades.exit_price(i)
+        _enp  = strategy.closedtrades.entry_price(i)
+        _dir_c = strategy.closedtrades.size(i) > 0 ? 1 : -1
+        _pnl_txt = (_prof >= 0 ? "✓ TP " : "✗ SL ") + str.tostring(_exp, "#.##")
+        _ex_clr  = _prof >= 0 ? color.new(color.lime, 10) : color.new(color.red, 10)
+        _ex_sty  = _dir_c == 1 ? label.style_label_down : label.style_label_up
+        _ex_y    = _dir_c == 1 ? high : low
+        label.new(bar_index, _ex_y, _pnl_txt,
+                  color=_ex_clr, textcolor=color.white,
+                  style=_ex_sty, size=size.small)
+
+        if _eid == "E1L" or _eid == "E1S"
+            line.delete(ln_e1_entry)
+            line.delete(ln_e1_sl)
+            line.delete(ln_e1_tp)
+            ln_e1_entry := na
+            ln_e1_sl    := na
+            ln_e1_tp    := na
+            v_e1_entry  := na
+            v_e1_sl     := na
+            v_e1_tp     := na
+        if _eid == "E2L" or _eid == "E2S"
+            line.delete(ln_e2_entry)
+            line.delete(ln_e2_sl)
+            line.delete(ln_e2_tp)
+            ln_e2_entry := na
+            ln_e2_sl    := na
+            ln_e2_tp    := na
+            v_e2_entry  := na
+            v_e2_sl     := na
+            v_e2_tp     := na
+    prev_closed := strategy.closedtrades
+
+// ============================================================
+// 11. ENTRY LOGIC
 // ============================================================
 can_trade = not na(g_hi) and in_sess and trend_dir != 0 and day_trades < max_daily
 
 if can_trade
-    f_750 = f_lvl(g_dir, g_hi, g_lo, fib_e1_bot)   // 0.750
-    f_786 = f_lvl(g_dir, g_hi, g_lo, fib_e1_top)   // 0.786
-    f_886 = f_lvl(g_dir, g_hi, g_lo, fib_e2)       // 0.886
-    f_100 = f_lvl(g_dir, g_hi, g_lo, 1.000)        // 1.000
+    f_750 = f_lvl(g_dir, g_hi, g_lo, fib_e1_bot)
+    f_786 = f_lvl(g_dir, g_hi, g_lo, fib_e1_top)
+    f_886 = f_lvl(g_dir, g_hi, g_lo, fib_e2)
+    f_100 = f_lvl(g_dir, g_hi, g_lo, 1.000)
 
-    // ── ENTRY 1: zona 0.750-0.786 ──────────────────────────────
+    // ── ENTRY 1: zona 0.750-0.786 ──────────────────────────
     if not e1_done
-        if g_dir == 1
-            if close <= f_750 and close >= f_786
-                sl_1  = f_886 - buf_p
-                risk1 = math.abs(close - sl_1)
-                tp_1  = close + risk1 * rr_ratio
-                strategy.entry("E1L", strategy.long,  comment="E1 BUY  0.786")
-                strategy.exit ("E1Lx", "E1L", stop=sl_1, limit=tp_1)
-                v_e1_entry := close
-                v_e1_sl    := sl_1
-                v_e1_tp    := tp_1
-                v_e1_dir   := 1
-                v_e1_be    := false
-                e1_done    := true
-                day_trades := day_trades + 1
-        else
-            if close >= f_750 and close <= f_786
-                sl_1  = f_886 + buf_p
-                risk1 = math.abs(sl_1 - close)
-                tp_1  = close - risk1 * rr_ratio
-                strategy.entry("E1S", strategy.short, comment="E1 SELL 0.786")
-                strategy.exit ("E1Sx", "E1S", stop=sl_1, limit=tp_1)
-                v_e1_entry := close
-                v_e1_sl    := sl_1
-                v_e1_tp    := tp_1
-                v_e1_dir   := -1
-                v_e1_be    := false
-                e1_done    := true
-                day_trades := day_trades + 1
+        if g_dir == 1 and close <= f_750 and close >= f_786
+            sl_1  = f_886 - buf_p
+            risk1 = math.abs(close - sl_1)
+            tp_1  = close + risk1 * rr_ratio
+            strategy.entry("E1L", strategy.long,  comment="↑ E1 0.786")
+            strategy.exit ("E1Lx", "E1L", stop=sl_1, limit=tp_1)
+            v_e1_entry := close
+            v_e1_sl    := sl_1
+            v_e1_tp    := tp_1
+            v_e1_dir   := 1
+            v_e1_be    := false
+            e1_done    := true
+            day_trades := day_trades + 1
+            line.delete(ln_e1_entry)
+            line.delete(ln_e1_sl)
+            line.delete(ln_e1_tp)
+            ln_e1_entry := line.new(bar_index, close, bar_index+1, close, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
+            ln_e1_sl    := line.new(bar_index, sl_1,  bar_index+1, sl_1,  extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
+            ln_e1_tp    := line.new(bar_index, tp_1,  bar_index+1, tp_1,  extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
+            label.new(bar_index, low,  "↑ E1 BUY\n"  + str.tostring(close, "#.##"), color=color.new(color.lime, 10), textcolor=color.white, style=label.style_label_up,   size=size.small)
 
-    // ── ENTRY 2: nivel 0.886 ───────────────────────────────────
+        else if g_dir == -1 and close >= f_750 and close <= f_786
+            sl_1  = f_886 + buf_p
+            risk1 = math.abs(sl_1 - close)
+            tp_1  = close - risk1 * rr_ratio
+            strategy.entry("E1S", strategy.short, comment="↓ E1 0.786")
+            strategy.exit ("E1Sx", "E1S", stop=sl_1, limit=tp_1)
+            v_e1_entry := close
+            v_e1_sl    := sl_1
+            v_e1_tp    := tp_1
+            v_e1_dir   := -1
+            v_e1_be    := false
+            e1_done    := true
+            day_trades := day_trades + 1
+            line.delete(ln_e1_entry)
+            line.delete(ln_e1_sl)
+            line.delete(ln_e1_tp)
+            ln_e1_entry := line.new(bar_index, close, bar_index+1, close, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
+            ln_e1_sl    := line.new(bar_index, sl_1,  bar_index+1, sl_1,  extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
+            ln_e1_tp    := line.new(bar_index, tp_1,  bar_index+1, tp_1,  extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
+            label.new(bar_index, high, "↓ E1 SELL\n" + str.tostring(close, "#.##"), color=color.new(color.red,  10), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+    // ── ENTRY 2: nivel 0.886 ───────────────────────────────
     if not e2_done and day_trades < max_daily
-        if g_dir == 1
-            if close <= f_886
-                sl_2  = f_100 - buf_p
-                risk2 = math.abs(close - sl_2)
-                tp_2  = close + risk2 * rr_ratio
-                strategy.entry("E2L", strategy.long,  comment="E2 BUY  0.886")
-                strategy.exit ("E2Lx", "E2L", stop=sl_2, limit=tp_2)
-                v_e2_entry := close
-                v_e2_sl    := sl_2
-                v_e2_tp    := tp_2
-                v_e2_dir   := 1
-                v_e2_be    := false
-                e2_done    := true
-                day_trades := day_trades + 1
-        else
-            if close >= f_886
-                sl_2  = f_100 + buf_p
-                risk2 = math.abs(sl_2 - close)
-                tp_2  = close - risk2 * rr_ratio
-                strategy.entry("E2S", strategy.short, comment="E2 SELL 0.886")
-                strategy.exit ("E2Sx", "E2S", stop=sl_2, limit=tp_2)
-                v_e2_entry := close
-                v_e2_sl    := sl_2
-                v_e2_tp    := tp_2
-                v_e2_dir   := -1
-                v_e2_be    := false
-                e2_done    := true
-                day_trades := day_trades + 1
+        if g_dir == 1 and close <= f_886
+            sl_2  = f_100 - buf_p
+            risk2 = math.abs(close - sl_2)
+            tp_2  = close + risk2 * rr_ratio
+            strategy.entry("E2L", strategy.long,  comment="↑ E2 0.886")
+            strategy.exit ("E2Lx", "E2L", stop=sl_2, limit=tp_2)
+            v_e2_entry := close
+            v_e2_sl    := sl_2
+            v_e2_tp    := tp_2
+            v_e2_dir   := 1
+            v_e2_be    := false
+            e2_done    := true
+            day_trades := day_trades + 1
+            line.delete(ln_e2_entry)
+            line.delete(ln_e2_sl)
+            line.delete(ln_e2_tp)
+            ln_e2_entry := line.new(bar_index, close, bar_index+1, close, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
+            ln_e2_sl    := line.new(bar_index, sl_2,  bar_index+1, sl_2,  extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
+            ln_e2_tp    := line.new(bar_index, tp_2,  bar_index+1, tp_2,  extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
+            label.new(bar_index, low,  "↑ E2 BUY\n"  + str.tostring(close, "#.##"), color=color.new(color.lime, 10), textcolor=color.white, style=label.style_label_up,   size=size.small)
+
+        else if g_dir == -1 and close >= f_886
+            sl_2  = f_100 + buf_p
+            risk2 = math.abs(sl_2 - close)
+            tp_2  = close - risk2 * rr_ratio
+            strategy.entry("E2S", strategy.short, comment="↓ E2 0.886")
+            strategy.exit ("E2Sx", "E2S", stop=sl_2, limit=tp_2)
+            v_e2_entry := close
+            v_e2_sl    := sl_2
+            v_e2_tp    := tp_2
+            v_e2_dir   := -1
+            v_e2_be    := false
+            e2_done    := true
+            day_trades := day_trades + 1
+            line.delete(ln_e2_entry)
+            line.delete(ln_e2_sl)
+            line.delete(ln_e2_tp)
+            ln_e2_entry := line.new(bar_index, close, bar_index+1, close, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
+            ln_e2_sl    := line.new(bar_index, sl_2,  bar_index+1, sl_2,  extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
+            ln_e2_tp    := line.new(bar_index, tp_2,  bar_index+1, tp_2,  extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
+            label.new(bar_index, high, "↓ E2 SELL\n" + str.tostring(close, "#.##"), color=color.new(color.red,  10), textcolor=color.white, style=label.style_label_down, size=size.small)
 
 // ============================================================
-// 10. BREAK EVEN la 1:1
-//     Cand pretul atinge nivelul 1:1 (risk = profit), SL se muta
-//     la pretul de entry. TP-ul la 2:1 ramane neschimbat.
+// 12. BREAK EVEN la 1:1  (SL mutat la entry, linia SL → galben)
 // ============================================================
 if not na(v_e1_entry) and not v_e1_be
     _be1_lvl = v_e1_entry + v_e1_dir * math.abs(v_e1_entry - v_e1_sl)
@@ -396,6 +426,11 @@ if not na(v_e1_entry) and not v_e1_be
         _id1 = v_e1_dir == 1 ? "E1Lx" : "E1Sx"
         _fr1 = v_e1_dir == 1 ? "E1L"  : "E1S"
         strategy.exit(_id1, _fr1, stop=v_e1_entry, limit=v_e1_tp, comment="BE E1")
+        if not na(ln_e1_sl)
+            line.set_y1(ln_e1_sl, v_e1_entry)
+            line.set_y2(ln_e1_sl, v_e1_entry)
+            line.set_color(ln_e1_sl, color.new(color.yellow, 20))
+        v_e1_sl := v_e1_entry
         v_e1_be := true
 
 if not na(v_e2_entry) and not v_e2_be
@@ -405,48 +440,39 @@ if not na(v_e2_entry) and not v_e2_be
         _id2 = v_e2_dir == 1 ? "E2Lx" : "E2Sx"
         _fr2 = v_e2_dir == 1 ? "E2L"  : "E2S"
         strategy.exit(_id2, _fr2, stop=v_e2_entry, limit=v_e2_tp, comment="BE E2")
+        if not na(ln_e2_sl)
+            line.set_y1(ln_e2_sl, v_e2_entry)
+            line.set_y2(ln_e2_sl, v_e2_entry)
+            line.set_color(ln_e2_sl, color.new(color.yellow, 20))
+        v_e2_sl := v_e2_entry
         v_e2_be := true
 
 // ============================================================
-// 11. VIZUALIZARE
+// 13. VIZUALIZARE – fundal sesiuni + VWAP + nivele fib
 // ============================================================
-
-// ── Fundal sesiuni (London=albastru, NY=verde) ──────────────
 bgcolor(in_morn ? color.new(color.blue,  93) : na, title="Sesiune London")
 bgcolor(in_aftn ? color.new(color.green, 93) : na, title="Sesiune NY")
 
-// ── VWAP Weekly ────────────────────────────────────────────
 vwap_clr = trend_dir == 1 ? color.new(color.lime, 20) : trend_dir == -1 ? color.new(color.red, 20) : color.new(color.gray, 40)
 plot(vwap_w, "VWAP Weekly", color=vwap_clr, linewidth=2)
 
-// ── Swing extreme (Hi/Lo) ──────────────────────────────────
-var line ln_shi = line.new(na, na, na, na, extend=extend.none, color=color.new(color.gray, 60), style=line.style_solid,  width=1)
-var line ln_slo = line.new(na, na, na, na, extend=extend.none, color=color.new(color.gray, 60), style=line.style_solid,  width=1)
-
-// ── Nivele fibonacci ──────────────────────────────────────
+// Nivele fibonacci (actualizate continuu, ascunse cand nu exista setup)
+var line ln_shi = line.new(na, na, na, na, extend=extend.none,  color=color.new(color.gray,   60), style=line.style_solid,  width=1)
+var line ln_slo = line.new(na, na, na, na, extend=extend.none,  color=color.new(color.gray,   60), style=line.style_solid,  width=1)
 var line ln_750 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.orange, 30), style=line.style_dashed, width=1)
 var line ln_786 = line.new(na, na, na, na, extend=extend.right, color=color.orange,               style=line.style_dashed, width=2)
 var line ln_886 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.red,    20), style=line.style_dashed, width=2)
 var line ln_100 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.gray,   40), style=line.style_dotted, width=1)
 
-// ── Zona Entry 1 (0.750-0.786) ca box ──────────────────────
-var box bx_zone = box.new(na, na, na, na,
-                          bgcolor      = color.new(color.orange, 85),
-                          border_color = color.new(color.orange, 50),
-                          border_width = 1)
+var box  bx_zone = box.new(na, na, na, na,
+                            bgcolor      = color.new(color.orange, 85),
+                            border_color = color.new(color.orange, 50),
+                            border_width = 1)
 
-// ── Linii TP (Entry 1 si Entry 2) ─────────────────────────
-var line ln_tp1 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.lime, 20), style=line.style_dashed, width=1)
-var line ln_tp2 = line.new(na, na, na, na, extend=extend.right, color=color.new(color.lime, 40), style=line.style_dashed, width=1)
-
-// ── Etichete nivele ────────────────────────────────────────
 var label lbl_750 = label.new(na, na, "", color=color.new(color.orange, 80), textcolor=color.orange, style=label.style_label_left, size=size.tiny)
 var label lbl_786 = label.new(na, na, "", color=color.new(color.orange, 80), textcolor=color.orange, style=label.style_label_left, size=size.tiny)
 var label lbl_886 = label.new(na, na, "", color=color.new(color.red,    80), textcolor=color.red,    style=label.style_label_left, size=size.tiny)
-var label lbl_tp1 = label.new(na, na, "", color=color.new(color.lime,   80), textcolor=color.lime,   style=label.style_label_left, size=size.tiny)
-var label lbl_tp2 = label.new(na, na, "", color=color.new(color.lime,   80), textcolor=color.lime,   style=label.style_label_left, size=size.tiny)
 
-// Actualizeaza liniile si box-ul cand exista un setup valid
 if not na(g_hi) and not na(g_lo)
     f_750v = f_lvl(g_dir, g_hi, g_lo, fib_e1_bot)
     f_786v = f_lvl(g_dir, g_hi, g_lo, fib_e1_top)
@@ -454,13 +480,10 @@ if not na(g_hi) and not na(g_lo)
     f_100v = f_lvl(g_dir, g_hi, g_lo, 1.000)
     look   = 50
 
-    // Swing extreme
     line.set_xy1(ln_shi, bar_index - look, g_hi)
     line.set_xy2(ln_shi, bar_index,        g_hi)
     line.set_xy1(ln_slo, bar_index - look, g_lo)
     line.set_xy2(ln_slo, bar_index,        g_lo)
-
-    // Fibonacci
     line.set_xy1(ln_750, bar_index - look, f_750v)
     line.set_xy2(ln_750, bar_index,        f_750v)
     line.set_xy1(ln_786, bar_index - look, f_786v)
@@ -470,36 +493,11 @@ if not na(g_hi) and not na(g_lo)
     line.set_xy1(ln_100, bar_index - look, f_100v)
     line.set_xy2(ln_100, bar_index,        f_100v)
 
-    // Entry zone box
     z_top = math.max(f_750v, f_786v)
     z_bot = math.min(f_750v, f_786v)
     box.set_lefttop    (bx_zone, bar_index - look, z_top)
     box.set_rightbottom(bx_zone, bar_index + 30,   z_bot)
 
-    // TP lines (vizibile doar daca exista trade activ)
-    if not na(v_e1_tp)
-        line.set_xy1(ln_tp1, bar_index - look, v_e1_tp)
-        line.set_xy2(ln_tp1, bar_index,        v_e1_tp)
-        label.set_xy  (lbl_tp1, bar_index + 1, v_e1_tp)
-        label.set_text(lbl_tp1, "TP1 " + str.tostring(v_e1_tp, "#.#####"))
-    else
-        line.set_xy1(ln_tp1, na, na)
-        line.set_xy2(ln_tp1, na, na)
-        label.set_xy  (lbl_tp1, na, na)
-        label.set_text(lbl_tp1, "")
-
-    if not na(v_e2_tp)
-        line.set_xy1(ln_tp2, bar_index - look, v_e2_tp)
-        line.set_xy2(ln_tp2, bar_index,        v_e2_tp)
-        label.set_xy  (lbl_tp2, bar_index + 1, v_e2_tp)
-        label.set_text(lbl_tp2, "TP2 " + str.tostring(v_e2_tp, "#.#####"))
-    else
-        line.set_xy1(ln_tp2, na, na)
-        line.set_xy2(ln_tp2, na, na)
-        label.set_xy  (lbl_tp2, na, na)
-        label.set_text(lbl_tp2, "")
-
-    // Etichete Fibonacci
     label.set_xy  (lbl_750, bar_index + 1, f_750v)
     label.set_text(lbl_750, "0.750")
     label.set_xy  (lbl_786, bar_index + 1, f_786v)
@@ -507,82 +505,25 @@ if not na(g_hi) and not na(g_lo)
     label.set_xy  (lbl_886, bar_index + 1, f_886v)
     label.set_text(lbl_886, "0.886")
 
-// ── Entry markers + linii persistente Entry/SL/TP ─────────
-e1_just_entered = e1_done and not e1_done[1]
-e2_just_entered = e2_done and not e2_done[1]
-
-f_draw_trade_lines(entry_p, sl_p, tp_p, dir, lbl_txt) =>
-    _entry_clr = color.new(color.white,  10)
-    _sl_clr    = color.new(color.red,    10)
-    _tp_clr    = color.new(color.lime,   10)
-    _x1        = bar_index
-    // Linie Entry
-    _le = line.new(_x1, entry_p, _x1 + 1, entry_p,
-                   extend=extend.right, color=_entry_clr,
-                   style=line.style_solid, width=1)
-    label.new(_x1, entry_p, "ENTRY " + str.tostring(entry_p, "#.#####"),
-              color=color.new(color.white, 70), textcolor=_entry_clr,
-              style=label.style_label_right, size=size.tiny)
-    // Linie SL
-    _ls = line.new(_x1, sl_p, _x1 + 1, sl_p,
-                   extend=extend.right, color=_sl_clr,
-                   style=line.style_solid, width=1)
-    label.new(_x1, sl_p, "SL " + str.tostring(sl_p, "#.#####"),
-              color=color.new(color.red, 70), textcolor=_sl_clr,
-              style=label.style_label_right, size=size.tiny)
-    // Linie TP
-    _lt = line.new(_x1, tp_p, _x1 + 1, tp_p,
-                   extend=extend.right, color=_tp_clr,
-                   style=line.style_dashed, width=1)
-    label.new(_x1, tp_p, "TP " + str.tostring(tp_p, "#.#####"),
-              color=color.new(color.lime, 70), textcolor=_tp_clr,
-              style=label.style_label_right, size=size.tiny)
-    // Label entry pe lumanare
-    _btn_clr = dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10)
-    _btn_sty = dir == 1 ? label.style_label_up : label.style_label_down
-    _btn_y   = dir == 1 ? low : high
-    label.new(_x1, _btn_y, lbl_txt + "\n" + str.tostring(entry_p, "#.#####"),
-              color=_btn_clr, textcolor=color.white, style=_btn_sty, size=size.small)
-
-if e1_just_entered
-    _txt = v_e1_dir == 1 ? "▲ E1 BUY" : "▼ E1 SELL"
-    f_draw_trade_lines(v_e1_entry, v_e1_sl, v_e1_tp, v_e1_dir, _txt)
-
-if e2_just_entered
-    _txt = v_e2_dir == 1 ? "▲ E2 BUY" : "▼ E2 SELL"
-    f_draw_trade_lines(v_e2_entry, v_e2_sl, v_e2_tp, v_e2_dir, _txt)
-
-// ── Exit markers ──────────────────────────────────────────
-var int prev_closed = 0
-if strategy.closedtrades > prev_closed
-    _idx      = strategy.closedtrades - 1
-    _ex_price = strategy.closedtrades.exit_price(_idx)
-    _ex_prof  = strategy.closedtrades.profit(_idx)
-    _ex_clr   = _ex_prof >= 0 ? color.new(color.lime, 10) : color.new(color.red, 10)
-    _ex_txt   = _ex_prof >= 0 ? "✓ TP  " + str.tostring(_ex_price, "#.#####") : "✗ SL  " + str.tostring(_ex_price, "#.#####")
-    _ex_style = _ex_prof >= 0 ? label.style_label_down : label.style_label_up
-    label.new(bar_index, _ex_price, _ex_txt, color=_ex_clr, textcolor=color.white, style=_ex_style, size=size.small)
-    prev_closed := strategy.closedtrades
-
-// ── Status table ─────────────────────────────────────────
+// ── Status table ─────────────────────────────────────────────
 var table tbl = table.new(position.top_right, 1, 5,
                            bgcolor      = color.new(color.black, 75),
-                           border_color = color.new(color.gray, 60),
+                           border_color = color.new(color.gray,  60),
                            border_width = 1)
 
-trend_clr  = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
-trend_txt  = trend_dir ==  1 ? "▲ UPTREND  (VWAP Weekly)" : trend_dir == -1 ? "▼ DOWNTREND (VWAP Weekly)" : "─ PE VWAP (asteptam)"
-sess_txt   = in_morn ? "🔵 London open (dimineata)" : in_aftn ? "🟢 NY open (dupa-masa)" : "⏸ Afara sesiune"
-_fib_dir   = g_dir == 1 ? "BUY" : "SELL"
-_fib_hi    = str.tostring(g_hi, "#.##")
-_fib_lo    = str.tostring(g_lo, "#.##")
-fib_txt    = not na(g_hi) ? _fib_dir + " | Hi: " + _fib_hi + " Lo: " + _fib_lo : "— fara setup —"
-trade_txt  = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
-dst_txt    = _is_summer ? "☀️ Ora vara (EEST / BST) – London 07:00 UTC" : "❄️ Ora iarna (EET / GMT) – London 08:00 UTC"
-dst_clr    = _is_summer ? color.yellow : color.new(color.white, 40)
+trend_clr = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
+trend_txt = trend_dir ==  1 ? "▲ UPTREND (VWAP Weekly)"  :
+            trend_dir == -1 ? "▼ DOWNTREND (VWAP Weekly)" : "─ PE VWAP (asteptam)"
+sess_txt  = in_morn ? "🔵 London open" : in_aftn ? "🟢 NY open" : "⏸ Afara sesiune"
+fib_txt   = not na(g_hi) ?
+            (g_dir == 1 ? "↑ BUY" : "↓ SELL") + " | Hi:" + str.tostring(g_hi, "#.##") + " Lo:" + str.tostring(g_lo, "#.##") :
+            "— fara setup —"
+trade_txt = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
+dst_txt   = _is_summer ? "☀️ Ora vara – London 07:00 UTC" : "❄️ Ora iarna – London 08:00 UTC"
+dst_clr   = _is_summer ? color.yellow : color.new(color.white, 40)
 
-table.cell(tbl, 0, 0, trend_txt,  text_color=trend_clr,    text_size=size.small)
-table.cell(tbl, 0, 1, sess_txt,   text_color=color.white,  text_size=size.small)
-table.cell(tbl, 0, 2, fib_txt,    text_color=color.orange, text_size=size.small)
-table.cell(tbl, 0, 3, trade_txt,  text_color=color.white,  text_size=size.small)
-table.cell(tbl, 0, 4, dst_txt,    text_color=dst_clr,      text_size=size.tiny)
+table.cell(tbl, 0, 0, trend_txt, text_color=trend_clr,    text_size=size.small)
+table.cell(tbl, 0, 1, sess_txt,  text_color=color.white,  text_size=size.small)
+table.cell(tbl, 0, 2, fib_txt,   text_color=color.orange, text_size=size.small)
+table.cell(tbl, 0, 3, trade_txt, text_color=color.white,  text_size=size.small)
+table.cell(tbl, 0, 4, dst_txt,   text_color=dst_clr,      text_size=size.tiny)
