@@ -328,8 +328,9 @@ if can_trade
 
     // ENTRY 1: zona 0.750-0.786
     if not e1_done
-        // LONG: low a atins zona, close nu a cazut sub ea
-        if g_dir == 1 and low <= f_750 and close >= f_786
+        // LONG: pretul vine DE SUS in zona (retrasare), nu de jos in sus
+        // close[1] >= f_750 garanteaza ca bara anterioara era inca deasupra zonei
+        if g_dir == 1 and close[1] >= f_750 and low <= f_750 and close >= f_786
             ep_1  = math.min(close, f_750)
             sl_1  = f_886 - buf_p
             risk1 = math.abs(ep_1 - sl_1)
@@ -368,8 +369,9 @@ if can_trade
                  style=label.style_label_up,
                  size=size.small)
 
-        // SHORT: high a atins zona, close nu a depasit-o
-        else if g_dir == -1 and high >= f_750 and close <= f_786
+        // SHORT: pretul vine DE JOS in zona (bounce), nu de sus in jos
+        // close[1] <= f_750 garanteaza ca bara anterioara era inca sub zona
+        else if g_dir == -1 and close[1] <= f_750 and high >= f_750 and close <= f_786
             ep_1  = math.max(close, f_750)
             sl_1  = f_886 + buf_p
             risk1 = math.abs(sl_1 - ep_1)
