@@ -512,12 +512,10 @@ var table tbl = table.new(position.top_right, 1, 5,
                            border_width = 1)
 
 trend_clr = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
-trend_txt = trend_dir ==  1 ? "▲ UPTREND (VWAP Weekly)"  :
-            trend_dir == -1 ? "▼ DOWNTREND (VWAP Weekly)" : "─ PE VWAP (asteptam)"
+trend_txt = trend_dir ==  1 ? "▲ UPTREND (VWAP Weekly)" : trend_dir == -1 ? "▼ DOWNTREND (VWAP Weekly)" : "─ PE VWAP (asteptam)"
 sess_txt  = in_morn ? "🔵 London open" : in_aftn ? "🟢 NY open" : "⏸ Afara sesiune"
-fib_txt   = not na(g_hi) ?
-            (g_dir == 1 ? "↑ BUY" : "↓ SELL") + " | Hi:" + str.tostring(g_hi, "#.##") + " Lo:" + str.tostring(g_lo, "#.##") :
-            "— fara setup —"
+fib_dir   = g_dir == 1 ? "↑ BUY" : "↓ SELL"
+fib_txt   = not na(g_hi) ? fib_dir + " | Hi:" + str.tostring(g_hi, "#.##") + " Lo:" + str.tostring(g_lo, "#.##") : "— fara setup —"
 trade_txt = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
 dst_txt   = _is_summer ? "☀️ Ora vara – London 07:00 UTC" : "❄️ Ora iarna – London 08:00 UTC"
 dst_clr   = _is_summer ? color.yellow : color.new(color.white, 40)
