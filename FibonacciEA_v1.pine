@@ -1,17 +1,18 @@
 //@version=5
 // ============================================================
-//  FibonacciEA v2  -  TradingView Pine Script v5
+//  FibonacciEA v3  -  TradingView Pine Script v5
 //  Strategie Fibonacci Retracement
 //
 //  Logica:
-//    Directie  : VWAP Weekly (pret > VWAP = UP, pret < VWAP = DOWN)
-//    Fibonacci : UP  -> swing LOW->HIGH, intrare la retrasare 0.75-0.786
-//                DOWN -> swing HIGH->LOW, intrare la bounce 0.75-0.786
+//    Directie  : Trend >= N% fata de deschiderea Londra
+//                (nu mai folosim VWAP)
+//    Fibonacci : UP  -> swing LOW->HIGH, intrare retrasare 0.75-0.786
+//                DOWN -> swing HIGH->LOW, intrare bounce 0.75-0.786
 //    Entry 1   : zona 0.750-0.786  |  SL dincolo de 0.886
 //    Entry 2   : nivel 0.886       |  SL dincolo de 1.0
 //    TP        : RR 1:2  |  BE automat la 1:1 (SL mutat la entry)
-//    Linii     : dispar automat cand trade-ul se inchide
-//    Fix       : fib reset automat la schimbarea trendului
+//    Sesiune   : deschidere Londra -> inchidere New York (continuu)
+//    Max       : 2 trade-uri/zi, dupa care ziua se opreste
 // ============================================================
 strategy(
   title             = "AdiivaGold",
@@ -31,7 +32,7 @@ var string G_FIB  = "Fibonacci Nivele"
 var string G_SWG  = "Swing Detectie"
 var string G_SES  = "Sesiune"
 
-rr_ratio   = input.float(2.0,   "RR Ratio",               group=G_RISK, minval=0.5,  step=0.5)
+rr_ratio   = input.float(2.0,   "RR Ratio",               group=G_RISK, minval=0.5, step=0.5)
 fib_e1_bot = input.float(0.750, "Entry 1 - nivel inferior",group=G_FIB,  step=0.001)
 fib_e1_top = input.float(0.786, "Entry 1 - nivel superior",group=G_FIB,  step=0.001)
 fib_e2     = input.float(0.886, "Entry 2 - nivel",         group=G_FIB,  step=0.001)
@@ -40,16 +41,14 @@ sl_buf_tck = input.int(20,      "Buffer SL (ticks)",        group=G_FIB,  minval
 piv_bars   = input.int(5,       "Pivot Bars",              group=G_SWG, minval=2, maxval=20)
 min_sw_pct = input.float(1.0,   "Range minim swing (%)",   group=G_SWG, minval=0.1, step=0.1)
 max_sw_pct = input.float(100.0, "Range maxim swing (%)",   group=G_SWG, minval=0.5, step=0.5)
+trend_pct  = input.float(1.0,   "Trend minim London (%)",  group=G_SWG, minval=0.1, step=0.1)
 
-morn_h_s = input.int(8,  "Dimineata start ora UTC",    group=G_SES, minval=0, maxval=23)
-morn_m_s = input.int(0,  "Dimineata start minut",      group=G_SES, minval=0, maxval=59)
-morn_h_e = input.int(10, "Dimineata sfarsit ora UTC",  group=G_SES, minval=0, maxval=23)
-morn_m_e = input.int(0,  "Dimineata sfarsit minut",    group=G_SES, minval=0, maxval=59)
-aftn_h_s = input.int(13, "Dupa-masa start ora UTC",    group=G_SES, minval=0, maxval=23)
-aftn_m_s = input.int(30, "Dupa-masa start minut",      group=G_SES, minval=0, maxval=59)
-aftn_h_e = input.int(15, "Dupa-masa sfarsit ora UTC",  group=G_SES, minval=0, maxval=23)
-aftn_m_e = input.int(30, "Dupa-masa sfarsit minut",    group=G_SES, minval=0, maxval=59)
-max_daily = input.int(2,  "Max tranzactii/zi",          group=G_SES, minval=1)
+// Sesiune continua: deschidere Londra -> inchidere New York
+// Start in ora locala Londra (DST auto), sfarsit in UTC fix
+sess_h_s = input.int(8,  "Sesiune start ora (Londra local)", group=G_SES, minval=0, maxval=23)
+sess_m_s = input.int(0,  "Sesiune start minut",              group=G_SES, minval=0, maxval=59)
+sess_h_e = input.int(21, "Sesiune sfarsit ora UTC (NY)",     group=G_SES, minval=0, maxval=23)
+sess_m_e = input.int(0,  "Sesiune sfarsit minut UTC",        group=G_SES, minval=0, maxval=59)
 
 // ============================================================
 // 2. HELPER
@@ -60,25 +59,7 @@ f_lvl(dir, hi, lo, lvl) =>
     dir == 1 ? hi - lvl * (hi - lo) : lo + lvl * (hi - lo)
 
 // ============================================================
-// 3. VWAP WEEKLY
-// ============================================================
-_wk_id    = year * 100 + weekofyear
-_new_week = ta.change(_wk_id) != 0
-
-var float _pv_sum = 0.0
-var float _v_sum  = 0.0
-if _new_week
-    _pv_sum := hlc3 * volume
-    _v_sum  := volume
-else
-    _pv_sum := _pv_sum + hlc3 * volume
-    _v_sum  := _v_sum  + volume
-
-vwap_w    = _pv_sum / _v_sum
-trend_dir = close > vwap_w ? 1 : close < vwap_w ? -1 : 0
-
-// ============================================================
-// 4. DST AUTO (EU: ultima duminica martie -> ultima duminica oct)
+// 3. DST AUTO (EU: ultima duminica martie -> ultima duminica oct)
 // ============================================================
 _ts31m     = timestamp(year, 3, 31, 12, 0)
 _dow31m    = dayofweek(_ts31m)
@@ -92,27 +73,37 @@ _is_summer = _aft_spr and _bef_aut
 _dst_off   = _is_summer ? -60 : 0
 
 // ============================================================
-// 5. SESSION FILTER
+// 4. SESSION FILTER (deschidere Londra -> inchidere NY)
 // ============================================================
 _cm     = hour * 60 + minute
-_morn_s = morn_h_s * 60 + morn_m_s + _dst_off
-_morn_e = morn_h_e * 60 + morn_m_e + _dst_off
-_aftn_s = aftn_h_s * 60 + aftn_m_s
-_aftn_e = aftn_h_e * 60 + aftn_m_e
-in_morn = _cm >= _morn_s and _cm < _morn_e
-in_aftn = _cm >= _aftn_s and _cm < _aftn_e
-in_sess = in_morn or in_aftn
+_sess_s = sess_h_s * 60 + sess_m_s + _dst_off
+_sess_e = sess_h_e * 60 + sess_m_e
+in_sess = _cm >= _sess_s and _cm < _sess_e
 
 // ============================================================
-// 6. DAILY RESET
+// 5. DAILY RESET + CAPTURA PRET LONDRA
 // ============================================================
-var int day_trades = 0
-var int last_date  = 0
+var int   day_trades     = 0
+var int   last_date      = 0
+var float london_open_px = na
+
 cur_date   = year * 10000 + month * 100 + dayofmonth
 is_new_day = cur_date != last_date
 if is_new_day
-    day_trades := 0
-    last_date  := cur_date
+    day_trades     := 0
+    last_date      := cur_date
+    london_open_px := na
+
+// Prima bara din sesiune = pret de referinta London open
+if in_sess and na(london_open_px)
+    london_open_px := open
+
+// ============================================================
+// 6. TREND DIRECTION: % miscare fata de deschiderea Londra
+// ============================================================
+_ref      = nz(london_open_px, close)
+_pct_chg  = _ref > 0 ? (close - _ref) / _ref * 100.0 : 0.0
+trend_dir = _pct_chg >= trend_pct ? 1 : _pct_chg <= -trend_pct ? -1 : 0
 
 // ============================================================
 // 7. PIVOT ARRAYS
@@ -214,6 +205,7 @@ var line ln_e1_tp    = na
 var line ln_e2_entry = na
 var line ln_e2_sl    = na
 var line ln_e2_tp    = na
+var line ln_london   = na
 
 buf_p = sl_buf_tck * syminfo.mintick
 
@@ -238,12 +230,22 @@ if is_new_day
     line.delete(ln_e2_entry)
     line.delete(ln_e2_sl)
     line.delete(ln_e2_tp)
+    line.delete(ln_london)
     ln_e1_entry := na
     ln_e1_sl    := na
     ln_e1_tp    := na
     ln_e2_entry := na
     ln_e2_sl    := na
     ln_e2_tp    := na
+    ln_london   := na
+
+// Deseneaza linia London open la prima bara a sesiunii
+if in_sess and na(ln_london) and not na(london_open_px)
+    ln_london := line.new(
+         bar_index, london_open_px, bar_index + 1, london_open_px,
+         extend=extend.right,
+         color=color.new(color.purple, 30),
+         style=line.style_dotted, width=1)
 
 // Reset fib cand trendul se schimba
 if not na(g_hi) and trend_dir != 0 and trend_dir != g_dir
@@ -257,8 +259,9 @@ if not na(g_hi) and trend_dir != 0 and trend_dir != g_dir
 if not na(sw_hi) and not na(sw_lo)
     _hi_diff = math.abs(sw_hi - nz(g_hi))
     _lo_diff = math.abs(sw_lo - nz(g_lo))
-    _changed = na(g_hi) or g_dir != trend_dir or _hi_diff > syminfo.mintick or _lo_diff > syminfo.mintick
-    if _changed
+    _c1      = na(g_hi) or g_dir != trend_dir
+    _c2      = _hi_diff > syminfo.mintick or _lo_diff > syminfo.mintick
+    if _c1 or _c2
         g_hi    := sw_hi
         g_lo    := sw_lo
         g_dir   := trend_dir
@@ -289,7 +292,6 @@ if strategy.closedtrades > prev_closed
         label.new(bar_index, _y, _pnl,
                   color=_clr, textcolor=color.white,
                   style=_sty, size=size.small)
-
         if _eid == "E1L" or _eid == "E1S"
             line.delete(ln_e1_entry)
             line.delete(ln_e1_sl)
@@ -315,7 +317,8 @@ if strategy.closedtrades > prev_closed
 // ============================================================
 // 11. ENTRY LOGIC
 // ============================================================
-can_trade = not na(g_hi) and in_sess and trend_dir != 0 and day_trades < max_daily
+// Max 2 trade-uri/zi fix - dupa 2 nu mai intram deloc
+can_trade = not na(g_hi) and in_sess and trend_dir != 0 and day_trades < 2
 
 if can_trade
     f_750 = f_lvl(g_dir, g_hi, g_lo, fib_e1_bot)
@@ -405,8 +408,8 @@ if can_trade
                  style=label.style_label_down,
                  size=size.small)
 
-    // ENTRY 2: nivel 0.886
-    if not e2_done and day_trades < max_daily
+    // ENTRY 2: nivel 0.886 (doar daca mai avem voie)
+    if not e2_done and day_trades < 2
         if g_dir == 1 and close <= f_886
             sl_2  = f_100 - buf_p
             risk2 = math.abs(close - sl_2)
@@ -517,17 +520,7 @@ if not na(v_e2_entry) and not v_e2_be
 // ============================================================
 // 13. VIZUALIZARE
 // ============================================================
-bgcolor(in_morn ? color.new(color.blue,  93) : na, title="Sesiune London")
-bgcolor(in_aftn ? color.new(color.green, 93) : na, title="Sesiune NY")
-
-var color vwap_clr = color.new(color.gray, 40)
-if trend_dir == 1
-    vwap_clr := color.new(color.lime, 20)
-else if trend_dir == -1
-    vwap_clr := color.new(color.red, 20)
-else
-    vwap_clr := color.new(color.gray, 40)
-plot(vwap_w, "VWAP Weekly", color=vwap_clr, linewidth=2)
+bgcolor(in_sess ? color.new(color.blue, 93) : na, title="Sesiune activa")
 
 var line ln_shi = line.new(na, na, na, na,
      extend=extend.none,
@@ -610,27 +603,32 @@ var table tbl = table.new(position.top_right, 1, 5,
      border_color=color.new(color.gray, 60),
      border_width=1)
 
-trend_clr = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
-var string trend_txt = "PE VWAP (asteptam)"
+_pct_str = str.tostring(math.abs(_pct_chg), "#.##") + "%"
+var string trend_txt = "ASTEPTAM"
+var color  trend_clr = color.gray
 if trend_dir == 1
-    trend_txt := "UPTREND (VWAP Weekly)"
+    trend_txt := "UPTREND +" + _pct_str
+    trend_clr := color.lime
 else if trend_dir == -1
-    trend_txt := "DOWNTREND (VWAP Weekly)"
+    trend_txt := "DOWNTREND -" + _pct_str
+    trend_clr := color.red
 else
-    trend_txt := "PE VWAP (asteptam)"
-sess_txt  = in_morn ? "London open" : in_aftn ? "NY open" : "Afara sesiune"
+    trend_txt := "ASTEPTAM " + _pct_str
+    trend_clr := color.gray
+
+sess_txt  = in_sess ? "Sesiune activa" : "Afara sesiunii"
 fib_dir   = g_dir == 1 ? "BUY" : "SELL"
 var string fib_txt = "fara setup"
 if not na(g_hi)
-    fib_txt := fib_dir + " | Hi:" + str.tostring(g_hi, "#.##") + " Lo:" + str.tostring(g_lo, "#.##")
+    fib_txt := fib_dir + " | Hi:" + str.tostring(g_hi,"#.##") + " Lo:" + str.tostring(g_lo,"#.##")
 else
     fib_txt := "fara setup"
-trade_txt = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
-dst_txt   = _is_summer ? "Ora vara - London 07:00 UTC" : "Ora iarna - London 08:00 UTC"
+trade_txt = str.tostring(day_trades) + "/2 trades azi"
+dst_txt   = _is_summer ? "Ora vara (BST UTC+1)" : "Ora iarna (GMT UTC+0)"
 dst_clr   = _is_summer ? color.yellow : color.new(color.white, 40)
 
-table.cell(tbl, 0, 0, trend_txt, text_color=trend_clr,    text_size=size.small)
-table.cell(tbl, 0, 1, sess_txt,  text_color=color.white,  text_size=size.small)
-table.cell(tbl, 0, 2, fib_txt,   text_color=color.orange, text_size=size.small)
-table.cell(tbl, 0, 3, trade_txt, text_color=color.white,  text_size=size.small)
-table.cell(tbl, 0, 4, dst_txt,   text_color=dst_clr,      text_size=size.tiny)
+table.cell(tbl, 0, 0, trend_txt,  text_color=trend_clr,    text_size=size.small)
+table.cell(tbl, 0, 1, sess_txt,   text_color=color.white,  text_size=size.small)
+table.cell(tbl, 0, 2, fib_txt,    text_color=color.orange, text_size=size.small)
+table.cell(tbl, 0, 3, trade_txt,  text_color=color.white,  text_size=size.small)
+table.cell(tbl, 0, 4, dst_txt,    text_color=dst_clr,      text_size=size.tiny)
