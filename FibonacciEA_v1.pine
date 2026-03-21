@@ -1,3 +1,4 @@
+//@version=5
 // ============================================================
 //  FibonacciEA v2  –  TradingView Pine Script v5
 //  Strategie Fibonacci Retracement
@@ -12,7 +13,6 @@
 //    • Linii     : dispar automat cand trade-ul se inchide (TP/SL atins)
 //    • Fix       : fib reset automat la schimbarea trendului
 // ============================================================
-//@version=5
 strategy(
   title             = "AdiivaGold",
   overlay           = true,
