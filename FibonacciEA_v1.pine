@@ -255,11 +255,10 @@ if not na(g_hi) and trend_dir != 0 and trend_dir != g_dir
 
 // Update swing
 if not na(sw_hi) and not na(sw_lo)
-    changed = (na(g_hi) or
-               g_dir != trend_dir or
-               math.abs(sw_hi - g_hi) > syminfo.mintick or
-               math.abs(sw_lo - g_lo) > syminfo.mintick)
-    if changed
+    _hi_diff = math.abs(sw_hi - nz(g_hi))
+    _lo_diff = math.abs(sw_lo - nz(g_lo))
+    _changed = na(g_hi) or g_dir != trend_dir or _hi_diff > syminfo.mintick or _lo_diff > syminfo.mintick
+    if _changed
         g_hi    := sw_hi
         g_lo    := sw_lo
         g_dir   := trend_dir
