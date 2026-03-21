@@ -71,8 +71,8 @@ if _new_week
     _pv_sum := hlc3 * volume
     _v_sum  := volume
 else
-    _pv_sum += hlc3 * volume
-    _v_sum  += volume
+    _pv_sum := _pv_sum + hlc3 * volume
+    _v_sum  := _v_sum  + volume
 
 vwap_w    = _pv_sum / _v_sum
 trend_dir = close > vwap_w ? 1 : close < vwap_w ? -1 : 0
@@ -150,9 +150,8 @@ find_swing(dir) =>
     n_ph  = array.size(a_ph_p)
     n_pl  = array.size(a_pl_p)
     if dir == 1 and n_ph > 0 and n_pl > 0
-        done = false
         for i = 0 to n_ph - 1
-            if done
+            if not na(r_hi)
                 break
             sh  = array.get(a_ph_p, i)
             shb = array.get(a_ph_b, i)
@@ -164,14 +163,12 @@ find_swing(dir) =>
                     if r >= min_r and r <= max_r and close < sh
                         r_hi := sh
                         r_lo := sl
-                        done := true
                         break
                     if r > max_r
                         break
     else if dir == -1 and n_ph > 0 and n_pl > 0
-        done = false
         for i = 0 to n_pl - 1
-            if done
+            if not na(r_hi)
                 break
             sl  = array.get(a_pl_p, i)
             slb = array.get(a_pl_b, i)
@@ -183,7 +180,6 @@ find_swing(dir) =>
                     if r >= min_r and r <= max_r and close > sl
                         r_hi := sh
                         r_lo := sl
-                        done := true
                         break
                     if r > max_r
                         break
