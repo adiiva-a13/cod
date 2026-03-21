@@ -330,13 +330,15 @@ if can_trade
 
     // ── ENTRY 1: zona 0.750-0.786 ──────────────────────────
     if not e1_done
-        if g_dir == 1 and close <= f_750 and close >= f_786
+        if g_dir == 1 and low <= f_750 and close >= f_786
+            // low a atins zona chiar daca close era inca deasupra → entry la f_750
+            ep_1  = math.min(close, f_750)
             sl_1  = f_886 - buf_p
-            risk1 = math.abs(close - sl_1)
-            tp_1  = close + risk1 * rr_ratio
-            strategy.entry("E1L", strategy.long,  comment="↑ E1 0.786")
+            risk1 = math.abs(ep_1 - sl_1)
+            tp_1  = ep_1 + risk1 * rr_ratio
+            strategy.entry("E1L", strategy.long,  limit=f_750, comment="↑ E1 0.786")
             strategy.exit ("E1Lx", "E1L", stop=sl_1, limit=tp_1)
-            v_e1_entry := close
+            v_e1_entry := ep_1
             v_e1_sl    := sl_1
             v_e1_tp    := tp_1
             v_e1_dir   := 1
@@ -346,18 +348,20 @@ if can_trade
             line.delete(ln_e1_entry)
             line.delete(ln_e1_sl)
             line.delete(ln_e1_tp)
-            ln_e1_entry := line.new(bar_index, close, bar_index+1, close, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
-            ln_e1_sl    := line.new(bar_index, sl_1,  bar_index+1, sl_1,  extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
-            ln_e1_tp    := line.new(bar_index, tp_1,  bar_index+1, tp_1,  extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
-            label.new(bar_index, low,  "↑ E1 BUY\n"  + str.tostring(close, "#.##"), color=color.new(color.lime, 10), textcolor=color.white, style=label.style_label_up,   size=size.small)
+            ln_e1_entry := line.new(bar_index, ep_1, bar_index+1, ep_1, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
+            ln_e1_sl    := line.new(bar_index, sl_1, bar_index+1, sl_1, extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
+            ln_e1_tp    := line.new(bar_index, tp_1, bar_index+1, tp_1, extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
+            label.new(bar_index, low,  "↑ E1 BUY\n"  + str.tostring(ep_1, "#.##"), color=color.new(color.lime, 10), textcolor=color.white, style=label.style_label_up,   size=size.small)
 
-        else if g_dir == -1 and close >= f_750 and close <= f_786
+        else if g_dir == -1 and high >= f_750 and close <= f_786
+            // high a atins zona chiar daca close era inca sub ea → entry la f_750
+            ep_1  = math.max(close, f_750)
             sl_1  = f_886 + buf_p
-            risk1 = math.abs(sl_1 - close)
-            tp_1  = close - risk1 * rr_ratio
-            strategy.entry("E1S", strategy.short, comment="↓ E1 0.786")
+            risk1 = math.abs(sl_1 - ep_1)
+            tp_1  = ep_1 - risk1 * rr_ratio
+            strategy.entry("E1S", strategy.short, limit=f_750, comment="↓ E1 0.786")
             strategy.exit ("E1Sx", "E1S", stop=sl_1, limit=tp_1)
-            v_e1_entry := close
+            v_e1_entry := ep_1
             v_e1_sl    := sl_1
             v_e1_tp    := tp_1
             v_e1_dir   := -1
@@ -367,10 +371,10 @@ if can_trade
             line.delete(ln_e1_entry)
             line.delete(ln_e1_sl)
             line.delete(ln_e1_tp)
-            ln_e1_entry := line.new(bar_index, close, bar_index+1, close, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
-            ln_e1_sl    := line.new(bar_index, sl_1,  bar_index+1, sl_1,  extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
-            ln_e1_tp    := line.new(bar_index, tp_1,  bar_index+1, tp_1,  extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
-            label.new(bar_index, high, "↓ E1 SELL\n" + str.tostring(close, "#.##"), color=color.new(color.red,  10), textcolor=color.white, style=label.style_label_down, size=size.small)
+            ln_e1_entry := line.new(bar_index, ep_1, bar_index+1, ep_1, extend=extend.right, color=color.new(color.white,  20), style=line.style_solid,  width=1)
+            ln_e1_sl    := line.new(bar_index, sl_1, bar_index+1, sl_1, extend=extend.right, color=color.new(color.red,    20), style=line.style_solid,  width=1)
+            ln_e1_tp    := line.new(bar_index, tp_1, bar_index+1, tp_1, extend=extend.right, color=color.new(color.lime,   20), style=line.style_dashed, width=1)
+            label.new(bar_index, high, "↓ E1 SELL\n" + str.tostring(ep_1, "#.##"), color=color.new(color.red,  10), textcolor=color.white, style=label.style_label_down, size=size.small)
 
     // ── ENTRY 2: nivel 0.886 ───────────────────────────────
     if not e2_done and day_trades < max_daily
