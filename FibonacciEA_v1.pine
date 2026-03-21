@@ -521,9 +521,13 @@ if not na(v_e2_entry) and not v_e2_be
 bgcolor(in_morn ? color.new(color.blue,  93) : na, title="Sesiune London")
 bgcolor(in_aftn ? color.new(color.green, 93) : na, title="Sesiune NY")
 
-vwap_clr = (trend_dir == 1  ? color.new(color.lime, 20) :
-            trend_dir == -1 ? color.new(color.red,  20) :
-            color.new(color.gray, 40))
+var color vwap_clr = color.new(color.gray, 40)
+if trend_dir == 1
+    vwap_clr := color.new(color.lime, 20)
+else if trend_dir == -1
+    vwap_clr := color.new(color.red, 20)
+else
+    vwap_clr := color.new(color.gray, 40)
 plot(vwap_w, "VWAP Weekly", color=vwap_clr, linewidth=2)
 
 var line ln_shi = line.new(na, na, na, na,
@@ -608,15 +612,20 @@ var table tbl = table.new(position.top_right, 1, 5,
      border_width=1)
 
 trend_clr = trend_dir ==  1 ? color.lime : trend_dir == -1 ? color.red : color.gray
-trend_txt = (trend_dir ==  1 ? "UPTREND (VWAP Weekly)" :
-             trend_dir == -1 ? "DOWNTREND (VWAP Weekly)" :
-             "PE VWAP (asteptam)")
+var string trend_txt = "PE VWAP (asteptam)"
+if trend_dir == 1
+    trend_txt := "UPTREND (VWAP Weekly)"
+else if trend_dir == -1
+    trend_txt := "DOWNTREND (VWAP Weekly)"
+else
+    trend_txt := "PE VWAP (asteptam)"
 sess_txt  = in_morn ? "London open" : in_aftn ? "NY open" : "Afara sesiune"
 fib_dir   = g_dir == 1 ? "BUY" : "SELL"
-fib_txt   = (not na(g_hi) ?
-             fib_dir + " | Hi:" + str.tostring(g_hi, "#.##") +
-             " Lo:" + str.tostring(g_lo, "#.##") :
-             "fara setup")
+var string fib_txt = "fara setup"
+if not na(g_hi)
+    fib_txt := fib_dir + " | Hi:" + str.tostring(g_hi, "#.##") + " Lo:" + str.tostring(g_lo, "#.##")
+else
+    fib_txt := "fara setup"
 trade_txt = str.tostring(day_trades) + "/" + str.tostring(max_daily) + " trades azi"
 dst_txt   = _is_summer ? "Ora vara - London 07:00 UTC" : "Ora iarna - London 08:00 UTC"
 dst_clr   = _is_summer ? color.yellow : color.new(color.white, 40)
