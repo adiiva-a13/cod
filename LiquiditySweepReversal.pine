@@ -314,27 +314,32 @@ if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(tr
         strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         beMoved := true
 
-// ── Exit labels: Exit S/L +X  (detectie prin ta.change) ──────────────
-if ta.change(strategy.closedtrades) > 0
-    idx     = strategy.closedtrades - 1
-    ep      = strategy.closedtrades.exit_price(idx)
-    enp     = strategy.closedtrades.entry_price(idx)
-    sz      = strategy.closedtrades.size(idx)
-    isSell  = sz < 0
-    storedSL    = tradeCount < array.size(slHistory)    ? array.get(slHistory,    tradeCount) : na
-    storedEntry = tradeCount < array.size(entryHistory) ? array.get(entryHistory, tradeCount) : enp
-    riskPts2    = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
-    pnlPts      = isSell ? enp - ep : ep - enp
-    rMult       = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
-    rStr        = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#")
-    yPos        = not na(ep) ? ep : close
-    label.new(bar_index, yPos,
-              (isSell ? "Exit S\n" : "Exit L\n") + rStr,
-              style     = isSell ? label.style_arrowup : label.style_arrowdown,
-              color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
-              textcolor = color.white,
-              size      = size.small)
-    tradeCount += 1
+// ── Exit labels: Exit S/L +X  (detectie prin var tracker — ta.change pe
+//    strategy.closedtrades este nesigur in backtesting dens) ──────────
+var int prevClosedTrades = 0
+int newlyClosed = strategy.closedtrades - prevClosedTrades
+if newlyClosed > 0
+    for _i = 0 to newlyClosed - 1
+        idx     = prevClosedTrades + _i
+        ep      = strategy.closedtrades.exit_price(idx)
+        enp     = strategy.closedtrades.entry_price(idx)
+        sz      = strategy.closedtrades.size(idx)
+        isSell  = sz < 0
+        storedSL    = tradeCount < array.size(slHistory)    ? array.get(slHistory,    tradeCount) : na
+        storedEntry = tradeCount < array.size(entryHistory) ? array.get(entryHistory, tradeCount) : enp
+        riskPts2    = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
+        pnlPts      = isSell ? enp - ep : ep - enp
+        rMult       = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
+        rStr        = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#")
+        yPos        = not na(ep) ? ep : close
+        label.new(bar_index, yPos,
+                  (isSell ? "Exit S\n" : "Exit L\n") + rStr,
+                  style     = isSell ? label.style_arrowup : label.style_arrowdown,
+                  color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
+                  textcolor = color.white,
+                  size      = size.small)
+        tradeCount += 1
+    prevClosedTrades := strategy.closedtrades
 
 // ════════════════════════════════════════════════════════════════════
 // CONSUM NIVELURI MTF — se executa DUPA intrari
