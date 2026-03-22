@@ -239,7 +239,10 @@ if tta_signal
         strategy.entry("SELL A", strategy.short, comment="TT-A 4H/1H")
         strategy.exit("EX A",    "SELL A", stop=sl, limit=tp)
         tradesToday += 1
-        trSL := sl  ;  trEntry := close  ;  trDir := -1  ;  beMoved := false
+        trSL    := sl
+        trEntry := close
+        trDir   := -1
+        beMoved := false
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -249,7 +252,10 @@ if tba_signal
         strategy.entry("BUY A", strategy.long, comment="TB-A 4H/1H")
         strategy.exit("EX A2",  "BUY A", stop=sl, limit=tp)
         tradesToday += 1
-        trSL := sl  ;  trEntry := close  ;  trDir := 1  ;  beMoved := false
+        trSL    := sl
+        trEntry := close
+        trDir   := 1
+        beMoved := false
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -259,7 +265,10 @@ if ttb_signal
         strategy.entry("SELL B", strategy.short, comment="TT-B 4H/1H")
         strategy.exit("EX B",    "SELL B", stop=sl, limit=tp)
         tradesToday += 1
-        trSL := sl  ;  trEntry := close  ;  trDir := -1  ;  beMoved := false
+        trSL    := sl
+        trEntry := close
+        trDir   := -1
+        beMoved := false
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -269,7 +278,10 @@ if tbb_signal
         strategy.entry("BUY B", strategy.long, comment="TB-B 4H/1H")
         strategy.exit("EX B2",  "BUY B", stop=sl, limit=tp)
         tradesToday += 1
-        trSL := sl  ;  trEntry := close  ;  trDir := 1  ;  beMoved := false
+        trSL    := sl
+        trEntry := close
+        trDir   := 1
+        beMoved := false
 
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
