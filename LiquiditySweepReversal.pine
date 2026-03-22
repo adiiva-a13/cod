@@ -212,13 +212,13 @@ ttb_twins  = true
 ttb_sweep  = high[0] > twinHi + pts(minSweepB)
 ttb_close  = close   < twinLoRef
 // Pattern B: bara[0] e CHIAR bara sweep+entry → trimitem close[0] (close curent)
-ttb_signal = ttb_twins and ttb_sweep and ttb_close and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
+ttb_signal = ttb_twins and ttb_sweep and ttb_close and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
 
 // TB-B
 tbb_twins  = true
 tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
 tbb_close  = close   > twinHiRef
-tbb_signal = tbb_twins and tbb_sweep and tbb_close and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
+tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
 
 // ════════════════════════════════════════════════════════════════════
 // ENTRY LA INCHIDEREA L3
