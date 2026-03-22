@@ -11,167 +11,229 @@ strategy("TT / TB – Liquidity Sweep 3 Candles [SMC]",
 // ════════════════════════════════════════════════════════════════════
 // INPUTS
 // ════════════════════════════════════════════════════════════════════
-grp1 = "=== PATTERN ==="
-minSweep = input.float(0.0,  "Sweep minim deasupra/sub L1 (puncte)",  group=grp1, minval=0.0, step=0.5,
-                       tooltip="Bara 2 trebuie sa depaseasca high/low-ul barei 1 cu cel putin X puncte")
-maxGap   = input.int  (3,    "Distanta maxima bara1 → bara2 (bare)",  group=grp1, minval=1, maxval=20,
-                       tooltip="Cate bare inapoi cautam bara 1 fata de bara 2 (bara de sweep)")
+grp1 = "=== PATTERN TYPE A  (L1 → L2 sweep → L3 confirmare) ==="
+maxGapA  = input.int  (5,    "Bare maxime intre L1 si L2",            group=grp1, minval=1, maxval=30)
+minSweepA= input.float(0.0,  "Sweep minim L2 peste L1 (puncte)",      group=grp1, minval=0.0, step=0.5)
 
-grp2 = "=== ENTRY / EXIT ==="
-rrRatio  = input.float(2.0,  "Risk : Reward",                         group=grp2, minval=0.5, step=0.5)
-slBuf    = input.float(2.0,  "SL Buffer (puncte dupa wick extrem)",   group=grp2, minval=0.0, step=0.5)
+grp2 = "=== PATTERN TYPE B  (L1 ≈ L2 twin → L3 sweep ambele) ==="
+twinTol  = input.float(5.0,  "Toleranta twin high/low L1≈L2 (puncte)",group=grp2, minval=0.0, step=0.5,
+                       tooltip="Cat de aproape trebuie sa fie high-ul L1 si L2 (sau low-ul) ca sa fie considerati 'twin'")
+minSweepB= input.float(0.0,  "Sweep minim L3 peste ambele (puncte)",  group=grp2, minval=0.0, step=0.5)
 
-grp3 = "=== FILTRU ORE (server) ==="
-useTime  = input.bool (false, "Filtru ore activ",                     group=grp3)
-startH   = input.int  (9,    "Ora start",                             group=grp3, minval=0, maxval=23)
-endH     = input.int  (17,   "Ora end",                               group=grp3, minval=1, maxval=24)
+grp3 = "=== ENTRY / EXIT ==="
+rrRatio  = input.float(2.0,  "Risk : Reward",                         group=grp3, minval=0.5, step=0.5)
+slBuf    = input.float(2.0,  "SL Buffer (puncte dupa wick extrem)",   group=grp3, minval=0.0, step=0.5)
 
-grp4 = "=== VIZUALIZARE ==="
-showLabels = input.bool(true, "Afiseaza etichete TT/TB pe chart",     group=grp4)
-showBoxes  = input.bool(true, "Afiseaza zona sweep (box)",            group=grp4)
+grp4 = "=== FILTRU ORE (server) ==="
+useTime  = input.bool (false, "Filtru ore activ",                      group=grp4)
+startH   = input.int  (9,    "Ora start",                              group=grp4, minval=0, maxval=23)
+endH     = input.int  (17,   "Ora end",                                group=grp4, minval=1, maxval=24)
+
+grp5 = "=== VIZUALIZARE ==="
+showLabels = input.bool(true,  "Etichete TT / TB pe chart",            group=grp5)
+showZone   = input.bool(true,  "Box zona sweep",                        group=grp5)
+showSLLine = input.bool(true,  "Linie SL",                              group=grp5)
 
 // ════════════════════════════════════════════════════════════════════
-// TIME FILTER
+// HELPERS
 // ════════════════════════════════════════════════════════════════════
 inSession = not useTime or (hour >= startH and hour < endH)
+pts(x)    => x * syminfo.mintick
+noTrade   = strategy.position_size == 0
 
 // ════════════════════════════════════════════════════════════════════
-// HELPER: pret in puncte
-// ════════════════════════════════════════════════════════════════════
-pts(x) => x * syminfo.mintick
-
-// ════════════════════════════════════════════════════════════════════
-// PATTERN DETECTION
+// ── PATTERN TYPE A ───────────────────────────────────────────────────
 //
-// Indexarea barelor (perspectiva barei curente = bar[0]):
-//   bar[0] = Lumanarea 3 (confirmare, cea pe care intram)
-//   bar[1] = Lumanarea 2 (sweep / preluare lichiditate)
-//   bar[2..n] = Lumanarea 1 (high sau low initial "twin")
+//  bar[0] = L3 (confirmare + entry)
+//  bar[1] = L2 (sweep: wick depaseste L1, body inchide inapoi)
+//  bar[2..maxGapA+1] = candidati L1 (cluster care a format nivelul)
 //
-// TT (Twin Tops) → SELL:
-//   L1 high[n]  <  L2 high[1]  (L2 sweeps deasupra L1)
-//   L2 close[1] <  L1 high[n]  (L2 inchide sub nivelul L1 → sweep confirmat)
-//   L3 close    <  L3 open     (Lumanarea 3 este Bearish)
+//  TT-A → SELL:  L2.high > L1.high  si  L2.close < L1.high
+//                Barele dintre L1 si L2 nu depasesc L1.high
+//                L3: close < open  (bearish)
 //
-// TB (Twin Bottoms) → BUY:
-//   L1 low[n]   >  L2 low[1]   (L2 sweeps sub L1)
-//   L2 close[1] >  L1 low[n]   (L2 inchide deasupra nivelului L1 → sweep confirmat)
-//   L3 close    >  L3 open     (Lumanarea 3 este Bullish)
+//  TB-A → BUY:   L2.low  < L1.low   si  L2.close > L1.low
+//                Barele dintre L1 si L2 nu coboara sub L1.low
+//                L3: close > open  (bullish)
 // ════════════════════════════════════════════════════════════════════
+var float l1hi_A = na
+var float l1lo_A = na
+tta_sweep = false
+tba_sweep = false
 
-var bool tt_found   = false
-var bool tb_found   = false
-var float tt_sl     = na    // SL SELL = high[1] + buffer
-var float tb_sl     = na    // SL BUY  = low[1]  - buffer
-var float tt_hi     = na    // high-ul extrem al sweep (pentru vizualizare)
-var float tb_lo     = na
-var float l1_hi     = na    // nivelul initial L1 (pentru vizualizare)
-var float l1_lo     = na
+for i = 2 to maxGapA + 1
+    // ── TT-A ──────────────────────────────────────────────────────────
+    if high[1] > high[i] + pts(minSweepA) and close[1] < high[i]
+        levelOk = true
+        if i > 2
+            for j = 2 to i - 1
+                if high[j] >= high[i]
+                    levelOk := false
+                    break
+        if levelOk
+            if na(l1hi_A) or high[i] > l1hi_A
+                l1hi_A   := high[i]
+                tta_sweep := true
 
-// Bara de sweep = bar[1], cauta L1 in bar[2..maxGap+1]
-tt_sweep_ok = false
-tb_sweep_ok = false
+    // ── TB-A ──────────────────────────────────────────────────────────
+    if low[1] < low[i] - pts(minSweepA) and close[1] > low[i]
+        levelOk = true
+        if i > 2
+            for j = 2 to i - 1
+                if low[j] <= low[i]
+                    levelOk := false
+                    break
+        if levelOk
+            if na(l1lo_A) or low[i] < l1lo_A
+                l1lo_A   := low[i]
+                tba_sweep := true
 
-float best_l1_hi = na
-float best_l1_lo = na
-
-for i = 2 to maxGap + 1
-    // ─── TT: L2 (bar[1]) a depasit high-ul L1 (bar[i]) ───────────────
-    if high[1] > high[i] + pts(minSweep) and close[1] < high[i]
-        if na(best_l1_hi) or high[i] > best_l1_hi
-            best_l1_hi  := high[i]
-            tt_sweep_ok := true
-
-    // ─── TB: L2 (bar[1]) a spart low-ul L1 (bar[i]) ──────────────────
-    if low[1] < low[i] - pts(minSweep) and close[1] > low[i]
-        if na(best_l1_lo) or low[i] < best_l1_lo
-            best_l1_lo  := low[i]
-            tb_sweep_ok := true
-
-// ─── Confirmare cu bara 3 (bar[0]) ────────────────────────────────────
-// TT → bara 3 Bearish
-tt_confirm = close < open
-
-// TB → bara 3 Bullish
-tb_confirm = close > open
-
-// ─── Semnale finale ────────────────────────────────────────────────────
-tt_signal = tt_sweep_ok and tt_confirm and inSession and strategy.position_size == 0
-tb_signal = tb_sweep_ok and tb_confirm and inSession and strategy.position_size == 0
-
-if tt_signal
-    tt_found := true
-    tt_sl    := high[1] + pts(slBuf)
-    tt_hi    := high[1]
-    l1_hi    := best_l1_hi
-
-if tb_signal
-    tb_found := true
-    tb_sl    := low[1]  - pts(slBuf)
-    tb_lo    := low[1]
-    l1_lo    := best_l1_lo
+// Confirmare L3
+tta_signal = tta_sweep and (close < open) and inSession and noTrade
+tba_signal = tba_sweep and (close > open) and inSession and noTrade
 
 // ════════════════════════════════════════════════════════════════════
-// ENTRY TRADES  (la inchiderea lumanarii 3)
+// ── PATTERN TYPE B ───────────────────────────────────────────────────
+//
+//  bar[0] = L3  ← sweep-ul SI entry-ul (inchidere pe aceasta bara)
+//  bar[1] = L2  ← al doilea "twin" (high[1] ≈ high[2]  sau  low[1] ≈ low[2])
+//  bar[2] = L1  ← primul "twin"
+//
+//  TT-B → SELL:  high[1] ≈ high[2]  (twin tops)
+//                L3: high[0] > max(high[1],high[2])  (sweeps amandoua)
+//                    close[0] < min(high[1],high[2])  (inchide sub ambele)
+//
+//  TB-B → BUY:   low[1] ≈ low[2]  (twin bottoms)
+//                L3: low[0]  < min(low[1],low[2])   (sweeps amandoua)
+//                    close[0] > max(low[1],low[2])   (inchide deasupra ambelor)
+// ════════════════════════════════════════════════════════════════════
+twinHi     = math.max(high[1], high[2])
+twinLo_ref = math.min(high[1], high[2])
+twinLo     = math.min(low[1],  low[2])
+twinHi_ref = math.max(low[1],  low[2])
+
+// TT-B: L1 si L2 au high-uri aproximativ egale
+ttb_twins = math.abs(high[2] - high[1]) <= pts(twinTol)
+ttb_sweep = high[0] > twinHi + pts(minSweepB)
+ttb_close = close   < twinLo_ref           // inchide sub ambele high-uri
+
+ttb_signal = ttb_twins and ttb_sweep and ttb_close and inSession and noTrade
+
+// TB-B: L1 si L2 au low-uri aproximativ egale
+tbb_twins = math.abs(low[2] - low[1]) <= pts(twinTol)
+tbb_sweep = low[0]  < twinLo - pts(minSweepB)
+tbb_close = close   > twinHi_ref            // inchide deasupra ambelor low-uri
+
+tbb_signal = tbb_twins and tbb_sweep and tbb_close and inSession and noTrade
+
+// ════════════════════════════════════════════════════════════════════
+// ENTRY LA INCHIDEREA L3
 // ════════════════════════════════════════════════════════════════════
 
-// ─── SELL TT ──────────────────────────────────────────────────────────
-if tt_signal
-    float risk = tt_sl - close
+// ── SELL  (TT-A) ──────────────────────────────────────────────────────
+if tta_signal
+    float sl   = high[1] + pts(slBuf)
+    float risk = sl - close
     float tp   = close - risk * rrRatio
     if risk > 0 and tp < close
-        strategy.entry("SELL TT", strategy.short, comment="TT → SHORT")
-        strategy.exit("EXIT TT", "SELL TT", stop=tt_sl, limit=tp)
+        strategy.entry("SELL A", strategy.short, comment="TT-A")
+        strategy.exit("EX A",    "SELL A", stop=sl, limit=tp)
 
-// ─── BUY TB ───────────────────────────────────────────────────────────
-if tb_signal
-    float risk = close - tb_sl
+// ── BUY   (TB-A) ──────────────────────────────────────────────────────
+if tba_signal
+    float sl   = low[1] - pts(slBuf)
+    float risk = close - sl
     float tp   = close + risk * rrRatio
     if risk > 0 and tp > close
-        strategy.entry("BUY TB", strategy.long, comment="TB → LONG")
-        strategy.exit("EXIT TB", "BUY TB", stop=tb_sl, limit=tp)
+        strategy.entry("BUY A", strategy.long, comment="TB-A")
+        strategy.exit("EX A2",  "BUY A", stop=sl, limit=tp)
+
+// ── SELL  (TT-B) ──────────────────────────────────────────────────────
+if ttb_signal
+    float sl   = high[0] + pts(slBuf)    // SL deasupra wick-ului L3 (sweep)
+    float risk = sl - close
+    float tp   = close - risk * rrRatio
+    if risk > 0 and tp < close
+        strategy.entry("SELL B", strategy.short, comment="TT-B")
+        strategy.exit("EX B",    "SELL B", stop=sl, limit=tp)
+
+// ── BUY   (TB-B) ──────────────────────────────────────────────────────
+if tbb_signal
+    float sl   = low[0]  - pts(slBuf)    // SL sub wick-ul L3 (sweep)
+    float risk = close - sl
+    float tp   = close + risk * rrRatio
+    if risk > 0 and tp > close
+        strategy.entry("BUY B", strategy.long, comment="TB-B")
+        strategy.exit("EX B2",  "BUY B", stop=sl, limit=tp)
 
 // ════════════════════════════════════════════════════════════════════
 // VIZUALIZARE
 // ════════════════════════════════════════════════════════════════════
 
-// Etichete pe lumanarea 3
+// ── Etichete ──────────────────────────────────────────────────────────
 if showLabels
-    if tt_signal
-        label.new(bar_index, high + pts(5),
-                  text    = "TT\n↓ SELL",
-                  style   = label.style_label_down,
-                  color   = color.red,
-                  textcolor = color.white,
-                  size    = size.small)
+    if tta_signal
+        label.new(bar_index, high + pts(4),
+                  "TT-A\n↓ SELL", style=label.style_label_down,
+                  color=color.red, textcolor=color.white, size=size.small)
+    if tba_signal
+        label.new(bar_index, low - pts(4),
+                  "TB-A\n↑ BUY", style=label.style_label_up,
+                  color=color.teal, textcolor=color.white, size=size.small)
+    if ttb_signal
+        label.new(bar_index, high + pts(4),
+                  "TT-B\n↓ SELL", style=label.style_label_down,
+                  color=color.maroon, textcolor=color.white, size=size.small)
+    if tbb_signal
+        label.new(bar_index, low - pts(4),
+                  "TB-B\n↑ BUY", style=label.style_label_up,
+                  color=color.green, textcolor=color.white, size=size.small)
 
-    if tb_signal
-        label.new(bar_index, low - pts(5),
-                  text    = "TB\n↑ BUY",
-                  style   = label.style_label_up,
-                  color   = color.teal,
-                  textcolor = color.white,
-                  size    = size.small)
+// ── Box zona sweep ────────────────────────────────────────────────────
+if showZone
+    // TT-A: box de la L1.high la L2.wick
+    if tta_signal
+        box.new(bar_index-1, l1hi_A, bar_index, high[1],
+                border_color=color.new(color.red,30),
+                bgcolor     =color.new(color.red,80))
+        line.new(bar_index-maxGapA-1, l1hi_A, bar_index, l1hi_A,
+                 color=color.new(color.red,40), style=line.style_dashed, width=1)
 
-// Box zona sweep (de la nivelul L1 pana la wick-ul extrem al L2)
-if showBoxes
-    if tt_signal
-        box.new(bar_index - 1, tt_hi, bar_index, l1_hi,
-                border_color = color.new(color.red, 40),
-                bgcolor      = color.new(color.red, 80))
+    // TB-A: box de la L2.wick la L1.low
+    if tba_signal
+        box.new(bar_index-1, low[1], bar_index, l1lo_A,
+                border_color=color.new(color.teal,30),
+                bgcolor     =color.new(color.teal,80))
+        line.new(bar_index-maxGapA-1, l1lo_A, bar_index, l1lo_A,
+                 color=color.new(color.teal,40), style=line.style_dashed, width=1)
 
-    if tb_signal
-        box.new(bar_index - 1, l1_lo, bar_index, tb_lo,
-                border_color = color.new(color.teal, 40),
-                bgcolor      = color.new(color.teal, 80))
+    // TT-B: box de la twin.high la L3.wick  (arata ambele niveluri)
+    if ttb_signal
+        box.new(bar_index-2, twinHi, bar_index, high[0],
+                border_color=color.new(color.maroon,30),
+                bgcolor     =color.new(color.maroon,85))
+        line.new(bar_index-2, twinHi, bar_index, twinHi,
+                 color=color.new(color.maroon,30), style=line.style_dashed, width=1)
 
-// Linie orizontala la nivelul SL
-if tt_signal
-    line.new(bar_index - 1, tt_sl, bar_index + 5, tt_sl,
-             color = color.new(color.red, 30),
-             style = line.style_dashed, width = 1)
+    // TB-B: box de la L3.wick la twin.low
+    if tbb_signal
+        box.new(bar_index-2, low[0], bar_index, twinLo,
+                border_color=color.new(color.green,30),
+                bgcolor     =color.new(color.green,85))
+        line.new(bar_index-2, twinLo, bar_index, twinLo,
+                 color=color.new(color.green,30), style=line.style_dashed, width=1)
 
-if tb_signal
-    line.new(bar_index - 1, tb_sl, bar_index + 5, tb_sl,
-             color = color.new(color.teal, 30),
-             style = line.style_dashed, width = 1)
+// ── Linie SL ──────────────────────────────────────────────────────────
+if showSLLine
+    if tta_signal
+        line.new(bar_index, high[1]+pts(slBuf), bar_index+8, high[1]+pts(slBuf),
+                 color=color.new(color.red,20), style=line.style_dotted, width=2)
+    if tba_signal
+        line.new(bar_index, low[1]-pts(slBuf), bar_index+8, low[1]-pts(slBuf),
+                 color=color.new(color.teal,20), style=line.style_dotted, width=2)
+    if ttb_signal
+        line.new(bar_index, high[0]+pts(slBuf), bar_index+8, high[0]+pts(slBuf),
+                 color=color.new(color.maroon,20), style=line.style_dotted, width=2)
+    if tbb_signal
+        line.new(bar_index, low[0]-pts(slBuf), bar_index+8, low[0]-pts(slBuf),
+                 color=color.new(color.green,20), style=line.style_dotted, width=2)
