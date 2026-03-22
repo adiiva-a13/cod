@@ -19,7 +19,7 @@ tf1H      = input.timeframe("60",  "Timeframe intern (liq interna)",   group=grp
 pivot4H   = input.int(3,  "Pivot bars 4H  (swing lookback)",           group=grpMTF, minval=1, maxval=10)
 pivot1H   = input.int(3,  "Pivot bars 1H  (swing lookback)",           group=grpMTF, minval=1, maxval=10)
 maxLvl    = input.int(5,  "Niveluri max stocate per TF",               group=grpMTF, minval=1, maxval=10)
-liqTol    = input.float(3.0, "Toleranta sweep → nivel MTF (puncte)",   group=grpMTF, minval=0.0, step=0.5,
+liqTol    = input.float(20.0, "Toleranta sweep → nivel MTF (puncte)",   group=grpMTF, minval=0.0, step=0.5,
                          tooltip="Wick-ul sweep trebuie sa ajunga in aceasta distanta fata de nivelul 4H/1H")
 require4H = input.bool(true,  "Obliga sweep pe nivel 4H (liq majora)", group=grpMTF)
 require1H = input.bool(true,  "Sau pe nivel 1H (liq interna)",         group=grpMTF)
