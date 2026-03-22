@@ -232,7 +232,7 @@ var float trSL    = na   // SL al tradului curent
 var float trEntry = na   // entry price
 var int   trDir   = 0    // -1 short / +1 long
 var bool  beMoved = false
-var int   prevClosed = 0
+var int   tradeCount = 0
 var array<float> slHistory    = array.new_float(0)
 var array<float> entryHistory = array.new_float(0)
 
@@ -314,27 +314,28 @@ if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(tr
         strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         beMoved := true
 
-// ── Exit labels: Exit S/L +XR ─────────────────────────────────────────
-nClosed = strategy.closedtrades
-if nClosed > prevClosed
-    for i = prevClosed to nClosed - 1
-        ep      = strategy.closedtrades.exit_price(i)
-        enp     = strategy.closedtrades.entry_price(i)
-        sz      = strategy.closedtrades.size(i)
-        isSell  = sz < 0
-        storedSL    = i < array.size(slHistory)    ? array.get(slHistory,    i) : na
-        storedEntry = i < array.size(entryHistory) ? array.get(entryHistory, i) : enp
-        riskPts2 = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
-        pnlPts   = isSell ? enp - ep : ep - enp
-        rMult    = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
-        rStr     = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#") + "R"
-        label.new(bar_index, ep,
-                  (isSell ? "Exit S\n" : "Exit L\n") + rStr,
-                  style     = isSell ? label.style_arrowup : label.style_arrowdown,
-                  color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
-                  textcolor = color.white,
-                  size      = size.small)
-    prevClosed := nClosed
+// ── Exit labels: Exit S/L +X  (detectie prin position_size[1]) ───────
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    idx = strategy.closedtrades - 1
+    if idx >= 0
+        ep      = strategy.closedtrades.exit_price(idx)
+        enp     = strategy.closedtrades.entry_price(idx)
+        sz      = strategy.closedtrades.size(idx)
+        if not na(ep)
+            isSell      = sz < 0
+            storedSL    = tradeCount < array.size(slHistory)    ? array.get(slHistory,    tradeCount) : na
+            storedEntry = tradeCount < array.size(entryHistory) ? array.get(entryHistory, tradeCount) : enp
+            riskPts2    = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
+            pnlPts      = isSell ? enp - ep : ep - enp
+            rMult       = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
+            rStr        = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#")
+            label.new(bar_index, ep,
+                      (isSell ? "Exit S\n" : "Exit L\n") + rStr,
+                      style     = isSell ? label.style_arrowup : label.style_arrowdown,
+                      color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
+                      textcolor = color.white,
+                      size      = size.small)
+            tradeCount += 1
 
 // ════════════════════════════════════════════════════════════════════
 // CONSUM NIVELURI MTF — se executa DUPA intrari
