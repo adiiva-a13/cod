@@ -27,8 +27,8 @@ require4H = input.bool(true,  "Obliga sweep pe nivel 4H (liq majora)", group=grp
 require1H = input.bool(true,  "Sau pe nivel 1H (liq interna)",         group=grpMTF)
 
 // ── PATTERN TYPE A  (L1 → L2 sweep → L3 confirmare) ──────────────────
-grp1 = "=== PATTERN TYPE A  (3-candle, entry pe L3) ==="
-maxGapA   = input.int  (5,   "Bare maxime intre L1 si L2 (cluster)",   group=grp1, minval=1, maxval=30)
+grp1 = "=== PATTERN TYPE A  (3-candle consecutive, entry pe L3) ==="
+// L1=bar[2], L2=bar[1], L3=bar[0] — mereu consecutive, fara bare intre ele
 
 // ── PATTERN TYPE B  (L1 ≈ L2 twin → L3 sweep ambele, entry pe L3) ────
 grp2 = "=== PATTERN TYPE B  (twin candle, entry pe L3) ==="
@@ -196,43 +196,19 @@ tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close[1] > open[1]) and 
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE A  (exclus daca Pattern B a aparut pe bara anterioara)
-//   bar[0]=L3  bar[1]=L2(sweep)  bar[2..maxGapA+1]=L1 cluster
+//   bar[2]=L1  bar[1]=L2(sweep)  bar[0]=L3(confirmare+entry)
+//   Bare CONSECUTIVE — fara gap intre ele
 // ════════════════════════════════════════════════════════════════════
-var bool lastBarB = false   // previne A imediat dupa B (aceeasi bara sweep)
+var bool lastBarB = false
 
-float l1hi_A = na
-float l1lo_A = na
-tta_sweep = false
-tba_sweep = false
+// TT-A: L2(bar[1]) sweepuieste high-ul L1(bar[2]) si inchide sub el
+float l1hi_A = high[2]
+tta_sweep    = high[1] > high[2] and close[1] < high[2]
 
-for i = 2 to maxGapA + 1
-    // TT-A
-    if high[1] > high[i] and close[1] < high[i]
-        levelOk = true
-        if i > 2
-            for j = 2 to i - 1
-                if high[j] >= high[i]
-                    levelOk := false
-                    break
-        if levelOk
-            if na(l1hi_A) or high[i] > l1hi_A
-                l1hi_A    := high[i]
-                tta_sweep := true
-    // TB-A
-    if low[1] < low[i] and close[1] > low[i]
-        levelOk = true
-        if i > 2
-            for j = 2 to i - 1
-                if low[j] <= low[i]
-                    levelOk := false
-                    break
-        if levelOk
-            if na(l1lo_A) or low[i] < l1lo_A
-                l1lo_A    := low[i]
-                tba_sweep := true
+// TB-A: L2(bar[1]) sweepuieste low-ul L1(bar[2]) si inchide deasupra lui
+float l1lo_A = low[2]
+tba_sweep    = low[1] < low[2] and close[1] > low[2]
 
-// A nu se poate forma daca B s-a format pe bara anterioara SAU pe aceeasi bara
-// (Pattern A si B sunt mutual exclusive — nu pot coexista pe acelasi move)
 tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal
 tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal
 
@@ -438,10 +414,10 @@ plotshape(showLabels and tbb_signal, title="TB-B", style=shape.triangleup,   loc
 if showZone
     if tta_signal
         box.new(bar_index-1, high[1], bar_index, l1hi_A, border_color=color.new(color.red,30), bgcolor=color.new(color.red,80))
-        line.new(bar_index-maxGapA-1, l1hi_A, bar_index, l1hi_A, color=color.new(color.red,40), style=line.style_dashed, width=1)
+        line.new(bar_index-3, l1hi_A, bar_index, l1hi_A, color=color.new(color.red,40), style=line.style_dashed, width=1)
     if tba_signal
         box.new(bar_index-1, l1lo_A, bar_index, low[1], border_color=color.new(color.teal,30), bgcolor=color.new(color.teal,80))
-        line.new(bar_index-maxGapA-1, l1lo_A, bar_index, l1lo_A, color=color.new(color.teal,40), style=line.style_dashed, width=1)
+        line.new(bar_index-3, l1lo_A, bar_index, l1lo_A, color=color.new(color.teal,40), style=line.style_dashed, width=1)
     if ttb_signal
         box.new(bar_index-2, high[0], bar_index, twinHi, border_color=color.new(color.maroon,30), bgcolor=color.new(color.maroon,85))
         line.new(bar_index-2, twinHi, bar_index, twinHi, color=color.new(color.maroon,30), style=line.style_dashed, width=1)
