@@ -1,0 +1,178 @@
+//@version=5
+strategy("Liquidity Sweep Reversal [SMC]",
+         overlay              = true,
+         default_qty_type     = strategy.percent_of_equity,
+         default_qty_value    = 2,
+         commission_type      = strategy.commission.percent,
+         commission_value     = 0.02,
+         slippage             = 2,
+         max_bars_back        = 500)
+
+// ════════════════════════════════════════════════════════════════════
+// INPUTS
+// ════════════════════════════════════════════════════════════════════
+grp1 = "=== DETECTIE SWING (lichiditate) ==="
+swingLen = input.int  (10,    "Lookback swing (bare)",          group=grp1, minval=3,  maxval=100)
+leftLen  = input.int  (10,    "Left bars pivot",                group=grp1, minval=1,  maxval=50)
+
+grp2 = "=== ENTRY / EXIT ==="
+rrRatio  = input.float(2.0,   "Risk : Reward",                  group=grp2, minval=0.5, step=0.5)
+slBuf    = input.float(2.0,   "SL Buffer (puncte dupa wick)",   group=grp2, minval=0.0, step=0.5)
+maxWait  = input.int  (5,     "Bare max asteptare entry",        group=grp2, minval=1,  maxval=20)
+reqBear  = input.bool (true,  "Confirma SELL cu bara bearish",   group=grp2)
+reqBull  = input.bool (true,  "Confirma BUY  cu bara bullish",   group=grp2)
+
+grp3 = "=== ORE ACTIVE (server) ==="
+useTime  = input.bool (false, "Filtru ore activ",               group=grp3)
+startH   = input.int  (9,    "Ora start",                       group=grp3, minval=0, maxval=23)
+endH     = input.int  (17,   "Ora end",                         group=grp3, minval=1, maxval=24)
+
+grp4 = "=== VIZUALIZARE ==="
+showSwings = input.bool(true, "Afiseaza swing highs/lows",      group=grp4)
+showZones  = input.bool(true, "Afiseaza zona lichiditate",      group=grp4)
+
+// ════════════════════════════════════════════════════════════════════
+// TIME FILTER
+// ════════════════════════════════════════════════════════════════════
+inSession = not useTime or (hour >= startH and hour < endH)
+
+// ════════════════════════════════════════════════════════════════════
+// SWING HIGH / LOW  –  detectie pivot
+// ════════════════════════════════════════════════════════════════════
+ph = ta.pivothigh(high, leftLen, swingLen)
+pl = ta.pivotlow (low,  leftLen, swingLen)
+
+// Retine ultimul nivel valid (pivotul e detectat cu intarziere de swingLen bare)
+var float lastPH    = na
+var float lastPL    = na
+var int   phBarIdx  = na
+var int   plBarIdx  = na
+
+if not na(ph)
+    lastPH   := ph
+    phBarIdx := bar_index - swingLen
+if not na(pl)
+    lastPL   := pl
+    plBarIdx := bar_index - swingLen
+
+// ════════════════════════════════════════════════════════════════════
+// SWEEP DETECTION
+//   Sweep High: wick-ul a trecut de lastPH, bara inchide SUB el
+//   Sweep Low : wick-ul a trecut sub lastPL, bara inchide DEASUPRA lui
+// ════════════════════════════════════════════════════════════════════
+sweepHigh = not na(lastPH) and
+            high  > lastPH and
+            close < lastPH
+
+sweepLow  = not na(lastPL) and
+            low   < lastPL and
+            close > lastPL
+
+// ════════════════════════════════════════════════════════════════════
+// STATE MACHINE
+// ════════════════════════════════════════════════════════════════════
+var int   setupDir  = 0     //  1 = asteapta SELL,  -1 = asteapta BUY
+var float setupSL   = na
+var float sweepHi   = na    // wick-ul exact al sweep-ului (pentru SL)
+var float sweepLo   = na
+var int   waitBars  = 0
+
+// Inregistreaza un nou setup la sweep
+if sweepHigh and strategy.position_size == 0 and inSession
+    setupDir := 1
+    sweepHi  := high
+    setupSL  := high + slBuf * syminfo.mintick
+    waitBars := 0
+
+if sweepLow and strategy.position_size == 0 and inSession
+    setupDir := -1
+    sweepLo  := low
+    setupSL  := low  - slBuf * syminfo.mintick
+    waitBars := 0
+
+// Incrementeaza asteptarea si reseteaza daca a expirat
+if setupDir != 0 and strategy.position_size == 0
+    waitBars += 1
+    if waitBars > maxWait
+        setupDir := 0
+
+// ════════════════════════════════════════════════════════════════════
+// ENTRY TRADES
+// ════════════════════════════════════════════════════════════════════
+
+// ─── SELL ───────────────────────────────────────────────────────────
+sellConfirm = reqBear ? close < open : true     // bara bearish optionala
+if setupDir == 1 and strategy.position_size == 0 and sellConfirm
+    float risk = setupSL - close
+    float tp   = close - risk * rrRatio
+    if risk > 0 and tp < close
+        strategy.entry("SELL", strategy.short,
+                       comment="Sweep High → SHORT")
+        strategy.exit("EXIT SELL", "SELL",
+                      stop  = setupSL,
+                      limit = tp)
+        setupDir := 0
+
+// ─── BUY ────────────────────────────────────────────────────────────
+buyConfirm = reqBull ? close > open : true      // bara bullish optionala
+if setupDir == -1 and strategy.position_size == 0 and buyConfirm
+    float risk = close - setupSL
+    float tp   = close + risk * rrRatio
+    if risk > 0 and tp > close
+        strategy.entry("BUY", strategy.long,
+                       comment="Sweep Low → LONG")
+        strategy.exit("EXIT BUY", "BUY",
+                      stop  = setupSL,
+                      limit = tp)
+        setupDir := 0
+
+// ════════════════════════════════════════════════════════════════════
+// VIZUALIZARE
+// ════════════════════════════════════════════════════════════════════
+
+// Marcare sweep
+plotshape(sweepHigh, "Sweep High (SELL)",
+          shape.labeldown, location.abovebar,
+          color.red, text="↓ SWEEP\nHIGH",
+          textcolor=color.white, size=size.small)
+
+plotshape(sweepLow, "Sweep Low (BUY)",
+          shape.labelup, location.belowbar,
+          color.teal, text="↑ SWEEP\nLOW",
+          textcolor=color.white, size=size.small)
+
+// Marcare swing pivots
+if showSwings
+    plotchar(not na(ph), "Swing High ▼", "▼", location.abovebar,
+             color.new(color.red,  30), size=size.tiny)
+    plotchar(not na(pl), "Swing Low ▲",  "▲", location.belowbar,
+             color.new(color.teal, 30), size=size.tiny)
+
+// Linii nivel swept (zona lichiditate)
+var line lhLine = na
+var line llLine = na
+
+if sweepHigh and showZones
+    if not na(lhLine)
+        line.delete(lhLine)
+    lhLine := line.new(phBarIdx, lastPH, bar_index, lastPH,
+                       color=color.new(color.red, 40),
+                       width=2, style=line.style_dashed)
+
+if sweepLow and showZones
+    if not na(llLine)
+        line.delete(llLine)
+    llLine := line.new(plBarIdx, lastPL, bar_index, lastPL,
+                       color=color.new(color.teal, 40),
+                       width=2, style=line.style_dashed)
+
+// Background setup activ
+bgcolor(setupDir ==  1 ? color.new(color.red,   93) :
+        setupDir == -1 ? color.new(color.teal,  93) : na,
+        title="Setup activ")
+
+// Plot ultimul nivel swing (continuu)
+p1 = plot(lastPH, "Last Swing High", color.new(color.red,  55),
+          linewidth=1, style=plot.style_stepline)
+p2 = plot(lastPL, "Last Swing Low",  color.new(color.teal, 55),
+          linewidth=1, style=plot.style_stepline)
