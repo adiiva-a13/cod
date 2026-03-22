@@ -314,26 +314,24 @@ if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(tr
         strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         beMoved := true
 
-// ── Exit labels ───────────────────────────────────────────────────────
+// ── Exit labels: Exit S/L +XR ─────────────────────────────────────────
 nClosed = strategy.closedtrades
 if nClosed > prevClosed
     for i = prevClosed to nClosed - 1
-        ep       = strategy.closedtrades.exit_price(i)
-        enp      = strategy.closedtrades.entry_price(i)
-        sz       = strategy.closedtrades.size(i)
-        exitIdx  = strategy.closedtrades.exit_bar_index(i)
-        isSell   = sz < 0
-        storedEntry = i < array.size(entryHistory) ? array.get(entryHistory, i) : enp
+        ep      = strategy.closedtrades.exit_price(i)
+        enp     = strategy.closedtrades.entry_price(i)
+        sz      = strategy.closedtrades.size(i)
+        isSell  = sz < 0
         storedSL    = i < array.size(slHistory)    ? array.get(slHistory,    i) : na
-        // Determina tipul de exit: TP, BE sau SL
+        storedEntry = i < array.size(entryHistory) ? array.get(entryHistory, i) : enp
+        riskPts2 = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
         pnlPts   = isSell ? enp - ep : ep - enp
-        beTol    = not na(storedSL) ? math.abs(storedEntry - storedSL) * 0.1 : pts(2)
-        exitType = math.abs(ep - storedEntry) <= beTol ? "BE" : pnlPts > 0 ? "TP" : "SL"
-        exitColor = exitType == "TP" ? color.green : exitType == "BE" ? color.orange : color.red
-        label.new(exitIdx, ep,
-                  (isSell ? "S " : "L ") + exitType,
+        rMult    = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
+        rStr     = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#") + "R"
+        label.new(bar_index, ep,
+                  (isSell ? "Exit S\n" : "Exit L\n") + rStr,
                   style     = isSell ? label.style_arrowup : label.style_arrowdown,
-                  color     = exitColor,
+                  color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
                   textcolor = color.white,
                   size      = size.small)
     prevClosed := nClosed
