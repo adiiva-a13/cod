@@ -32,6 +32,7 @@ maxGapA   = input.int  (5,   "Bare maxime intre L1 si L2 (cluster)",   group=grp
 // ── PATTERN TYPE B  (L1 ≈ L2 twin → L3 sweep ambele, entry pe L3) ────
 grp2 = "=== PATTERN TYPE B  (twin candle, entry pe L3) ==="
 minSweepB = input.float(0.0, "Sweep minim L3 peste ambele (puncte)",   group=grp2, minval=0.0, step=0.5)
+twinTol   = input.float(3.0, "Toleranta twin L1≈L2 (max dif high/low, puncte)", group=grp2, minval=0.0, step=0.5)
 
 // ── ENTRY / EXIT ──────────────────────────────────────────────────────
 grp3 = "=== ENTRY / EXIT ==="
@@ -162,9 +163,33 @@ sweepsLowLiq(sweepWick, sweepClose) =>
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
 
 // ════════════════════════════════════════════════════════════════════
-// PATTERN TYPE A  (entry pe bara L3 — confirmare)
+// PATTERN TYPE B  (calculat PRIMUL pentru excluderea Pattern A)
+//   bar[0]=L3(sweep+entry)  bar[1]=L2(twin)  bar[2]=L1(twin)
+//   CONDITIE TWIN: high[1] ≈ high[2] (TT-B) sau low[1] ≈ low[2] (TB-B)
+// ════════════════════════════════════════════════════════════════════
+twinHi    = math.max(high[1], high[2])
+twinLoRef = math.min(high[1], high[2])
+twinLo    = math.min(low[1],  low[2])
+twinHiRef = math.max(low[1],  low[2])
+
+// TT-B: L1 si L2 trebuie sa aiba HIGHS APROPIATE (twin tops reale)
+ttb_twins  = math.abs(high[1] - high[2]) <= pts(twinTol)
+ttb_sweep  = high[0] > twinHi + pts(minSweepB)
+ttb_close  = close   < twinLoRef
+ttb_signal = ttb_twins and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
+
+// TB-B: L1 si L2 trebuie sa aiba LOWS APROPIATE (twin bottoms reale)
+tbb_twins  = math.abs(low[1] - low[2]) <= pts(twinTol)
+tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
+tbb_close  = close   > twinHiRef
+tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
+
+// ════════════════════════════════════════════════════════════════════
+// PATTERN TYPE A  (exclus daca Pattern B a aparut pe bara anterioara)
 //   bar[0]=L3  bar[1]=L2(sweep)  bar[2..maxGapA+1]=L1 cluster
 // ════════════════════════════════════════════════════════════════════
+var bool lastBarB = false   // previne A imediat dupa B (aceeasi bara sweep)
+
 float l1hi_A = na
 float l1lo_A = na
 tta_sweep = false
@@ -196,34 +221,12 @@ for i = 2 to maxGapA + 1
                 l1lo_A    := low[i]
                 tba_sweep := true
 
-// Confirmare L3 + validare MTF
-// REGULA ESENTIALA: ultimele 2 lumânări (L2=bar[1] si L3=bar[0]) trebuie sa fie
-//   ambele BEARISH pentru TT  (close[1]<open[1] si close<open)
-//   ambele BULLISH pentru TB  (close[1]>open[1] si close>open)
-tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade
-tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade
+// A nu se poate forma daca B s-a format pe bara anterioara (acelasi sweep)
+tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB
+tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB
 
-// ════════════════════════════════════════════════════════════════════
-// PATTERN TYPE B  (entry pe bara L3 — sweep + entry)
-//   bar[0]=L3(sweep+entry)  bar[1]=L2(twin)  bar[2]=L1(twin)
-// ════════════════════════════════════════════════════════════════════
-twinHi    = math.max(high[1], high[2])
-twinLoRef = math.min(high[1], high[2])
-twinLo    = math.min(low[1],  low[2])
-twinHiRef = math.max(low[1],  low[2])
-
-// TT-B
-ttb_twins  = true
-ttb_sweep  = high[0] > twinHi + pts(minSweepB)
-ttb_close  = close   < twinLoRef
-// Pattern B: L2=bar[1], L3=bar[0] → ambele trebuie sa fie bearish(TT) sau bullish(TB)
-ttb_signal = ttb_twins and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
-
-// TB-B
-tbb_twins  = true
-tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
-tbb_close  = close   > twinHiRef
-tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
+// Actualizeaza lastBarB pentru bara urmatoare
+lastBarB := ttb_signal or tbb_signal
 
 // ════════════════════════════════════════════════════════════════════
 // ENTRY LA INCHIDEREA L3
