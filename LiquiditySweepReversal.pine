@@ -241,7 +241,7 @@ if tta_signal
         trEntry := close
         trDir   := -1
         beMoved := false
-        label.new(bar_index, close, "SELL A", style=label.style_circle, color=color.red, textcolor=color.white, size=size.normal)
+        label.new(bar_index, close, "SELL A", style=label.style_arrowdown, color=color.red, textcolor=color.white, size=size.small)
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -255,7 +255,7 @@ if tba_signal
         trEntry := close
         trDir   := 1
         beMoved := false
-        label.new(bar_index, close, "BUY A", style=label.style_circle, color=color.teal, textcolor=color.white, size=size.normal)
+        label.new(bar_index, close, "BUY A", style=label.style_arrowup, color=color.teal, textcolor=color.white, size=size.small)
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -269,7 +269,7 @@ if ttb_signal
         trEntry := close
         trDir   := -1
         beMoved := false
-        label.new(bar_index, close, "SELL B", style=label.style_circle, color=color.maroon, textcolor=color.white, size=size.normal)
+        label.new(bar_index, close, "SELL B", style=label.style_arrowdown, color=color.maroon, textcolor=color.white, size=size.small)
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -283,7 +283,7 @@ if tbb_signal
         trEntry := close
         trDir   := 1
         beMoved := false
-        label.new(bar_index, close, "BUY B", style=label.style_circle, color=color.green, textcolor=color.white, size=size.normal)
+        label.new(bar_index, close, "BUY B", style=label.style_arrowup, color=color.green, textcolor=color.white, size=size.small)
 
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
@@ -313,10 +313,10 @@ if nClosed > prevClosed
         isSell   = sz < 0
         label.new(bar_index, ep,
                   (isSell ? "Exit S\n" : "Exit L\n") + rStr,
-                  style     = label.style_circle,
+                  style     = isSell ? label.style_arrowup : label.style_arrowdown,
                   color     = rMult >= 0 ? color.purple : color.gray,
                   textcolor = color.white,
-                  size      = size.normal)
+                  size      = size.small)
     prevClosed := nClosed
 
 // ════════════════════════════════════════════════════════════════════
