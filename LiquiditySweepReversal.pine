@@ -409,13 +409,13 @@ if barstate.islast
 
 if showLabels
     if tta_signal
-        label.new(bar_index, high + pts(1), "TT-A", style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
+        label.new(bar_index, na, "TT-A", yloc=yloc.abovebar, style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
     if tba_signal
-        label.new(bar_index, low  - pts(1), "TB-A", style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
+        label.new(bar_index, na, "TB-A", yloc=yloc.belowbar, style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
     if ttb_signal
-        label.new(bar_index, high + pts(1), "TT-B", style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
+        label.new(bar_index, na, "TT-B", yloc=yloc.abovebar, style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
     if tbb_signal
-        label.new(bar_index, low  - pts(1), "TB-B", style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
+        label.new(bar_index, na, "TB-B", yloc=yloc.belowbar, style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
 
 if showZone
     if tta_signal
