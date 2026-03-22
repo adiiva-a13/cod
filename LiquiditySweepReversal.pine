@@ -195,9 +195,11 @@ for i = 2 to maxGapA + 1
                 tba_sweep := true
 
 // Confirmare L3 + validare MTF
-// Trimitem si close-ul barei sweep (bar[1]) pentru a verifica ca nivelul e IN wick
-tta_signal = tta_sweep and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade
-tba_signal = tba_sweep and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade
+// REGULA ESENTIALA: ultimele 2 lumânări (L2=bar[1] si L3=bar[0]) trebuie sa fie
+//   ambele BEARISH pentru TT  (close[1]<open[1] si close<open)
+//   ambele BULLISH pentru TB  (close[1]>open[1] si close>open)
+tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade
+tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE B  (entry pe bara L3 — sweep + entry)
@@ -212,14 +214,14 @@ twinHiRef = math.max(low[1],  low[2])
 ttb_twins  = true
 ttb_sweep  = high[0] > twinHi + pts(minSweepB)
 ttb_close  = close   < twinLoRef
-// Pattern B: bara[0] e CHIAR bara sweep+entry → trimitem close[0] (close curent)
-ttb_signal = ttb_twins and ttb_sweep and ttb_close and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
+// Pattern B: L2=bar[1], L3=bar[0] → ambele trebuie sa fie bearish(TT) sau bullish(TB)
+ttb_signal = ttb_twins and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
 
 // TB-B
 tbb_twins  = true
 tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
 tbb_close  = close   > twinHiRef
-tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
+tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
 
 // ════════════════════════════════════════════════════════════════════
 // ENTRY LA INCHIDEREA L3
