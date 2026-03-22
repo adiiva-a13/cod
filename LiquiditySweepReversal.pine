@@ -250,7 +250,6 @@ if tta_signal
         beMoved := false
         array.push(slHistory,    sl)
         array.push(entryHistory, close)
-        label.new(bar_index, close, "SELL A", style=label.style_arrowdown, color=colorSell, textcolor=color.white, size=size.small)
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -266,7 +265,6 @@ if tba_signal
         beMoved := false
         array.push(slHistory,    sl)
         array.push(entryHistory, close)
-        label.new(bar_index, close, "BUY A", style=label.style_arrowup, color=colorBuy, textcolor=color.white, size=size.small)
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -282,7 +280,6 @@ if ttb_signal
         beMoved := false
         array.push(slHistory,    sl)
         array.push(entryHistory, close)
-        label.new(bar_index, close, "SELL B", style=label.style_arrowdown, color=colorSell, textcolor=color.white, size=size.small)
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -298,7 +295,6 @@ if tbb_signal
         beMoved := false
         array.push(slHistory,    sl)
         array.push(entryHistory, close)
-        label.new(bar_index, close, "BUY B", style=label.style_arrowup, color=colorBuy, textcolor=color.white, size=size.small)
 
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
@@ -314,28 +310,27 @@ if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(tr
         strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         beMoved := true
 
-// ── Exit labels: Exit S/L +X  (detectie prin position_size[1]) ───────
-if strategy.position_size == 0 and strategy.position_size[1] != 0
-    idx = strategy.closedtrades - 1
-    if idx >= 0
-        ep      = strategy.closedtrades.exit_price(idx)
-        enp     = strategy.closedtrades.entry_price(idx)
-        sz      = strategy.closedtrades.size(idx)
-        if not na(ep)
-            isSell      = sz < 0
-            storedSL    = tradeCount < array.size(slHistory)    ? array.get(slHistory,    tradeCount) : na
-            storedEntry = tradeCount < array.size(entryHistory) ? array.get(entryHistory, tradeCount) : enp
-            riskPts2    = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
-            pnlPts      = isSell ? enp - ep : ep - enp
-            rMult       = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
-            rStr        = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#")
-            label.new(bar_index, ep,
-                      (isSell ? "Exit S\n" : "Exit L\n") + rStr,
-                      style     = isSell ? label.style_arrowup : label.style_arrowdown,
-                      color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
-                      textcolor = color.white,
-                      size      = size.small)
-            tradeCount += 1
+// ── Exit labels: Exit S/L +X  (detectie prin ta.change) ──────────────
+if ta.change(strategy.closedtrades) > 0
+    idx     = strategy.closedtrades - 1
+    ep      = strategy.closedtrades.exit_price(idx)
+    enp     = strategy.closedtrades.entry_price(idx)
+    sz      = strategy.closedtrades.size(idx)
+    isSell  = sz < 0
+    storedSL    = tradeCount < array.size(slHistory)    ? array.get(slHistory,    tradeCount) : na
+    storedEntry = tradeCount < array.size(entryHistory) ? array.get(entryHistory, tradeCount) : enp
+    riskPts2    = not na(storedSL) and not na(storedEntry) ? math.abs(storedEntry - storedSL) : math.abs(ep - enp)
+    pnlPts      = isSell ? enp - ep : ep - enp
+    rMult       = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
+    rStr        = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#")
+    yPos        = not na(ep) ? ep : close
+    label.new(bar_index, yPos,
+              (isSell ? "Exit S\n" : "Exit L\n") + rStr,
+              style     = isSell ? label.style_arrowup : label.style_arrowdown,
+              color     = rMult >= 0 ? color.new(color.purple, 20) : color.gray,
+              textcolor = color.white,
+              size      = size.small)
+    tradeCount += 1
 
 // ════════════════════════════════════════════════════════════════════
 // CONSUM NIVELURI MTF — se executa DUPA intrari
