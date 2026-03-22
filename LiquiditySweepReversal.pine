@@ -221,9 +221,10 @@ for i = 2 to maxGapA + 1
                 l1lo_A    := low[i]
                 tba_sweep := true
 
-// A nu se poate forma daca B s-a format pe bara anterioara (acelasi sweep)
-tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB
-tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB
+// A nu se poate forma daca B s-a format pe bara anterioara SAU pe aceeasi bara
+// (Pattern A si B sunt mutual exclusive — nu pot coexista pe acelasi move)
+tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal
+tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal
 
 // Actualizeaza lastBarB pentru bara urmatoare
 lastBarB := ttb_signal or tbb_signal
