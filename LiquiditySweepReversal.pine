@@ -52,6 +52,8 @@ showZone   = input.bool(true,  "Box zona sweep (5min)",   group=grp5)
 showSLLine = input.bool(true,  "Linie SL",                group=grp5)
 show4H     = input.bool(true,  "Niveluri 4H pe chart",    group=grp5)
 show1H     = input.bool(true,  "Niveluri 1H pe chart",    group=grp5)
+colorSell  = input.color(color.purple, "Culoare semnale SELL",  group=grp5)
+colorBuy   = input.color(color.purple, "Culoare semnale BUY",   group=grp5)
 
 // ════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -231,6 +233,8 @@ var float trEntry = na   // entry price
 var int   trDir   = 0    // -1 short / +1 long
 var bool  beMoved = false
 var int   prevClosed = 0
+var array<float> slHistory    = array.new_float(0)
+var array<float> entryHistory = array.new_float(0)
 
 if tta_signal
     float sl = high[1] + pts(slBuf)
@@ -244,7 +248,9 @@ if tta_signal
         trEntry := close
         trDir   := -1
         beMoved := false
-        label.new(bar_index, close, "SELL A", style=label.style_arrowdown, color=color.red, textcolor=color.white, size=size.small)
+        array.push(slHistory,    sl)
+        array.push(entryHistory, close)
+        label.new(bar_index, close, "SELL A", style=label.style_arrowdown, color=colorSell, textcolor=color.white, size=size.small)
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -258,7 +264,9 @@ if tba_signal
         trEntry := close
         trDir   := 1
         beMoved := false
-        label.new(bar_index, close, "BUY A", style=label.style_arrowup, color=color.teal, textcolor=color.white, size=size.small)
+        array.push(slHistory,    sl)
+        array.push(entryHistory, close)
+        label.new(bar_index, close, "BUY A", style=label.style_arrowup, color=colorBuy, textcolor=color.white, size=size.small)
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -272,7 +280,9 @@ if ttb_signal
         trEntry := close
         trDir   := -1
         beMoved := false
-        label.new(bar_index, close, "SELL B", style=label.style_arrowdown, color=color.maroon, textcolor=color.white, size=size.small)
+        array.push(slHistory,    sl)
+        array.push(entryHistory, close)
+        label.new(bar_index, close, "SELL B", style=label.style_arrowdown, color=colorSell, textcolor=color.white, size=size.small)
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -286,7 +296,9 @@ if tbb_signal
         trEntry := close
         trDir   := 1
         beMoved := false
-        label.new(bar_index, close, "BUY B", style=label.style_arrowup, color=color.green, textcolor=color.white, size=size.small)
+        array.push(slHistory,    sl)
+        array.push(entryHistory, close)
+        label.new(bar_index, close, "BUY B", style=label.style_arrowup, color=colorBuy, textcolor=color.white, size=size.small)
 
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
@@ -306,19 +318,22 @@ if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(tr
 nClosed = strategy.closedtrades
 if nClosed > prevClosed
     for i = prevClosed to nClosed - 1
-        ep      = strategy.closedtrades.exit_price(i)
-        enp     = strategy.closedtrades.entry_price(i)
-        sz      = strategy.closedtrades.size(i)
-        exitIdx = strategy.closedtrades.exit_bar_index(i)
-        riskPts2 = not na(trSL) and not na(trEntry) ? math.abs(trEntry - trSL) : math.abs(ep - enp)
-        pnlPts   = sz < 0 ? enp - ep : ep - enp
-        rMult    = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
-        rStr     = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#") + "R"
+        ep       = strategy.closedtrades.exit_price(i)
+        enp      = strategy.closedtrades.entry_price(i)
+        sz       = strategy.closedtrades.size(i)
+        exitIdx  = strategy.closedtrades.exit_bar_index(i)
         isSell   = sz < 0
+        storedEntry = i < array.size(entryHistory) ? array.get(entryHistory, i) : enp
+        storedSL    = i < array.size(slHistory)    ? array.get(slHistory,    i) : na
+        // Determina tipul de exit: TP, BE sau SL
+        pnlPts   = isSell ? enp - ep : ep - enp
+        beTol    = not na(storedSL) ? math.abs(storedEntry - storedSL) * 0.1 : pts(2)
+        exitType = math.abs(ep - storedEntry) <= beTol ? "BE" : pnlPts > 0 ? "TP" : "SL"
+        exitColor = exitType == "TP" ? color.green : exitType == "BE" ? color.orange : color.red
         label.new(exitIdx, ep,
-                  (isSell ? "Exit S\n" : "Exit L\n") + rStr,
+                  (isSell ? "S " : "L ") + exitType,
                   style     = isSell ? label.style_arrowup : label.style_arrowdown,
-                  color     = rMult >= 0 ? color.purple : color.gray,
+                  color     = exitColor,
                   textcolor = color.white,
                   size      = size.small)
     prevClosed := nClosed
@@ -396,13 +411,13 @@ if barstate.islast
 
 if showLabels
     if tta_signal
-        label.new(bar_index, high + pts(1), "TT-A", style=label.style_triangledown, color=color.red,    textcolor=color.white, size=size.tiny)
+        label.new(bar_index, high + pts(1), "TT-A", style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
     if tba_signal
-        label.new(bar_index, low  - pts(1), "TB-A", style=label.style_triangleup,   color=color.teal,   textcolor=color.white, size=size.tiny)
+        label.new(bar_index, low  - pts(1), "TB-A", style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
     if ttb_signal
-        label.new(bar_index, high + pts(1), "TT-B", style=label.style_triangledown, color=color.maroon, textcolor=color.white, size=size.tiny)
+        label.new(bar_index, high + pts(1), "TT-B", style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
     if tbb_signal
-        label.new(bar_index, low  - pts(1), "TB-B", style=label.style_triangleup,   color=color.green,  textcolor=color.white, size=size.tiny)
+        label.new(bar_index, low  - pts(1), "TB-B", style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
 
 if showZone
     if tta_signal
