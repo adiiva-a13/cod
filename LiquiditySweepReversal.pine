@@ -149,8 +149,8 @@ sweepsLowLiq(sweepWick) =>
 // PATTERN TYPE A  (entry pe bara L3 — confirmare)
 //   bar[0]=L3  bar[1]=L2(sweep)  bar[2..maxGapA+1]=L1 cluster
 // ════════════════════════════════════════════════════════════════════
-var float l1hi_A = na
-var float l1lo_A = na
+float l1hi_A = na
+float l1lo_A = na
 tta_sweep = false
 tba_sweep = false
 
@@ -254,11 +254,11 @@ var array<line> lines1H = array.new_line(0)
 // (dezavantaj: redeseneaza frecvent, dar pastreaza corectitudinea)
 if barstate.islast
     // Sterge linii vechi
-    for ln in lines4H
-        line.delete(ln)
+    for k = 0 to array.size(lines4H) - 1
+        line.delete(array.get(lines4H, k))
     array.clear(lines4H)
-    for ln in lines1H
-        line.delete(ln)
+    for k = 0 to array.size(lines1H) - 1
+        line.delete(array.get(lines1H, k))
     array.clear(lines1H)
 
     // Niveluri 4H
@@ -331,24 +331,28 @@ if showLabels
 // Box zona sweep
 if showZone
     if tta_signal
-        box.new(bar_index-1, l1hi_A, bar_index, high[1],
+        // TT-A: wick L2 (high[1]) e DEASUPRA nivelului L1 → top=high[1], bottom=l1hi_A
+        box.new(bar_index-1, high[1], bar_index, l1hi_A,
                 border_color=color.new(color.red,30), bgcolor=color.new(color.red,80))
         line.new(bar_index-maxGapA-1, l1hi_A, bar_index, l1hi_A,
                  color=color.new(color.red,40), style=line.style_dashed, width=1)
     if tba_signal
-        box.new(bar_index-1, low[1], bar_index, l1lo_A,
+        // TB-A: wick L2 (low[1]) e SUB nivelul L1 → top=l1lo_A, bottom=low[1]
+        box.new(bar_index-1, l1lo_A, bar_index, low[1],
                 border_color=color.new(color.teal,30), bgcolor=color.new(color.teal,80))
         line.new(bar_index-maxGapA-1, l1lo_A, bar_index, l1lo_A,
                  color=color.new(color.teal,40), style=line.style_dashed, width=1)
     if ttb_signal
-        box.new(bar_index-2, twinHi, bar_index, high[0],
+        // TT-B: wick L3 (high[0]) e DEASUPRA twin → top=high[0], bottom=twinHi
+        box.new(bar_index-2, high[0], bar_index, twinHi,
                 border_color=color.new(color.maroon,30), bgcolor=color.new(color.maroon,85))
         line.new(bar_index-2, twinHi, bar_index, twinHi,
                  color=color.new(color.maroon,30), style=line.style_dashed, width=1)
     if tbb_signal
-        box.new(bar_index-2, low[0], bar_index, twinLo,
+        // TB-B: wick L3 (low[0]) e SUB twin → top=twinLo, bottom=low[0]
+        box.new(bar_index-2, twinLo, bar_index, low[0],
                 border_color=color.new(color.green,30), bgcolor=color.new(color.green,85))
-        line.new(bar_index-2, twinLo, bar_index, twinLo,
+        line.new(bar_index-2, twinLo, bar_index, low[0],
                  color=color.new(color.green,30), style=line.style_dashed, width=1)
 
 // Linie SL
