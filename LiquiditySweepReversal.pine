@@ -45,6 +45,8 @@ useTime        = input.bool (true, "Filtru ore activ",                  group=gr
 startH         = input.int  (10,  "Ora start (Romania)",               group=grp4, minval=0,  maxval=23)
 endH           = input.int  (20,  "Ora end (Romania)",                 group=grp4, minval=1,  maxval=24)
 maxDailyTrades = input.int  (3,   "Max trades / zi",                   group=grp4, minval=1,  maxval=50)
+cooldownBars   = input.int  (10,  "Cooldown bare dupa exit (anti-re-entry)", group=grp4, minval=0, maxval=200,
+                              tooltip="Cate bare sa astepte dupa inchiderea unui trade inainte de urmatorul semnal. Pe 5min: 12 bare = 1H, 48 bare = 4H")
 
 // ── VIZUALIZARE ───────────────────────────────────────────────────────
 grp5 = "=== VIZUALIZARE ==="
@@ -74,7 +76,14 @@ if roDay != lastDay_ro
     lastDay_ro  := roDay
 
 canTradeDaily = tradesToday < maxDailyTrades
-noTrade       = strategy.position_size == 0 and canTradeDaily
+
+var int lastExitBar = 0
+if strategy.closedtrades > 0
+    if strategy.closedtrades.exit_bar_index(strategy.closedtrades - 1) > lastExitBar
+        lastExitBar := strategy.closedtrades.exit_bar_index(strategy.closedtrades - 1)
+
+inCooldown = bar_index - lastExitBar < cooldownBars
+noTrade    = strategy.position_size == 0 and canTradeDaily and not inCooldown
 
 // ════════════════════════════════════════════════════════════════════
 // MULTI-TIMEFRAME  — identificare niveluri de lichiditate
