@@ -1,5 +1,5 @@
 //@version=5
-strategy("TT / TB – MTF Liquidity Sweep [SMC] 5min",
+strategy("AdiivaTwezer",
          overlay              = true,
          default_qty_type     = strategy.percent_of_equity,
          default_qty_value    = 2,
