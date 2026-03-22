@@ -241,6 +241,7 @@ if tta_signal
         trEntry := close
         trDir   := -1
         beMoved := false
+        label.new(bar_index, close, "SELL A\n" + str.tostring(close), style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -254,6 +255,7 @@ if tba_signal
         trEntry := close
         trDir   := 1
         beMoved := false
+        label.new(bar_index, close, "BUY A\n" + str.tostring(close), style=label.style_label_up, color=color.teal, textcolor=color.white, size=size.small)
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -267,6 +269,7 @@ if ttb_signal
         trEntry := close
         trDir   := -1
         beMoved := false
+        label.new(bar_index, close, "SELL B\n" + str.tostring(close), style=label.style_label_down, color=color.maroon, textcolor=color.white, size=size.small)
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -280,6 +283,7 @@ if tbb_signal
         trEntry := close
         trDir   := 1
         beMoved := false
+        label.new(bar_index, close, "BUY B\n" + str.tostring(close), style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
 
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
