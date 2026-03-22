@@ -225,6 +225,12 @@ tbb_signal = tbb_twins and tbb_sweep and tbb_close and sweepsLowLiq(low[0], clos
 // ════════════════════════════════════════════════════════════════════
 // ENTRY LA INCHIDEREA L3
 // ════════════════════════════════════════════════════════════════════
+var float trSL    = na   // SL al tradului curent
+var float trEntry = na   // entry price
+var int   trDir   = 0    // -1 short / +1 long
+var bool  beMoved = false
+var int   prevClosed = 0
+
 if tta_signal
     float sl = high[1] + pts(slBuf)
     float rk = sl - close
@@ -233,6 +239,7 @@ if tta_signal
         strategy.entry("SELL A", strategy.short, comment="TT-A 4H/1H")
         strategy.exit("EX A",    "SELL A", stop=sl, limit=tp)
         tradesToday += 1
+        trSL := sl  ;  trEntry := close  ;  trDir := -1  ;  beMoved := false
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -242,6 +249,7 @@ if tba_signal
         strategy.entry("BUY A", strategy.long, comment="TB-A 4H/1H")
         strategy.exit("EX A2",  "BUY A", stop=sl, limit=tp)
         tradesToday += 1
+        trSL := sl  ;  trEntry := close  ;  trDir := 1  ;  beMoved := false
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -251,6 +259,7 @@ if ttb_signal
         strategy.entry("SELL B", strategy.short, comment="TT-B 4H/1H")
         strategy.exit("EX B",    "SELL B", stop=sl, limit=tp)
         tradesToday += 1
+        trSL := sl  ;  trEntry := close  ;  trDir := -1  ;  beMoved := false
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -260,6 +269,41 @@ if tbb_signal
         strategy.entry("BUY B", strategy.long, comment="TB-B 4H/1H")
         strategy.exit("EX B2",  "BUY B", stop=sl, limit=tp)
         tradesToday += 1
+        trSL := sl  ;  trEntry := close  ;  trDir := 1  ;  beMoved := false
+
+// ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
+if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
+    riskPts = math.abs(trEntry - trSL)
+    if trDir < 0 and low <= trEntry - riskPts
+        // short: pretul a coborat 1R → muta SL la entry (BE)
+        strategy.exit("EX A", "SELL A", stop=trEntry, limit=trEntry - riskPts * rrRatio)
+        strategy.exit("EX B", "SELL B", stop=trEntry, limit=trEntry - riskPts * rrRatio)
+        beMoved := true
+    else if trDir > 0 and high >= trEntry + riskPts
+        // long: pretul a urcat 1R → muta SL la entry (BE)
+        strategy.exit("EX A2", "BUY A", stop=trEntry, limit=trEntry + riskPts * rrRatio)
+        strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
+        beMoved := true
+
+// ── Exit labels ───────────────────────────────────────────────────────
+nClosed = strategy.closedtrades
+if nClosed > prevClosed
+    for i = prevClosed to nClosed - 1
+        ep     = strategy.closedtrades.exit_price(i)
+        enp    = strategy.closedtrades.entry_price(i)
+        sz     = strategy.closedtrades.size(i)
+        riskPts2 = not na(trSL) and not na(trEntry) ? math.abs(trEntry - trSL) : 1
+        pnlPts   = sz < 0 ? enp - ep : ep - enp
+        rMult    = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
+        rStr     = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#") + "R"
+        isSell   = sz < 0
+        label.new(bar_index, ep,
+                  (isSell ? "Exit S\n" : "Exit L\n") + rStr,
+                  style    = isSell ? label.style_arrowup : label.style_arrowdown,
+                  color    = rMult >= 0 ? color.purple : color.gray,
+                  textcolor = color.white,
+                  size     = size.small)
+    prevClosed := nClosed
 
 // ════════════════════════════════════════════════════════════════════
 // CONSUM NIVELURI MTF — se executa DUPA intrari
@@ -330,13 +374,13 @@ if barstate.islast
 
 if showLabels
     if tta_signal
-        label.new(bar_index, high + pts(4), "TT-A\n↓ SELL", style=label.style_label_down, color=color.red, textcolor=color.white, size=size.small)
+        label.new(bar_index, high + pts(1), "TT-A", style=label.style_triangledown, color=color.red,    textcolor=color.white, size=size.tiny)
     if tba_signal
-        label.new(bar_index, low - pts(4), "TB-A\n↑ BUY", style=label.style_label_up, color=color.teal, textcolor=color.white, size=size.small)
+        label.new(bar_index, low  - pts(1), "TB-A", style=label.style_triangleup,   color=color.teal,   textcolor=color.white, size=size.tiny)
     if ttb_signal
-        label.new(bar_index, high + pts(4), "TT-B\n↓ SELL", style=label.style_label_down, color=color.maroon, textcolor=color.white, size=size.small)
+        label.new(bar_index, high + pts(1), "TT-B", style=label.style_triangledown, color=color.maroon, textcolor=color.white, size=size.tiny)
     if tbb_signal
-        label.new(bar_index, low - pts(4), "TB-B\n↑ BUY", style=label.style_label_up, color=color.green, textcolor=color.white, size=size.small)
+        label.new(bar_index, low  - pts(1), "TB-B", style=label.style_triangleup,   color=color.green,  textcolor=color.white, size=size.tiny)
 
 if showZone
     if tta_signal
