@@ -342,31 +342,32 @@ if newlyClosed > 0
     prevClosedTrades := strategy.closedtrades
 
 // ════════════════════════════════════════════════════════════════════
-// CONSUM NIVELURI MTF — se executa DUPA intrari
+// CONSUM NIVELURI MTF — se sterge nivelul DOAR dupa un semnal valid
 //
-// Regula: odata ce o bara (wick SAU body) a atins un nivel MTF,
-// nivelul devine nul dupa inchiderea acelei bare.
-// Implementare: verificam bara ANTERIOARA (high[1] / low[1]).
-// Asta garanteaza ca pe bara semnalului nivelul e inca activ,
-// si se sterge imediat dupa ce bara respectiva s-a inchis.
+// Regula noua: nivelul este consumat NUMAI cand un pattern s-a format
+// pe el (nu la orice bara care se apropie).
+// Asta previne golirea prematura a array-urilor pe TF mici (5min),
+// unde 48 bare/4H ar sterge instantaneu orice nivel nou adaugat.
 // ════════════════════════════════════════════════════════════════════
 liqTolPts = pts(liqTol)
-if array.size(bsl4H) > 0
-    for k = array.size(bsl4H) - 1 to 0
-        if high[1] >= array.get(bsl4H, k) - liqTolPts
-            array.remove(bsl4H, k)
-if array.size(ssl4H) > 0
-    for k = array.size(ssl4H) - 1 to 0
-        if low[1] <= array.get(ssl4H, k) + liqTolPts
-            array.remove(ssl4H, k)
-if array.size(bsl1H) > 0
-    for k = array.size(bsl1H) - 1 to 0
-        if high[1] >= array.get(bsl1H, k) - liqTolPts
-            array.remove(bsl1H, k)
-if array.size(ssl1H) > 0
-    for k = array.size(ssl1H) - 1 to 0
-        if low[1] <= array.get(ssl1H, k) + liqTolPts
-            array.remove(ssl1H, k)
+if tta_signal or ttb_signal
+    if array.size(bsl4H) > 0
+        for k = array.size(bsl4H) - 1 to 0
+            if high[1] >= array.get(bsl4H, k) - liqTolPts or high[0] >= array.get(bsl4H, k) - liqTolPts
+                array.remove(bsl4H, k)
+    if array.size(bsl1H) > 0
+        for k = array.size(bsl1H) - 1 to 0
+            if high[1] >= array.get(bsl1H, k) - liqTolPts or high[0] >= array.get(bsl1H, k) - liqTolPts
+                array.remove(bsl1H, k)
+if tba_signal or tbb_signal
+    if array.size(ssl4H) > 0
+        for k = array.size(ssl4H) - 1 to 0
+            if low[1] <= array.get(ssl4H, k) + liqTolPts or low[0] <= array.get(ssl4H, k) + liqTolPts
+                array.remove(ssl4H, k)
+    if array.size(ssl1H) > 0
+        for k = array.size(ssl1H) - 1 to 0
+            if low[1] <= array.get(ssl1H, k) + liqTolPts or low[0] <= array.get(ssl1H, k) + liqTolPts
+                array.remove(ssl1H, k)
 
 // ════════════════════════════════════════════════════════════════════
 // VIZUALIZARE  —  niveluri MTF
@@ -418,15 +419,11 @@ if barstate.islast
 // VIZUALIZARE  —  semnale 5min
 // ════════════════════════════════════════════════════════════════════
 
-if showLabels
-    if tta_signal
-        label.new(bar_index, na, "TT-A", yloc=yloc.abovebar, style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
-    if tba_signal
-        label.new(bar_index, na, "TB-A", yloc=yloc.belowbar, style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
-    if ttb_signal
-        label.new(bar_index, na, "TT-B", yloc=yloc.abovebar, style=label.style_triangledown, color=colorSell, textcolor=color.white, size=size.tiny)
-    if tbb_signal
-        label.new(bar_index, na, "TB-B", yloc=yloc.belowbar, style=label.style_triangleup,   color=colorBuy,  textcolor=color.white, size=size.tiny)
+// plotshape nu are limita de 500 — elibereaza toate label-slot-urile pentru Exit labels
+plotshape(showLabels and tta_signal, title="TT-A", style=shape.triangledown, location=location.abovebar, color=colorSell, text="TT-A", textcolor=color.white, size=size.tiny)
+plotshape(showLabels and tba_signal, title="TB-A", style=shape.triangleup,   location=location.belowbar, color=colorBuy,  text="TB-A", textcolor=color.white, size=size.tiny)
+plotshape(showLabels and ttb_signal, title="TT-B", style=shape.triangledown, location=location.abovebar, color=colorSell, text="TT-B", textcolor=color.white, size=size.tiny)
+plotshape(showLabels and tbb_signal, title="TB-B", style=shape.triangleup,   location=location.belowbar, color=colorBuy,  text="TB-B", textcolor=color.white, size=size.tiny)
 
 if showZone
     if tta_signal
