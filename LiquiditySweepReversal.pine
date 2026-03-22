@@ -115,62 +115,47 @@ addLevel(ssl4H, pl4H_raw, maxLvl)
 addLevel(bsl1H, ph1H_raw, maxLvl)
 addLevel(ssl1H, pl1H_raw, maxLvl)
 
-// ── FIX: Sterge niveluri consumate (close a depasit nivelul → liq luata) ──
-// BSL consumat = close inchide DEASUPRA nivelului (lichiditate cumparata luata)
-// SSL consumat = close inchide SUB nivelul (lichiditate vanzare luata)
-if array.size(bsl4H) > 0
-    for k = array.size(bsl4H) - 1 to 0
-        if close > array.get(bsl4H, k) + pts(liqTol)
-            array.remove(bsl4H, k)
-if array.size(ssl4H) > 0
-    for k = array.size(ssl4H) - 1 to 0
-        if close < array.get(ssl4H, k) - pts(liqTol)
-            array.remove(ssl4H, k)
-if array.size(bsl1H) > 0
-    for k = array.size(bsl1H) - 1 to 0
-        if close > array.get(bsl1H, k) + pts(liqTol)
-            array.remove(bsl1H, k)
-if array.size(ssl1H) > 0
-    for k = array.size(ssl1H) - 1 to 0
-        if close < array.get(ssl1H, k) - pts(liqTol)
-            array.remove(ssl1H, k)
 
 // ── Validare: sweep-ul a atins un nivel MTF? ──────────────────────────
-// FIX: conditie bilaterala — wick trebuie sa fie LANGA nivel (nu doar deasupra)
-// sweepWick >= nivel - tol  (a atins nivelul sau a venit aproape)
-// sweepWick <= nivel + tol * 5 (nu depaseste cu mult, evita match-uri false de departe)
-sweepsHighLiq(sweepWick) =>
+// REGULA: nivelul MTF trebuie sa fie IN WICK-UL barei de sweep
+//   Pentru TT (SELL): nivelul BSL trebuie sa fie intre close si high al barei sweep
+//     → sweepWick (high) >= nivel - tol   (wick-ul a atins nivelul)
+//     → nivel >= sweepClose - tol          (nivelul e deasupra/langa close = in wick)
+//   Pentru TB (BUY): nivelul SSL trebuie sa fie intre low si close al barei sweep
+//     → sweepWick (low) <= nivel + tol    (wick-ul a atins nivelul)
+//     → nivel <= sweepClose + tol          (nivelul e sub/langa close = in wick)
+sweepsHighLiq(sweepWick, sweepClose) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
     if require4H and array.size(bsl4H) > 0
         for k = 0 to array.size(bsl4H) - 1
             lvl = array.get(bsl4H, k)
-            if sweepWick >= lvl - tol and sweepWick <= lvl + tol * 5
+            if sweepWick >= lvl - tol and lvl >= sweepClose - tol
                 hit4H := true
                 break
     if require1H and array.size(bsl1H) > 0
         for k = 0 to array.size(bsl1H) - 1
             lvl = array.get(bsl1H, k)
-            if sweepWick >= lvl - tol and sweepWick <= lvl + tol * 5
+            if sweepWick >= lvl - tol and lvl >= sweepClose - tol
                 hit1H := true
                 break
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
 
-sweepsLowLiq(sweepWick) =>
+sweepsLowLiq(sweepWick, sweepClose) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
     if require4H and array.size(ssl4H) > 0
         for k = 0 to array.size(ssl4H) - 1
             lvl = array.get(ssl4H, k)
-            if sweepWick <= lvl + tol and sweepWick >= lvl - tol * 5
+            if sweepWick <= lvl + tol and lvl <= sweepClose + tol
                 hit4H := true
                 break
     if require1H and array.size(ssl1H) > 0
         for k = 0 to array.size(ssl1H) - 1
             lvl = array.get(ssl1H, k)
-            if sweepWick <= lvl + tol and sweepWick >= lvl - tol * 5
+            if sweepWick <= lvl + tol and lvl <= sweepClose + tol
                 hit1H := true
                 break
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
@@ -211,8 +196,9 @@ for i = 2 to maxGapA + 1
                 tba_sweep := true
 
 // Confirmare L3 + validare MTF
-tta_signal = tta_sweep and (close < open) and sweepsHighLiq(high[1]) and inSession and noTrade
-tba_signal = tba_sweep and (close > open) and sweepsLowLiq (low[1])  and inSession and noTrade
+// Trimitem si close-ul barei sweep (bar[1]) pentru a verifica ca nivelul e IN wick
+tta_signal = tta_sweep and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade
+tba_signal = tba_sweep and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE B  (entry pe bara L3 — sweep + entry)
@@ -227,13 +213,14 @@ twinHiRef = math.max(low[1],  low[2])
 ttb_twins  = math.abs(high[2] - high[1]) <= pts(twinTol)
 ttb_sweep  = high[0] > twinHi + pts(minSweepB)
 ttb_close  = close   < twinLoRef
-ttb_signal = ttb_twins and ttb_sweep and ttb_close and sweepsHighLiq(high[0]) and inSession and noTrade
+// Pattern B: bara[0] e CHIAR bara sweep+entry → trimitem close[0] (close curent)
+ttb_signal = ttb_twins and ttb_sweep and ttb_close and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
 
 // TB-B
 tbb_twins  = math.abs(low[2] - low[1]) <= pts(twinTol)
 tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
 tbb_close  = close   > twinHiRef
-tbb_signal = tbb_twins and tbb_sweep and tbb_close and sweepsLowLiq(low[0]) and inSession and noTrade
+tbb_signal = tbb_twins and tbb_sweep and tbb_close and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
 
 // ════════════════════════════════════════════════════════════════════
 // ENTRY LA INCHIDEREA L3
@@ -273,6 +260,33 @@ if tbb_signal
         strategy.entry("BUY B", strategy.long, comment="TB-B 4H/1H")
         strategy.exit("EX B2",  "BUY B", stop=sl, limit=tp)
         tradesToday += 1
+
+// ════════════════════════════════════════════════════════════════════
+// CONSUM NIVELURI MTF — se executa DUPA intrari
+//
+// Regula: odata ce o bara (wick SAU body) a atins un nivel MTF,
+// nivelul devine nul dupa inchiderea acelei bare.
+// Implementare: verificam bara ANTERIOARA (high[1] / low[1]).
+// Asta garanteaza ca pe bara semnalului nivelul e inca activ,
+// si se sterge imediat dupa ce bara respectiva s-a inchis.
+// ════════════════════════════════════════════════════════════════════
+liqTolPts = pts(liqTol)
+if array.size(bsl4H) > 0
+    for k = array.size(bsl4H) - 1 to 0
+        if high[1] >= array.get(bsl4H, k) - liqTolPts
+            array.remove(bsl4H, k)
+if array.size(ssl4H) > 0
+    for k = array.size(ssl4H) - 1 to 0
+        if low[1] <= array.get(ssl4H, k) + liqTolPts
+            array.remove(ssl4H, k)
+if array.size(bsl1H) > 0
+    for k = array.size(bsl1H) - 1 to 0
+        if high[1] >= array.get(bsl1H, k) - liqTolPts
+            array.remove(bsl1H, k)
+if array.size(ssl1H) > 0
+    for k = array.size(ssl1H) - 1 to 0
+        if low[1] <= array.get(ssl1H, k) + liqTolPts
+            array.remove(ssl1H, k)
 
 // ════════════════════════════════════════════════════════════════════
 // VIZUALIZARE  —  niveluri MTF
