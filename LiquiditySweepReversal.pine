@@ -254,12 +254,10 @@ var array<line> lines1H = array.new_line(0)
 // (dezavantaj: redeseneaza frecvent, dar pastreaza corectitudinea)
 if barstate.islast
     // Sterge linii vechi
-    for k = 0 to array.size(lines4H) - 1
-        line.delete(array.get(lines4H, k))
-    array.clear(lines4H)
-    for k = 0 to array.size(lines1H) - 1
-        line.delete(array.get(lines1H, k))
-    array.clear(lines1H)
+    while array.size(lines4H) > 0
+        line.delete(array.pop(lines4H))
+    while array.size(lines1H) > 0
+        line.delete(array.pop(lines1H))
 
     // Niveluri 4H
     if show4H
