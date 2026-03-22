@@ -31,7 +31,6 @@ minSweepA = input.float(0.0, "Sweep minim L2 peste L1 (puncte)",       group=grp
 
 // ── PATTERN TYPE B  (L1 ≈ L2 twin → L3 sweep ambele, entry pe L3) ────
 grp2 = "=== PATTERN TYPE B  (twin candle, entry pe L3) ==="
-twinTol   = input.float(5.0, "Toleranta twin high/low L1≈L2 (puncte)", group=grp2, minval=0.0, step=0.5)
 minSweepB = input.float(0.0, "Sweep minim L3 peste ambele (puncte)",   group=grp2, minval=0.0, step=0.5)
 
 // ── ENTRY / EXIT ──────────────────────────────────────────────────────
@@ -210,14 +209,14 @@ twinLo    = math.min(low[1],  low[2])
 twinHiRef = math.max(low[1],  low[2])
 
 // TT-B
-ttb_twins  = math.abs(high[2] - high[1]) <= pts(twinTol)
+ttb_twins  = true
 ttb_sweep  = high[0] > twinHi + pts(minSweepB)
 ttb_close  = close   < twinLoRef
 // Pattern B: bara[0] e CHIAR bara sweep+entry → trimitem close[0] (close curent)
 ttb_signal = ttb_twins and ttb_sweep and ttb_close and sweepsHighLiq(high[0], close[0]) and inSession and noTrade
 
 // TB-B
-tbb_twins  = math.abs(low[2] - low[1]) <= pts(twinTol)
+tbb_twins  = true
 tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
 tbb_close  = close   > twinHiRef
 tbb_signal = tbb_twins and tbb_sweep and tbb_close and sweepsLowLiq(low[0], close[0]) and inSession and noTrade
