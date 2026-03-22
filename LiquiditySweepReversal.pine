@@ -93,12 +93,12 @@ var array<float> ssl1H = array.new_float(0)  // 1H pivot lows  (SSL intern)
 
 addLevel(arr, val, maxSize) =>
     if not na(val)
-        // Nu adauga duplicate (acelasi nivel)
         isDup = false
-        for k = 0 to array.size(arr) - 1
-            if math.abs(array.get(arr, k) - val) < pts(0.5)
-                isDup := true
-                break
+        if array.size(arr) > 0
+            for k = 0 to array.size(arr) - 1
+                if math.abs(array.get(arr, k) - val) < pts(0.5)
+                    isDup := true
+                    break
         if not isDup
             array.unshift(arr, val)
             if array.size(arr) > maxSize
@@ -115,30 +115,28 @@ sweepsHighLiq(sweepWick) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
-    if require4H
+    if require4H and array.size(bsl4H) > 0
         for k = 0 to array.size(bsl4H) - 1
             if sweepWick >= array.get(bsl4H, k) - tol
                 hit4H := true
                 break
-    if require1H
+    if require1H and array.size(bsl1H) > 0
         for k = 0 to array.size(bsl1H) - 1
             if sweepWick >= array.get(bsl1H, k) - tol
                 hit1H := true
                 break
-    // Valid daca a atins cel putin un nivel activ
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
 
-// Pentru TB (BUY): sweep wick (low) trebuie sa atinga un SSL 4H sau 1H
 sweepsLowLiq(sweepWick) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
-    if require4H
+    if require4H and array.size(ssl4H) > 0
         for k = 0 to array.size(ssl4H) - 1
             if sweepWick <= array.get(ssl4H, k) + tol
                 hit4H := true
                 break
-    if require1H
+    if require1H and array.size(ssl1H) > 0
         for k = 0 to array.size(ssl1H) - 1
             if sweepWick <= array.get(ssl1H, k) + tol
                 hit1H := true
