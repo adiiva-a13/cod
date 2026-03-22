@@ -303,15 +303,16 @@ if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(tr
 nClosed = strategy.closedtrades
 if nClosed > prevClosed
     for i = prevClosed to nClosed - 1
-        ep     = strategy.closedtrades.exit_price(i)
-        enp    = strategy.closedtrades.entry_price(i)
-        sz     = strategy.closedtrades.size(i)
-        riskPts2 = not na(trSL) and not na(trEntry) ? math.abs(trEntry - trSL) : 1
+        ep      = strategy.closedtrades.exit_price(i)
+        enp     = strategy.closedtrades.entry_price(i)
+        sz      = strategy.closedtrades.size(i)
+        exitIdx = strategy.closedtrades.exit_bar_index(i)
+        riskPts2 = not na(trSL) and not na(trEntry) ? math.abs(trEntry - trSL) : math.abs(ep - enp)
         pnlPts   = sz < 0 ? enp - ep : ep - enp
         rMult    = riskPts2 > 0 ? pnlPts / riskPts2 : 0.0
         rStr     = (rMult >= 0 ? "+" : "") + str.tostring(math.round(rMult, 1), "#.#") + "R"
         isSell   = sz < 0
-        label.new(bar_index, ep,
+        label.new(exitIdx, ep,
                   (isSell ? "Exit S\n" : "Exit L\n") + rStr,
                   style     = isSell ? label.style_arrowup : label.style_arrowdown,
                   color     = rMult >= 0 ? color.purple : color.gray,
