@@ -39,11 +39,12 @@ grp3 = "=== ENTRY / EXIT ==="
 rrRatio   = input.float(2.0, "Risk : Reward",                          group=grp3, minval=0.5, step=0.5)
 slBuf     = input.float(2.0, "SL Buffer (puncte dupa wick extrem)",    group=grp3, minval=0.0, step=0.5)
 
-// ── FILTRU ORE ────────────────────────────────────────────────────────
-grp4 = "=== FILTRU ORE (server) ==="
-useTime   = input.bool (false,"Filtru ore activ",                       group=grp4)
-startH    = input.int  (9,   "Ora start",                              group=grp4, minval=0,  maxval=23)
-endH      = input.int  (17,  "Ora end",                                group=grp4, minval=1,  maxval=24)
+// ── FILTRU ORE + LIMITE ZILNICE ───────────────────────────────────────
+grp4 = "=== FILTRU ORE (ora Romaniei) ==="
+useTime        = input.bool (true, "Filtru ore activ",                  group=grp4)
+startH         = input.int  (10,  "Ora start (Romania)",               group=grp4, minval=0,  maxval=23)
+endH           = input.int  (20,  "Ora end (Romania)",                 group=grp4, minval=1,  maxval=24)
+maxDailyTrades = input.int  (3,   "Max trades / zi",                   group=grp4, minval=1,  maxval=50)
 
 // ── VIZUALIZARE ───────────────────────────────────────────────────────
 grp5 = "=== VIZUALIZARE ==="
@@ -56,34 +57,39 @@ show1H     = input.bool(true,  "Niveluri 1H pe chart",    group=grp5)
 // ════════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════════
-inSession = not useTime or (hour >= startH and hour < endH)
-pts(x)    => x * syminfo.mintick
-noTrade   = strategy.position_size == 0
+pts(x) => x * syminfo.mintick
+
+// Ora curenta in fusul orar Romania (EET = UTC+2 iarna / UTC+3 vara)
+roHour    = hour(time, "Europe/Bucharest")
+inSession = not useTime or (roHour >= startH and roHour < endH)
+
+// Contor trades zilnic (resetat la ora Romania)
+var int tradesToday  = 0
+var int lastDay_ro   = -1
+roDay = dayofmonth(time, "Europe/Bucharest")
+if roDay != lastDay_ro
+    tradesToday := 0
+    lastDay_ro  := roDay
+
+canTradeDaily = tradesToday < maxDailyTrades
+noTrade       = strategy.position_size == 0 and canTradeDaily
 
 // ════════════════════════════════════════════════════════════════════
 // MULTI-TIMEFRAME  — identificare niveluri de lichiditate
 //
 //  4H pivot HIGH  = Buy-Side Liquidity  (BSL) majora
-//       → validare pentru pattern SELL (TT): sweep-ul trebuie sa atinga/depaseasca un pivot 4H high
+//       → validare pentru pattern SELL (TT): sweep-ul trebuie sa atinga un pivot 4H high
 //  4H pivot LOW   = Sell-Side Liquidity (SSL) majora
-//       → validare pentru pattern BUY  (TB): sweep-ul trebuie sa atinga/depaseasca un pivot 4H low
+//       → validare pentru pattern BUY  (TB): sweep-ul trebuie sa atinga un pivot 4H low
 //  1H pivot HIGH  = BSL interna
 //  1H pivot LOW   = SSL interna
 // ════════════════════════════════════════════════════════════════════
 
 // ── Requesturi higher TF ──────────────────────────────────────────────
-ph4H_raw = request.security(syminfo.tickerid, tf4H,
-             ta.pivothigh(pivot4H, pivot4H),
-             gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-pl4H_raw = request.security(syminfo.tickerid, tf4H,
-             ta.pivotlow (pivot4H, pivot4H),
-             gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-ph1H_raw = request.security(syminfo.tickerid, tf1H,
-             ta.pivothigh(pivot1H, pivot1H),
-             gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-pl1H_raw = request.security(syminfo.tickerid, tf1H,
-             ta.pivotlow (pivot1H, pivot1H),
-             gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+ph4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivothigh(pivot4H, pivot4H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+pl4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivotlow (pivot4H, pivot4H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+ph1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivothigh(pivot1H, pivot1H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+pl1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivotlow (pivot1H, pivot1H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 
 // ── Stocare niveluri in array-uri ─────────────────────────────────────
 var array<float> bsl4H = array.new_float(0)  // 4H pivot highs (BSL major)
@@ -109,20 +115,44 @@ addLevel(ssl4H, pl4H_raw, maxLvl)
 addLevel(bsl1H, ph1H_raw, maxLvl)
 addLevel(ssl1H, pl1H_raw, maxLvl)
 
+// ── FIX: Sterge niveluri consumate (close a depasit nivelul → liq luata) ──
+// BSL consumat = close inchide DEASUPRA nivelului (lichiditate cumparata luata)
+// SSL consumat = close inchide SUB nivelul (lichiditate vanzare luata)
+if array.size(bsl4H) > 0
+    for k = array.size(bsl4H) - 1 to 0
+        if close > array.get(bsl4H, k) + pts(liqTol)
+            array.remove(bsl4H, k)
+if array.size(ssl4H) > 0
+    for k = array.size(ssl4H) - 1 to 0
+        if close < array.get(ssl4H, k) - pts(liqTol)
+            array.remove(ssl4H, k)
+if array.size(bsl1H) > 0
+    for k = array.size(bsl1H) - 1 to 0
+        if close > array.get(bsl1H, k) + pts(liqTol)
+            array.remove(bsl1H, k)
+if array.size(ssl1H) > 0
+    for k = array.size(ssl1H) - 1 to 0
+        if close < array.get(ssl1H, k) - pts(liqTol)
+            array.remove(ssl1H, k)
+
 // ── Validare: sweep-ul a atins un nivel MTF? ──────────────────────────
-// Pentru TT (SELL): sweep wick (high) trebuie sa atinga un BSL 4H sau 1H
+// FIX: conditie bilaterala — wick trebuie sa fie LANGA nivel (nu doar deasupra)
+// sweepWick >= nivel - tol  (a atins nivelul sau a venit aproape)
+// sweepWick <= nivel + tol * 5 (nu depaseste cu mult, evita match-uri false de departe)
 sweepsHighLiq(sweepWick) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
     if require4H and array.size(bsl4H) > 0
         for k = 0 to array.size(bsl4H) - 1
-            if sweepWick >= array.get(bsl4H, k) - tol
+            lvl = array.get(bsl4H, k)
+            if sweepWick >= lvl - tol and sweepWick <= lvl + tol * 5
                 hit4H := true
                 break
     if require1H and array.size(bsl1H) > 0
         for k = 0 to array.size(bsl1H) - 1
-            if sweepWick >= array.get(bsl1H, k) - tol
+            lvl = array.get(bsl1H, k)
+            if sweepWick >= lvl - tol and sweepWick <= lvl + tol * 5
                 hit1H := true
                 break
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
@@ -133,12 +163,14 @@ sweepsLowLiq(sweepWick) =>
     hit1H = false
     if require4H and array.size(ssl4H) > 0
         for k = 0 to array.size(ssl4H) - 1
-            if sweepWick <= array.get(ssl4H, k) + tol
+            lvl = array.get(ssl4H, k)
+            if sweepWick <= lvl + tol and sweepWick >= lvl - tol * 5
                 hit4H := true
                 break
     if require1H and array.size(ssl1H) > 0
         for k = 0 to array.size(ssl1H) - 1
-            if sweepWick <= array.get(ssl1H, k) + tol
+            lvl = array.get(ssl1H, k)
+            if sweepWick <= lvl + tol and sweepWick >= lvl - tol * 5
                 hit1H := true
                 break
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
@@ -186,10 +218,10 @@ tba_signal = tba_sweep and (close > open) and sweepsLowLiq (low[1])  and inSessi
 // PATTERN TYPE B  (entry pe bara L3 — sweep + entry)
 //   bar[0]=L3(sweep+entry)  bar[1]=L2(twin)  bar[2]=L1(twin)
 // ════════════════════════════════════════════════════════════════════
-twinHi      = math.max(high[1], high[2])
-twinLoRef   = math.min(high[1], high[2])
-twinLo      = math.min(low[1],  low[2])
-twinHiRef   = math.max(low[1],  low[2])
+twinHi    = math.max(high[1], high[2])
+twinLoRef = math.min(high[1], high[2])
+twinLo    = math.min(low[1],  low[2])
+twinHiRef = math.max(low[1],  low[2])
 
 // TT-B
 ttb_twins  = math.abs(high[2] - high[1]) <= pts(twinTol)
@@ -213,6 +245,7 @@ if tta_signal
     if rk > 0 and tp < close
         strategy.entry("SELL A", strategy.short, comment="TT-A 4H/1H")
         strategy.exit("EX A",    "SELL A", stop=sl, limit=tp)
+        tradesToday += 1
 
 if tba_signal
     float sl = low[1] - pts(slBuf)
@@ -221,6 +254,7 @@ if tba_signal
     if rk > 0 and tp > close
         strategy.entry("BUY A", strategy.long, comment="TB-A 4H/1H")
         strategy.exit("EX A2",  "BUY A", stop=sl, limit=tp)
+        tradesToday += 1
 
 if ttb_signal
     float sl = high[0] + pts(slBuf)
@@ -229,6 +263,7 @@ if ttb_signal
     if rk > 0 and tp < close
         strategy.entry("SELL B", strategy.short, comment="TT-B 4H/1H")
         strategy.exit("EX B",    "SELL B", stop=sl, limit=tp)
+        tradesToday += 1
 
 if tbb_signal
     float sl = low[0] - pts(slBuf)
@@ -237,6 +272,7 @@ if tbb_signal
     if rk > 0 and tp > close
         strategy.entry("BUY B", strategy.long, comment="TB-B 4H/1H")
         strategy.exit("EX B2",  "BUY B", stop=sl, limit=tp)
+        tradesToday += 1
 
 // ════════════════════════════════════════════════════════════════════
 // VIZUALIZARE  —  niveluri MTF
@@ -248,16 +284,12 @@ if tbb_signal
 var array<line> lines4H = array.new_line(0)
 var array<line> lines1H = array.new_line(0)
 
-// Curata liniile vechi si redeseneaza la fiecare schimbare de nivel
-// (dezavantaj: redeseneaza frecvent, dar pastreaza corectitudinea)
 if barstate.islast
-    // Sterge linii vechi
     while array.size(lines4H) > 0
         line.delete(array.pop(lines4H))
     while array.size(lines1H) > 0
         line.delete(array.pop(lines1H))
 
-    // Niveluri 4H
     if show4H
         for k = 0 to array.size(bsl4H) - 1
             lvl = array.get(bsl4H, k)
@@ -268,7 +300,6 @@ if barstate.islast
             array.push(lines4H, line.new(bar_index - 200, lvl, bar_index + 50, lvl, color=color.new(color.teal, 20), style=line.style_dashed, width=2))
             label.new(bar_index + 51, lvl, "4H SSL", color=color.new(color.teal, 50), textcolor=color.teal, style=label.style_label_left, size=size.tiny)
 
-    // Niveluri 1H
     if show1H
         for k = 0 to array.size(bsl1H) - 1
             lvl = array.get(bsl1H, k)
