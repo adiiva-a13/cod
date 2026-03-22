@@ -6,7 +6,8 @@ strategy("AdiivaTwezer",
          commission_type      = strategy.commission.percent,
          commission_value     = 0.02,
          slippage             = 2,
-         max_bars_back        = 500)
+         max_bars_back        = 500,
+         max_labels_count     = 500)
 
 // ════════════════════════════════════════════════════════════════════
 // INPUTS
