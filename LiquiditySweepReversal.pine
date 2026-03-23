@@ -331,24 +331,26 @@ if tbb_signal
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
     riskPts = math.abs(trEntry - trSL)
-    if trDir < 0 and low <= trEntry - riskPts
-        // short: pretul a coborat 1R → muta SL la entry (BE)
+    if trDir < 0 and close <= trEntry - riskPts
+        // short: bara s-a inchis la sau sub 1R → muta SL la entry (BE)
+        // folosim close (nu low) pentru consistenta cu process_orders_on_close=true
         strategy.exit("EX A", "SELL A", stop=trEntry, limit=trEntry - riskPts * rrRatio)
         strategy.exit("EX B", "SELL B", stop=trEntry, limit=trEntry - riskPts * rrRatio)
         trSL    := trEntry   // actualizeaza SL vizual la BE
         beMoved := true
-    else if trDir > 0 and high >= trEntry + riskPts
-        // long: pretul a urcat 1R → muta SL la entry (BE)
+    else if trDir > 0 and close >= trEntry + riskPts
+        // long: bara s-a inchis la sau peste 1R → muta SL la entry (BE)
         strategy.exit("EX A2", "BUY A", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         trSL    := trEntry   // actualizeaza SL vizual la BE
         beMoved := true
 
 // ── Exit labels: detectie din miscarea pretului (SL/TP hit) ──────────
-// Functioneaza pe TOATE barele, independent de Date Range din Strategy Tester
+// Folosim close pentru consistenta cu process_orders_on_close=true
+// (strategy executa la close, nu la high/low intrabar)
 if not visExited and trDir != 0 and not na(trSL) and not na(trTP) and not na(trEntry) and not na(trOrigRisk)
-    _hitSL = (trDir == -1 and high >= trSL) or (trDir == 1 and low <= trSL)
-    _hitTP = (trDir == -1 and low  <= trTP) or (trDir == 1 and high >= trTP)
+    _hitSL = (trDir == -1 and close >= trSL) or (trDir == 1 and close <= trSL)
+    _hitTP = (trDir == -1 and close <= trTP) or (trDir == 1 and close >= trTP)
     if _hitSL or _hitTP
         _ep   = _hitSL ? trSL : trTP
         _pnl  = trDir == -1 ? trEntry - _ep : _ep - trEntry
