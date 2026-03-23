@@ -35,13 +35,10 @@ require1H = input.bool(true,  "Sau pe nivel 1H (liq interna)",         group=grp
 
 // ── FILTRU CONTEXT STRUCTURAL ────────────────────────────────────────
 grpStruct    = "=== FILTRU CONTEXT STRUCTURAL ==="
-useStructCtx = input.bool(true, "Activ: SHORT doar la HIGH structural, LONG doar la LOW", group=grpStruct,
-                           tooltip="Previne short-uri la lows structurale si long-uri la highs structurale")
-structTF     = input.timeframe("60", "Timeframe structura (1H recomandat)", group=grpStruct)
-structLB     = input.int(20, "Bare lookback pe TF structura",              group=grpStruct, minval=5, maxval=200,
-                           tooltip="Cate bare pe structTF definesc range-ul structural. 20 bare x 1H = 20 ore")
-structZonePct= input.float(0.5, "Zona extrema pt SHORT/LONG (0.5=50%, 0.382=Fib)", group=grpStruct, minval=0.1, maxval=0.9, step=0.05,
-                           tooltip="Procentul din range-ul structural care defineste zona HIGH (pt SHORT) si zona LOW (pt LONG). Ex: 0.5 = pretul trebuie sa fie in jumatatea superioara pentru SHORT")
+useStructCtx = input.bool(true, "Activ: SHORT doar langa BSL (HH), LONG doar langa SSL (LL)", group=grpStruct,
+                           tooltip="SHORT valid doar cand pretul e in zona unui nivel BSL (4H/1H). LONG valid doar langa SSL. Previne semnale false in mijlocul range-ului.")
+zoneProxPrice= input.float(100.0, "Latime zona langa nivel MTF (puncte pret)", group=grpStruct, minval=5.0, maxval=1000.0, step=5.0,
+                           tooltip="Cat de aproape (in puncte de pret) trebuie sa fie pretul de un nivel BSL/SSL pentru a fi in zona valida. Ex: 100 = pretul +/-100 puncte fata de nivelul 4H/1H.")
 
 // ── PATTERN TYPE A  (L1 → L2 sweep → L3 confirmare) ──────────────────
 grp1 = "=== PATTERN TYPE A  (3-candle consecutive, entry pe L3) ==="
@@ -119,8 +116,6 @@ ph4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivothigh(pivot4H_L, pivo
 pl4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivotlow (pivot4H_L, pivot4H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 ph1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivothigh(pivot1H_L, pivot1H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 pl1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivotlow (pivot1H_L, pivot1H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-structHi_raw = request.security(syminfo.tickerid, structTF, ta.highest(high, structLB), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-structLo_raw = request.security(syminfo.tickerid, structTF, ta.lowest (low,  structLB), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 
 // ── Stocare niveluri in array-uri ─────────────────────────────────────
 var array<float> bsl4H = array.new_float(0)  // 4H pivot highs (BSL major)
@@ -147,14 +142,26 @@ addLevel(bsl1H, ph1H_raw, maxLvl)
 addLevel(ssl1H, pl1H_raw, maxLvl)
 
 
-// ── Context structural: HIGH zone pt SHORT, LOW zone pt LONG ─────────
-// SHORT valid: pretul (L3 close) este in zona superioara a range-ului structural
-// LONG  valid: pretul (L3 close) este in zona inferioara a range-ului structural
-// Range structural = highest high / lowest low pe structLB bare din structTF
-_sRange    = not na(structHi_raw) and not na(structLo_raw) ? structHi_raw - structLo_raw : 0.0
-_sThr      = _sRange > 0 ? _sRange * structZonePct : 0.0
-inHighZone = not useStructCtx or (_sRange > 0 and close >= structHi_raw - _sThr)
-inLowZone  = not useStructCtx or (_sRange > 0 and close <= structLo_raw + _sThr)
+// ── Zone filter: SHORT doar langa BSL (HH 4H/1H), LONG doar langa SSL (LL 4H/1H) ──
+// Previne semnale false din mijlocul range-ului unde nu exista lichiditate importanta
+_nearBSL = false
+_nearSSL = false
+if useStructCtx
+    for k = 0 to array.size(bsl4H) - 1
+        if math.abs(close - array.get(bsl4H, k)) <= zoneProxPrice
+            _nearBSL := true
+    for k = 0 to array.size(bsl1H) - 1
+        if math.abs(close - array.get(bsl1H, k)) <= zoneProxPrice
+            _nearBSL := true
+    for k = 0 to array.size(ssl4H) - 1
+        if math.abs(close - array.get(ssl4H, k)) <= zoneProxPrice
+            _nearSSL := true
+    for k = 0 to array.size(ssl1H) - 1
+        if math.abs(close - array.get(ssl1H, k)) <= zoneProxPrice
+            _nearSSL := true
+
+inHighZone = not useStructCtx or _nearBSL
+inLowZone  = not useStructCtx or _nearSSL
 
 // ── Validare: sweep-ul a atins un nivel MTF? ──────────────────────────
 // REGULA: nivelul MTF trebuie sa fie IN WICK-UL barei de sweep
