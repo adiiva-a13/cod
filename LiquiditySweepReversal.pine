@@ -182,37 +182,43 @@ sweepsHighLiq(sweepWick, sweepClose) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
-    if require4H and array.size(bsl4H) > 0
+    // 4H optional (filtru suplimentar)
+    if array.size(bsl4H) > 0
         for k = 0 to array.size(bsl4H) - 1
             lvl = array.get(bsl4H, k)
-            if sweepWick >= lvl and lvl >= sweepClose - tol   // wick atinge/depaseste nivelul
+            if sweepWick >= lvl and lvl >= sweepClose - tol
                 hit4H := true
                 break
-    if require1H and array.size(bsl1H) > 0
+    // 1H OBLIGATORIU — intervalul minim, fara el nu exista pattern valid
+    if array.size(bsl1H) > 0
         for k = 0 to array.size(bsl1H) - 1
             lvl = array.get(bsl1H, k)
-            if sweepWick >= lvl and lvl >= sweepClose - tol   // wick atinge/depaseste nivelul
+            if sweepWick >= lvl and lvl >= sweepClose - tol
                 hit1H := true
                 break
-    (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
+    // 1H trebuie INTOTDEAUNA atins; 4H e obligatoriu doar daca require4H=true
+    hit1H and (not require4H or hit4H)
 
 sweepsLowLiq(sweepWick, sweepClose) =>
     tol   = pts(liqTol)
     hit4H = false
     hit1H = false
-    if require4H and array.size(ssl4H) > 0
+    // 4H optional (filtru suplimentar)
+    if array.size(ssl4H) > 0
         for k = 0 to array.size(ssl4H) - 1
             lvl = array.get(ssl4H, k)
-            if sweepWick <= lvl and lvl <= sweepClose + tol   // wick atinge/depaseste nivelul
+            if sweepWick <= lvl and lvl <= sweepClose + tol
                 hit4H := true
                 break
-    if require1H and array.size(ssl1H) > 0
+    // 1H OBLIGATORIU — intervalul minim, fara el nu exista pattern valid
+    if array.size(ssl1H) > 0
         for k = 0 to array.size(ssl1H) - 1
             lvl = array.get(ssl1H, k)
-            if sweepWick <= lvl and lvl <= sweepClose + tol   // wick atinge/depaseste nivelul
+            if sweepWick <= lvl and lvl <= sweepClose + tol
                 hit1H := true
                 break
-    (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
+    // 1H trebuie INTOTDEAUNA atins; 4H e obligatoriu doar daca require4H=true
+    hit1H and (not require4H or hit4H)
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE B  (calculat PRIMUL pentru excluderea Pattern A)
