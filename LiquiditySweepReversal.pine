@@ -212,13 +212,17 @@ twinHiRef = math.max(low[1],  low[2])
 ttb_twins  = math.abs(high[1] - high[2]) <= pts(twinTol)
 ttb_sweep  = high[0] > twinHi + pts(minSweepB)
 ttb_close  = close   < twinLoRef
-ttb_signal = ttb_twins and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade and inHighZone
+// Filtru structura TT-B: bara din stanga twin-ului stang (bar[3]) NU trebuie sa aiba HH
+// Daca bar[3].high >= twinLoRef → exista deja un high egal sau mai mare la stanga → nu e TT real
+ttb_signal = ttb_twins and high[3] < twinLoRef and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade and inHighZone
 
 // TB-B: L1 si L2 trebuie sa aiba LOWS APROPIATE (twin bottoms reale)
 tbb_twins  = math.abs(low[1] - low[2]) <= pts(twinTol)
 tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
 tbb_close  = close   > twinHiRef
-tbb_signal = tbb_twins and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade and inLowZone
+// Filtru structura TB-B: bara din stanga twin-ului stang (bar[3]) NU trebuie sa aiba LL
+// Daca bar[3].low <= twinHiRef → exista deja un low egal sau mai mic la stanga → nu e TB real
+tbb_signal = tbb_twins and low[3] > twinHiRef and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade and inLowZone
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE A  (exclus daca Pattern B a aparut pe bara anterioara)
@@ -235,8 +239,11 @@ tta_sweep    = high[1] > high[2] and close[1] < high[2]
 float l1lo_A = low[2]
 tba_sweep    = low[1] < low[2] and close[1] > low[2]
 
-tta_signal = tta_sweep and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal and inHighZone
-tba_signal = tba_sweep and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal and inLowZone
+// Filtru structura: bara din stanga L1 (bar[3]) NU trebuie sa aiba HH (TT) sau LL (TB)
+// Daca high[3] >= high[2] → L1 nu e high local → nu avem TT real
+// Daca low[3]  <= low[2]  → L1 nu e low  local → nu avem TB real
+tta_signal = tta_sweep and high[3] < high[2] and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal and inHighZone
+tba_signal = tba_sweep and low[3]  > low[2]  and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal and inLowZone
 
 // Actualizeaza lastBarB pentru bara urmatoare
 lastBarB := ttb_signal or tbb_signal
