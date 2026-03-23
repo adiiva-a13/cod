@@ -20,8 +20,11 @@ strategy("AdiivaTwezer",
 grpMTF = "=== MULTI-TIMEFRAME LIQUIDITY ==="
 tf4H      = input.timeframe("240", "Timeframe major (liq externa)",    group=grpMTF)
 tf1H      = input.timeframe("60",  "Timeframe intern (liq interna)",   group=grpMTF)
-pivot4H   = input.int(1,  "Pivot bars 4H  (swing lookback)",           group=grpMTF, minval=1, maxval=10)
-pivot1H   = input.int(1,  "Pivot bars 1H  (swing lookback)",           group=grpMTF, minval=1, maxval=10)
+// Sonarlab Liquidity Levels style: Left bars 40, Right bars 5 pe 4H
+pivot4H_L = input.int(40, "Pivot Left bars 4H  (Sonarlab style)",      group=grpMTF, minval=1, maxval=200)
+pivot4H_R = input.int(5,  "Pivot Right bars 4H (Sonarlab style)",      group=grpMTF, minval=1, maxval=50)
+pivot1H_L = input.int(10, "Pivot Left bars 1H",                        group=grpMTF, minval=1, maxval=200)
+pivot1H_R = input.int(5,  "Pivot Right bars 1H",                       group=grpMTF, minval=1, maxval=50)
 maxLvl    = input.int(5,  "Niveluri max stocate per TF",               group=grpMTF, minval=1, maxval=10)
 liqTol    = input.float(20.0, "Toleranta sweep → nivel MTF (puncte)",   group=grpMTF, minval=0.0, step=0.5,
                          tooltip="Wick-ul sweep trebuie sa ajunga in aceasta distanta fata de nivelul 4H/1H")
@@ -100,10 +103,10 @@ noTrade    = strategy.position_size == 0 and canTradeDaily and not inCooldown
 // ════════════════════════════════════════════════════════════════════
 
 // ── Requesturi higher TF ──────────────────────────────────────────────
-ph4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivothigh(pivot4H, pivot4H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-pl4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivotlow (pivot4H, pivot4H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-ph1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivothigh(pivot1H, pivot1H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
-pl1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivotlow (pivot1H, pivot1H), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+ph4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivothigh(pivot4H_L, pivot4H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+pl4H_raw = request.security(syminfo.tickerid, tf4H, ta.pivotlow (pivot4H_L, pivot4H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+ph1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivothigh(pivot1H_L, pivot1H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+pl1H_raw = request.security(syminfo.tickerid, tf1H, ta.pivotlow (pivot1H_L, pivot1H_R), gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
 
 // ── Stocare niveluri in array-uri ─────────────────────────────────────
 var array<float> bsl4H = array.new_float(0)  // 4H pivot highs (BSL major)
