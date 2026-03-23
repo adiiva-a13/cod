@@ -56,8 +56,6 @@ twinTol   = input.float(3.0, "Toleranta twin L1≈L2 (max dif high/low, puncte)"
 grp3 = "=== ENTRY / EXIT ==="
 rrRatio   = input.float(2.0, "Risk : Reward",                          group=grp3, minval=0.5, step=0.5)
 slBuf     = input.float(2.0, "SL Buffer (puncte dupa wick extrem)",    group=grp3, minval=0.0, step=0.5)
-beTrigger = input.float(1.5, "BE trigger (R multiplu)",                group=grp3, minval=0.5, step=0.5,
-                         tooltip="La cat R muta SL la entry (BE). Ex: 1.5 = BE cand pretul a facut 1.5R in favoarea ta")
 
 // ── FILTRU ORE + LIMITE ZILNICE ───────────────────────────────────────
 grp4 = "=== FILTRU ORE (ora Romaniei) ==="
@@ -333,14 +331,14 @@ if tbb_signal
 // ── BE: muta SL la entry cand pretul atinge 1:1 ──────────────────────
 if strategy.position_size != 0 and not beMoved and not na(trEntry) and not na(trSL)
     riskPts = math.abs(trEntry - trSL)
-    if trDir < 0 and low <= trEntry - riskPts * beTrigger
-        // short: pretul a coborat beTrigger*R → muta SL la entry (BE)
+    if trDir < 0 and low <= trEntry - riskPts
+        // short: pretul a coborat 1R → muta SL la entry (BE)
         strategy.exit("EX A", "SELL A", stop=trEntry, limit=trEntry - riskPts * rrRatio)
         strategy.exit("EX B", "SELL B", stop=trEntry, limit=trEntry - riskPts * rrRatio)
         trSL    := trEntry   // actualizeaza SL vizual la BE
         beMoved := true
-    else if trDir > 0 and high >= trEntry + riskPts * beTrigger
-        // long: pretul a urcat beTrigger*R → muta SL la entry (BE)
+    else if trDir > 0 and high >= trEntry + riskPts
+        // long: pretul a urcat 1R → muta SL la entry (BE)
         strategy.exit("EX A2", "BUY A", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         strategy.exit("EX B2", "BUY B", stop=trEntry, limit=trEntry + riskPts * rrRatio)
         trSL    := trEntry   // actualizeaza SL vizual la BE
