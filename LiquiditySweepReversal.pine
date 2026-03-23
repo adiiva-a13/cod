@@ -147,18 +147,22 @@ addLevel(ssl1H, pl1H_raw, maxLvl)
 _nearBSL = false
 _nearSSL = false
 if useStructCtx
-    for k = 0 to array.size(bsl4H) - 1
-        if math.abs(close - array.get(bsl4H, k)) <= zoneProxPrice
-            _nearBSL := true
-    for k = 0 to array.size(bsl1H) - 1
-        if math.abs(close - array.get(bsl1H, k)) <= zoneProxPrice
-            _nearBSL := true
-    for k = 0 to array.size(ssl4H) - 1
-        if math.abs(close - array.get(ssl4H, k)) <= zoneProxPrice
-            _nearSSL := true
-    for k = 0 to array.size(ssl1H) - 1
-        if math.abs(close - array.get(ssl1H, k)) <= zoneProxPrice
-            _nearSSL := true
+    if array.size(bsl4H) > 0
+        for k = 0 to array.size(bsl4H) - 1
+            if math.abs(close - array.get(bsl4H, k)) <= zoneProxPrice
+                _nearBSL := true
+    if array.size(bsl1H) > 0
+        for k = 0 to array.size(bsl1H) - 1
+            if math.abs(close - array.get(bsl1H, k)) <= zoneProxPrice
+                _nearBSL := true
+    if array.size(ssl4H) > 0
+        for k = 0 to array.size(ssl4H) - 1
+            if math.abs(close - array.get(ssl4H, k)) <= zoneProxPrice
+                _nearSSL := true
+    if array.size(ssl1H) > 0
+        for k = 0 to array.size(ssl1H) - 1
+            if math.abs(close - array.get(ssl1H, k)) <= zoneProxPrice
+                _nearSSL := true
 
 inHighZone = not useStructCtx or _nearBSL
 inLowZone  = not useStructCtx or _nearSSL
