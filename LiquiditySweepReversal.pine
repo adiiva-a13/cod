@@ -233,18 +233,14 @@ twinHiRef = math.max(low[1],  low[2])
 // TT-B: L1 si L2 trebuie sa aiba HIGHS APROPIATE (twin tops reale)
 ttb_twins  = math.abs(high[1] - high[2]) <= pts(twinTol)
 ttb_sweep  = high[0] > twinHi + pts(minSweepB)
-ttb_close  = close   < twinHi      // fara MSS: close sub twin highs
-// Filtru structura TT-B: bara din stanga twin-ului stang (bar[3]) NU trebuie sa aiba HH sau LL spike
-// low[3] >= low[2]: bar[3] nu a spart in jos inainte de L1 (nu spike bullish inainte de TT)
-ttb_signal = ttb_twins and ta.highest(high, localLookback)[3] < twinLoRef and low[3] >= low[2] and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade and inHighZone
+ttb_close  = close   < twinLoRef
+ttb_signal = ttb_twins and ta.highest(high, localLookback)[3] < twinLoRef and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade and inHighZone
 
 // TB-B: L1 si L2 trebuie sa aiba LOWS APROPIATE (twin bottoms reale)
 tbb_twins  = math.abs(low[1] - low[2]) <= pts(twinTol)
 tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
-tbb_close  = close   > twinLo      // fara MSS: close peste twin lows
-// Filtru structura TB-B: bara din stanga twin-ului stang (bar[3]) NU trebuie sa aiba LL sau HH spike
-// high[3] <= high[2]: bar[3] nu a spart in sus inainte de L1 (nu spike bearish inainte de TB)
-tbb_signal = tbb_twins and ta.lowest(low, localLookback)[3] > twinHiRef and high[3] <= high[2] and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade and inLowZone
+tbb_close  = close   > twinHiRef
+tbb_signal = tbb_twins and ta.lowest(low, localLookback)[3] > twinHiRef and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade and inLowZone
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE A  (exclus daca Pattern B a aparut pe bara anterioara)
@@ -261,12 +257,8 @@ tta_sweep    = high[1] > high[2] and close[1] < high[2]
 float l1lo_A = low[2]
 tba_sweep    = low[1] < low[2] and close[1] > low[2]
 
-// Filtru structura: bara din stanga L1 (bar[3]) NU trebuie sa aiba HH spike (TB) sau LL spike (TT)
-// high[3] <= high[2]: bar[3] nu a spart in sus inainte de L1 (nu spike bearish → L1 nu e bottom dupa distributie)
-// low[3]  >= low[2] : bar[3] nu a spart in jos inainte de L1 (nu spike bullish → L1 nu e top dupa acumulare)
-// fara MSS: L3 trebuie doar sa inchida bearish (TT) / bullish (TB)
-tta_signal = tta_sweep and ta.highest(high, localLookback)[3] < high[2] and low[3] >= low[2] and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal and inHighZone
-tba_signal = tba_sweep and ta.lowest (low,  localLookback)[3] > low[2]  and high[3] <= high[2] and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal and inLowZone
+tta_signal = tta_sweep and ta.highest(high, localLookback)[3] < high[2] and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal and inHighZone
+tba_signal = tba_sweep and ta.lowest (low,  localLookback)[3] > low[2]  and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal and inLowZone
 
 // Actualizeaza lastBarB pentru bara urmatoare
 lastBarB := ttb_signal or tbb_signal
