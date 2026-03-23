@@ -26,8 +26,10 @@ pivot4H_R = input.int(5,  "Pivot Right bars 4H (Sonarlab style)",      group=grp
 pivot1H_L = input.int(10, "Pivot Left bars 1H",                        group=grpMTF, minval=1, maxval=200)
 pivot1H_R = input.int(5,  "Pivot Right bars 1H",                       group=grpMTF, minval=1, maxval=50)
 maxLvl    = input.int(5,  "Niveluri max stocate per TF",               group=grpMTF, minval=1, maxval=10)
-liqTol    = input.float(20.0, "Toleranta sweep → nivel MTF (puncte)",   group=grpMTF, minval=0.0, step=0.5,
+liqTol    = input.float(50.0, "Toleranta sweep → nivel MTF (puncte)",   group=grpMTF, minval=0.0, step=0.5,
                          tooltip="Wick-ul sweep trebuie sa ajunga in aceasta distanta fata de nivelul 4H/1H")
+localLookback = input.int(3, "Bare stanga pt local High/Low (filtru structura)", group=grpMTF, minval=1, maxval=20,
+                         tooltip="Cate bare la stanga lui L1 trebuie sa fie sub high-ul L1 (TT) sau deasupra low-ului L1 (TB). Ex: 3 = L1 e cel mai inalt din ultimele 3 bare la stanga lui")
 require4H = input.bool(true,  "Obliga sweep pe nivel 4H (liq majora)", group=grpMTF)
 require1H = input.bool(true,  "Sau pe nivel 1H (liq interna)",         group=grpMTF)
 
@@ -217,7 +219,7 @@ ttb_sweep  = high[0] > twinHi + pts(minSweepB)
 ttb_close  = close   < twinLoRef
 // Filtru structura TT-B: bara din stanga twin-ului stang (bar[3]) NU trebuie sa aiba HH
 // Daca bar[3].high >= twinLoRef → exista deja un high egal sau mai mare la stanga → nu e TT real
-ttb_signal = ttb_twins and high[3] < twinLoRef and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade and inHighZone
+ttb_signal = ttb_twins and ta.highest(high, localLookback)[3] < twinLoRef and ttb_sweep and ttb_close and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[0], close[0]) and inSession and noTrade and inHighZone
 
 // TB-B: L1 si L2 trebuie sa aiba LOWS APROPIATE (twin bottoms reale)
 tbb_twins  = math.abs(low[1] - low[2]) <= pts(twinTol)
@@ -225,7 +227,7 @@ tbb_sweep  = low[0]  < twinLo - pts(minSweepB)
 tbb_close  = close   > twinHiRef
 // Filtru structura TB-B: bara din stanga twin-ului stang (bar[3]) NU trebuie sa aiba LL
 // Daca bar[3].low <= twinHiRef → exista deja un low egal sau mai mic la stanga → nu e TB real
-tbb_signal = tbb_twins and low[3] > twinHiRef and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade and inLowZone
+tbb_signal = tbb_twins and ta.lowest(low, localLookback)[3] > twinHiRef and tbb_sweep and tbb_close and (close[1] > open[1]) and (close > open) and sweepsLowLiq(low[0], close[0]) and inSession and noTrade and inLowZone
 
 // ════════════════════════════════════════════════════════════════════
 // PATTERN TYPE A  (exclus daca Pattern B a aparut pe bara anterioara)
@@ -245,8 +247,8 @@ tba_sweep    = low[1] < low[2] and close[1] > low[2]
 // Filtru structura: bara din stanga L1 (bar[3]) NU trebuie sa aiba HH (TT) sau LL (TB)
 // Daca high[3] >= high[2] → L1 nu e high local → nu avem TT real
 // Daca low[3]  <= low[2]  → L1 nu e low  local → nu avem TB real
-tta_signal = tta_sweep and high[3] < high[2] and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal and inHighZone
-tba_signal = tba_sweep and low[3]  > low[2]  and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal and inLowZone
+tta_signal = tta_sweep and ta.highest(high, localLookback)[3] < high[2] and (close[1] < open[1]) and (close < open) and sweepsHighLiq(high[1], close[1]) and inSession and noTrade and not lastBarB and not ttb_signal and inHighZone
+tba_signal = tba_sweep and ta.lowest (low,  localLookback)[3] > low[2]  and (close[1] > open[1]) and (close > open) and sweepsLowLiq (low[1],  close[1]) and inSession and noTrade and not lastBarB and not tbb_signal and inLowZone
 
 // Actualizeaza lastBarB pentru bara urmatoare
 lastBarB := ttb_signal or tbb_signal
