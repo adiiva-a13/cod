@@ -162,6 +162,9 @@ inLowZone  = not useStructCtx or (_sRange > 0 and close <= structLo_raw + _sThr)
 //   Pentru TB (BUY): nivelul SSL trebuie sa fie intre low si close al barei sweep
 //     → sweepWick (low) <= nivel + tol    (wick-ul a atins nivelul)
 //     → nivel <= sweepClose + tol          (nivelul e sub/langa close = in wick)
+// REGULA DE SWEEP: wick-ul TREBUIE sa atinga sau sa depaseasca nivelul (fara toleranta pe crossing)
+// Toleranta (liqTol) se aplica DOAR la conditia „nivelul e in wick" (intre wick si close)
+// Astfel prevenim semnale unde wick-ul se apropie de nivel dar nu il ia efectiv
 sweepsHighLiq(sweepWick, sweepClose) =>
     tol   = pts(liqTol)
     hit4H = false
@@ -169,13 +172,13 @@ sweepsHighLiq(sweepWick, sweepClose) =>
     if require4H and array.size(bsl4H) > 0
         for k = 0 to array.size(bsl4H) - 1
             lvl = array.get(bsl4H, k)
-            if sweepWick >= lvl - tol and lvl >= sweepClose - tol
+            if sweepWick >= lvl and lvl >= sweepClose - tol   // wick atinge/depaseste nivelul
                 hit4H := true
                 break
     if require1H and array.size(bsl1H) > 0
         for k = 0 to array.size(bsl1H) - 1
             lvl = array.get(bsl1H, k)
-            if sweepWick >= lvl - tol and lvl >= sweepClose - tol
+            if sweepWick >= lvl and lvl >= sweepClose - tol   // wick atinge/depaseste nivelul
                 hit1H := true
                 break
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
@@ -187,13 +190,13 @@ sweepsLowLiq(sweepWick, sweepClose) =>
     if require4H and array.size(ssl4H) > 0
         for k = 0 to array.size(ssl4H) - 1
             lvl = array.get(ssl4H, k)
-            if sweepWick <= lvl + tol and lvl <= sweepClose + tol
+            if sweepWick <= lvl and lvl <= sweepClose + tol   // wick atinge/depaseste nivelul
                 hit4H := true
                 break
     if require1H and array.size(ssl1H) > 0
         for k = 0 to array.size(ssl1H) - 1
             lvl = array.get(ssl1H, k)
-            if sweepWick <= lvl + tol and lvl <= sweepClose + tol
+            if sweepWick <= lvl and lvl <= sweepClose + tol   // wick atinge/depaseste nivelul
                 hit1H := true
                 break
     (require4H and hit4H) or (require1H and hit1H) or (not require4H and not require1H)
