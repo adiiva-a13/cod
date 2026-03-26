@@ -1,5 +1,5 @@
 //@version=5
-strategy("MSS Range Retest Strategy", overlay=true,
+strategy("AdiivaMSS", overlay=true,
      default_qty_type=strategy.percent_of_equity,
      default_qty_value=2,
      commission_type=strategy.commission.percent,
@@ -419,7 +419,7 @@ var table t = table.new(position.top_right, 2, 8,
      bgcolor=color.new(color.black, 65), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
-    table.cell(t, 0, 0, "MSS RETEST",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 30))
+    table.cell(t, 0, 0, "AdiivaMSS",    text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 30))
     table.cell(t, 1, 0, "v2.0",         text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 30))
     table.cell(t, 0, 1, "SHORT state",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 1, shortState == 0 ? "Watching" : shortState == 1 ? "MSS ✓ Wait Retest" : "IN TRADE",
