@@ -334,8 +334,12 @@ if shortState == 0 and shortState[1] != 0
     sRangeBox  := na
     sTargetBox := na
     sRetestLn  := na
-    sSLLn := na  ;  sTP1Ln := na  ;  sBELn := na
-    sSLLbl := na ;  sTP1Lbl := na ;  sBELbl := na
+    sSLLn   := na
+    sTP1Ln  := na
+    sBELn   := na
+    sSLLbl  := na
+    sTP1Lbl := na
+    sBELbl  := na
 
 // ════════════════════════════════════════════
 // ── Tranzitie LONG 0 → 1 : MSS confirmat ───
@@ -409,8 +413,12 @@ if longState == 0 and longState[1] != 0
     lRangeBox  := na
     lTargetBox := na
     lRetestLn  := na
-    lSLLn := na  ;  lTP1Ln := na  ;  lBELn := na
-    lSLLbl := na ;  lTP1Lbl := na ;  lBELbl := na
+    lSLLn   := na
+    lTP1Ln  := na
+    lBELn   := na
+    lSLLbl  := na
+    lTP1Lbl := na
+    lBELbl  := na
 
 // ─────────────────────────────────────────────
 // INFO TABLE
