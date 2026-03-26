@@ -1,119 +1,283 @@
 //@version=5
-strategy("Supply Zone Retest - Short Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=2, commission_type=strategy.commission.percent, commission_value=0.05)
+strategy("MSS Range Retest Strategy", overlay=true,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=2,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     calc_on_every_tick=false)
 
 // ─────────────────────────────────────────────
 // INPUTS
 // ─────────────────────────────────────────────
-lookback         = input.int(20,    "Lookback pentru Supply Zone (bars)",  minval=5)
-zoneBuffer       = input.float(0.5, "Buffer zona supply (%)",              minval=0.1, step=0.1)
-retestMaxPct     = input.float(70,  "Retest maxim in zona (%)",            minval=10,  maxval=100)
-slBuffer         = input.float(0.3, "SL buffer deasupra zonei (%)",        minval=0.1, step=0.1)
-tp1Ratio         = input.float(1.0, "TP1 Risk:Reward",                    minval=0.5, step=0.5)
-tp2Ratio         = input.float(2.0, "TP2 Risk:Reward",                    minval=1.0, step=0.5)
-useMaFilter      = input.bool(true,  "Filtru MA (trend bearish)")
-maLength         = input.int(50,    "Perioada MA",                         minval=10)
-showZones        = input.bool(true,  "Afiseaza Supply Zones")
+grp1 = "Range Settings"
+rangeLookback   = input.int(10,   "Range lookback (bars)",         minval=3, maxval=50, group=grp1)
+zoneBuffer      = input.float(0.1,"Buffer zona (%)",               minval=0.0, step=0.05, group=grp1)
+showBoxes       = input.bool(true, "Afiseaza Range Boxes",         group=grp1)
+
+grp2 = "Trade Management"
+tp1Ratio        = input.float(1.0, "TP1 RR (runner la BE)",        minval=0.5, step=0.5, group=grp2)
+tp1ClosePct     = input.float(80,  "% pozitie inchisa la TP1",     minval=50, maxval=95, group=grp2)
+slBufferPct     = input.float(0.05,"SL buffer deasupra High (%)",  minval=0.0, step=0.05, group=grp2)
+
+grp3 = "Filters"
+tradeShorts     = input.bool(true,  "Trade SHORT",  group=grp3)
+tradeLongs      = input.bool(true,  "Trade LONG",   group=grp3)
 
 // ─────────────────────────────────────────────
-// CALCULE
+// STARE GLOBALA
 // ─────────────────────────────────────────────
-ma = ta.sma(close, maLength)
+// SHORT state machine
+var int   shortState    = 0   // 0=wait  1=mss_confirmed  2=in_trade  3=runner_BE
+var float sRangeHigh    = na
+var float sRangeLow     = na
+var float sHighBeforeMSS = na  // SL reference
+var float sEntry        = na
+var float sSL           = na
+var float sTP1          = na
+var bool  sTP1Hit       = false
 
-// Identificare High semnificativ (pivot high)
-pivotHigh = ta.pivothigh(high, lookback, lookback)
-
-// Zona de supply: de la pivot high in jos cu buffer
-var float supplyTop    = na
-var float supplyBottom = na
-var bool  zoneActive   = false
-var bool  breakdown    = false
-var int   breakBar     = na
-
-if not na(pivotHigh)
-    supplyTop    := pivotHigh
-    supplyBottom := pivotHigh * (1 - zoneBuffer / 100)
-    zoneActive   := true
-    breakdown    := false
-
-// Detectie breakdown: close sub supplyBottom cu candela bearish
-if zoneActive and not breakdown
-    if close < supplyBottom and close < open
-        breakdown := true
-        breakBar  := bar_index
+// LONG state machine
+var int   longState     = 0
+var float lRangeHigh    = na
+var float lRangeLow     = na
+var float lLowBeforeMSS = na
+var float lEntry        = na
+var float lSL           = na
+var float lTP1          = na
+var bool  lTP1Hit       = false
 
 // ─────────────────────────────────────────────
-// CONDITIE RETEST
+// HELPER FUNCTIONS
 // ─────────────────────────────────────────────
-retestThreshold = supplyBottom + (supplyTop - supplyBottom) * (retestMaxPct / 100)
+isBearish(i) => close[i] < open[i]
+isBullish(i) => close[i] > open[i]
 
-inRetest    = breakdown and high >= supplyBottom and high <= retestThreshold
-bearishCandle = close < open
-rejectionWick = (high - math.max(open, close)) > (math.abs(close - open) * 1.5)  // wick mare sus
-
-retestConfirmed = inRetest and (bearishCandle or rejectionWick)
-
-// Filtru trend: MA descendent
-maFilter = not useMaFilter or (close < ma and ma < ma[5])
+bufferVal(price, pct) => price * pct / 100
 
 // ─────────────────────────────────────────────
-// ENTRY / SL / TP
+// SHORT LOGIC
 // ─────────────────────────────────────────────
-var float entryPrice = na
-var float slPrice    = na
-var float tp1Price   = na
-var float tp2Price   = na
+if tradeShorts
 
-shortCondition = retestConfirmed and maFilter and zoneActive and strategy.position_size == 0
+    // STATE 0: Detectie range + MSS SHORT
+    // MSS = 2 consecutive bearish candles closing BELOW range low
+    if shortState == 0
+        rHigh = ta.highest(high, rangeLookback)
+        rLow  = ta.lowest(low,   rangeLookback)
+        // Verifica daca ultimele 2 lumanari sunt bearish si inchid sub rangeLow
+        twoBearsBelow = isBearish(0) and isBearish(1) and close[0] < rLow and close[1] < rLow
+        if twoBearsBelow
+            sRangeHigh     := rHigh
+            sRangeLow      := rLow
+            // SL = high-ul de dinainte de MSS (cel mai mare high din ultimele rangeLookback bars)
+            sHighBeforeMSS := rHigh
+            shortState     := 1
 
-if shortCondition
-    entryPrice := close
-    slPrice    := supplyTop * (1 + slBuffer / 100)
-    risk       = slPrice - entryPrice
-    tp1Price   := entryPrice - risk * tp1Ratio
-    tp2Price   := entryPrice - risk * tp2Ratio
+    // STATE 1: Asteapta retest la sRangeLow
+    // Retest = pretul revine la nivelul sRangeLow (zona de sus a range-ului spart)
+    if shortState == 1 and strategy.position_size == 0
+        retestZoneTop    = sRangeLow + bufferVal(sRangeLow, zoneBuffer)
+        retestZoneBottom = sRangeLow - bufferVal(sRangeLow, zoneBuffer * 2)
 
-    strategy.entry("Short", strategy.short, comment="Retest Short")
-    strategy.exit("TP1",    "Short", qty_percent=50, limit=tp1Price, stop=slPrice, comment="TP1")
-    strategy.exit("TP2",    "Short", qty_percent=50, limit=tp2Price, stop=slPrice, comment="TP2")
+        inRetestZone = high >= retestZoneBottom and close <= retestZoneTop
 
-// Invalidare zona daca pretul inchide DEASUPRA supplyTop
-if zoneActive and close > supplyTop
-    zoneActive := false
-    breakdown  := false
+        // Confirmare: candela bearish in zona de retest
+        if inRetestZone and isBearish(0)
+            sEntry  := close
+            sSL     := sHighBeforeMSS * (1 + slBufferPct / 100)
+            risk    = sSL - sEntry
+            sTP1    := sEntry - risk * tp1Ratio
+            sTP1Hit := false
+
+            strategy.entry("Short", strategy.short, comment="MSS Short")
+            // 80% la TP1
+            strategy.exit("Short_TP1", "Short",
+                 qty_percent = tp1ClosePct,
+                 limit       = sTP1,
+                 stop        = sSL,
+                 comment     = "TP1 80%")
+            // 20% runner cu SL la BE (entry)
+            strategy.exit("Short_Runner", "Short",
+                 qty_percent = 100,
+                 stop        = sEntry,
+                 comment     = "Runner BE")
+
+            shortState := 2
+
+    // STATE 2: In trade - verifica daca TP1 a fost atins
+    if shortState == 2
+        // TP1 hit = 80% din pozitie inchisa → ramane ~20% runner
+        posNow = math.abs(strategy.position_size)
+        posMax = strategy.opentrades.size(0) > 0 ? math.abs(strategy.opentrades.entry_price(0)) : na
+
+        // Detectam reducerea pozitiei (TP1 hit)
+        if not sTP1Hit and strategy.position_size < 0
+            if close <= sTP1
+                sTP1Hit := true
+
+        // Daca pozitia e inchisa complet → reset
+        if strategy.position_size == 0
+            shortState := 0
+            sRangeHigh := na
+            sRangeLow  := na
+            sTP1Hit    := false
+
+    // Invalidare MSS daca pretul inchide DEASUPRA sRangeHigh (zona invalidata)
+    if shortState == 1 and close > sRangeHigh
+        shortState := 0
+        sRangeHigh := na
+        sRangeLow  := na
+
+// ─────────────────────────────────────────────
+// LONG LOGIC
+// ─────────────────────────────────────────────
+if tradeLongs
+
+    // STATE 0: Detectie range + MSS LONG
+    if longState == 0
+        rHigh = ta.highest(high, rangeLookback)
+        rLow  = ta.lowest(low,   rangeLookback)
+        // 2 lumanari bullish inchid DEASUPRA rangeHigh
+        twoBullsAbove = isBullish(0) and isBullish(1) and close[0] > rHigh and close[1] > rHigh
+        if twoBullsAbove
+            lRangeHigh     := rHigh
+            lRangeLow      := rLow
+            lLowBeforeMSS  := rLow
+            longState      := 1
+
+    // STATE 1: Asteapta retest la lRangeHigh
+    if longState == 1 and strategy.position_size == 0
+        retestZoneBottom = lRangeHigh - bufferVal(lRangeHigh, zoneBuffer)
+        retestZoneTop    = lRangeHigh + bufferVal(lRangeHigh, zoneBuffer * 2)
+
+        inRetestZone = low <= retestZoneTop and close >= retestZoneBottom
+
+        // Confirmare: candela bullish in zona de retest
+        if inRetestZone and isBullish(0)
+            lEntry  := close
+            lSL     := lLowBeforeMSS * (1 - slBufferPct / 100)
+            risk    = lEntry - lSL
+            lTP1    := lEntry + risk * tp1Ratio
+            lTP1Hit := false
+
+            strategy.entry("Long", strategy.long, comment="MSS Long")
+            // 80% la TP1
+            strategy.exit("Long_TP1", "Long",
+                 qty_percent = tp1ClosePct,
+                 limit       = lTP1,
+                 stop        = lSL,
+                 comment     = "TP1 80%")
+            // 20% runner cu SL la BE
+            strategy.exit("Long_Runner", "Long",
+                 qty_percent = 100,
+                 stop        = lEntry,
+                 comment     = "Runner BE")
+
+            longState := 2
+
+    // STATE 2: In trade
+    if longState == 2
+        if not lTP1Hit and strategy.position_size > 0
+            if close >= lTP1
+                lTP1Hit := true
+
+        if strategy.position_size == 0
+            longState := 0
+            lRangeHigh := na
+            lRangeLow  := na
+            lTP1Hit    := false
+
+    // Invalidare daca pretul inchide SUB lRangeLow
+    if longState == 1 and close < lRangeLow
+        longState := 0
+        lRangeHigh := na
+        lRangeLow  := na
 
 // ─────────────────────────────────────────────
 // VIZUALIZARE
 // ─────────────────────────────────────────────
 
-// Supply Zone (rosu)
-bgcolor(showZones and zoneActive and high >= supplyBottom and high <= supplyTop ? color.new(color.red, 80) : na)
+// Range boxes
+var box shortBox = na
+var box longBox  = na
 
-// Plot MA
-plot(useMaFilter ? ma : na, "MA", color=color.yellow, linewidth=1)
+// SHORT: zona rosie (supply/range)
+if shortState >= 1 and not na(sRangeHigh) and showBoxes
+    if na(shortBox)
+        shortBox := box.new(bar_index - rangeLookback, sRangeHigh, bar_index, sRangeLow,
+             border_color=color.new(color.red, 30),
+             bgcolor=color.new(color.red, 75),
+             text="Range (Short)", text_color=color.white, text_size=size.tiny)
+    else
+        box.set_right(shortBox, bar_index)
 
-// Semnale pe grafic
-plotshape(shortCondition, "SHORT Entry", shape.labeldown, location.abovebar, color.red, text="SHORT", textcolor=color.white, size=size.small)
+if shortState == 0
+    shortBox := na
 
-// Nivele SL / TP pentru pozitia activa
-plot(strategy.position_size < 0 ? slPrice    : na, "Stop Loss", color.red,   linewidth=1, style=plot.style_linebr)
-plot(strategy.position_size < 0 ? tp1Price   : na, "TP1",       color.green, linewidth=1, style=plot.style_linebr)
-plot(strategy.position_size < 0 ? tp2Price   : na, "TP2",       color.teal,  linewidth=2, style=plot.style_linebr)
+// LONG: zona teal (demand/range)
+if longState >= 1 and not na(lRangeHigh) and showBoxes
+    if na(longBox)
+        longBox := box.new(bar_index - rangeLookback, lRangeHigh, bar_index, lRangeLow,
+             border_color=color.new(color.teal, 30),
+             bgcolor=color.new(color.teal, 75),
+             text="Range (Long)", text_color=color.white, text_size=size.tiny)
+    else
+        box.set_right(longBox, bar_index)
+
+if longState == 0
+    longBox := na
+
+// Semnale entry
+plotshape(shortState == 2 and shortState[1] == 1, "SHORT Entry",
+     shape.labeldown, location.abovebar,
+     color.red, text="SHORT\nMSS", textcolor=color.white, size=size.small)
+
+plotshape(longState == 2 and longState[1] == 1, "LONG Entry",
+     shape.labelup, location.belowbar,
+     color.teal, text="LONG\nMSS", textcolor=color.white, size=size.small)
+
+// Linii SL / TP pentru pozitia activa
+plot(strategy.position_size < 0 ? sSL  : na, "Short SL",  color.red,           linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? sTP1 : na, "Short TP1", color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? sEntry : na, "Short BE", color.new(color.orange, 0), linewidth=1, style=plot.style_linebr)
+
+plot(strategy.position_size > 0 ? lSL  : na, "Long SL",   color.red,           linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size > 0 ? lTP1 : na, "Long TP1",  color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size > 0 ? lEntry : na, "Long BE",  color.new(color.orange, 0), linewidth=1, style=plot.style_linebr)
+
+// Etichete SL/TP/BE la dreapta
+if strategy.position_size < 0 and barstate.islast
+    label.new(bar_index + 1, sSL,   "SL",  color=color.red,    textcolor=color.white, size=size.tiny, style=label.style_label_left)
+    label.new(bar_index + 1, sTP1,  "TP1 (80%)", color=color.green,  textcolor=color.white, size=size.tiny, style=label.style_label_left)
+    label.new(bar_index + 1, sEntry,"BE",  color=color.orange, textcolor=color.white, size=size.tiny, style=label.style_label_left)
+
+if strategy.position_size > 0 and barstate.islast
+    label.new(bar_index + 1, lSL,   "SL",  color=color.red,    textcolor=color.white, size=size.tiny, style=label.style_label_left)
+    label.new(bar_index + 1, lTP1,  "TP1 (80%)", color=color.green,  textcolor=color.white, size=size.tiny, style=label.style_label_left)
+    label.new(bar_index + 1, lEntry,"BE",  color=color.orange, textcolor=color.white, size=size.tiny, style=label.style_label_left)
 
 // ─────────────────────────────────────────────
 // INFO TABLE
 // ─────────────────────────────────────────────
-var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 70), border_width=1)
+var table t = table.new(position.top_right, 2, 7,
+     bgcolor=color.new(color.black, 65), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
-    table.cell(infoTable, 0, 0, "Supply Zone Retest",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.gray, 50))
-    table.cell(infoTable, 1, 0, "SHORT Strategy",       text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.gray, 50))
-    table.cell(infoTable, 0, 1, "Zona activa",         text_color=color.silver, text_size=size.tiny)
-    table.cell(infoTable, 1, 1, zoneActive ? "DA" : "NU", text_color=zoneActive ? color.green : color.red, text_size=size.tiny)
-    table.cell(infoTable, 0, 2, "Breakdown detectat",  text_color=color.silver, text_size=size.tiny)
-    table.cell(infoTable, 1, 2, breakdown ? "DA" : "NU", text_color=breakdown ? color.orange : color.gray, text_size=size.tiny)
-    table.cell(infoTable, 0, 3, "Supply Top",          text_color=color.silver, text_size=size.tiny)
-    table.cell(infoTable, 1, 3, not na(supplyTop) ? str.tostring(supplyTop, "#.####") : "-", text_color=color.red, text_size=size.tiny)
-    table.cell(infoTable, 0, 4, "Supply Bottom",       text_color=color.silver, text_size=size.tiny)
-    table.cell(infoTable, 1, 4, not na(supplyBottom) ? str.tostring(supplyBottom, "#.####") : "-", text_color=color.orange, text_size=size.tiny)
-    table.cell(infoTable, 0, 5, "MA Filter",           text_color=color.silver, text_size=size.tiny)
-    table.cell(infoTable, 1, 5, useMaFilter ? (maFilter ? "BEARISH ✓" : "BULLISH ✗") : "OFF", text_color=useMaFilter ? (maFilter ? color.green : color.red) : color.gray, text_size=size.tiny)
+    table.cell(t, 0, 0, "MSS RETEST",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 30))
+    table.cell(t, 1, 0, "v2.0",         text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 30))
+    table.cell(t, 0, 1, "SHORT state",  text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 1, shortState == 0 ? "Watching" : shortState == 1 ? "MSS ✓ Wait Retest" : "IN TRADE",
+         text_color=shortState == 0 ? color.gray : shortState == 1 ? color.orange : color.red, text_size=size.tiny)
+    table.cell(t, 0, 2, "LONG state",   text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 2, longState == 0 ? "Watching" : longState == 1 ? "MSS ✓ Wait Retest" : "IN TRADE",
+         text_color=longState == 0 ? color.gray : longState == 1 ? color.orange : color.teal, text_size=size.tiny)
+    table.cell(t, 0, 3, "TP1 hit Short",text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 3, sTP1Hit ? "DA → Runner BE" : "NU",
+         text_color=sTP1Hit ? color.green : color.gray, text_size=size.tiny)
+    table.cell(t, 0, 4, "TP1 hit Long", text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 4, lTP1Hit ? "DA → Runner BE" : "NU",
+         text_color=lTP1Hit ? color.green : color.gray, text_size=size.tiny)
+    table.cell(t, 0, 5, "Range bars",   text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 5, str.tostring(rangeLookback), text_color=color.white, text_size=size.tiny)
+    table.cell(t, 0, 6, "TP1 close %",  text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 6, str.tostring(tp1ClosePct) + "%", text_color=color.white, text_size=size.tiny)
