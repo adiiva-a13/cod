@@ -298,12 +298,12 @@ var int   lMSSBar    = na
 if shortState == 1 and shortState[1] == 0 and showBoxes
     sMSSBar    := bar_index
     // Box range (rosu inchis) - zona care a fost sparta
-    sRangeBox  := box.new(bar_index - rangeLookback, sRangeHigh, bar_index + EXTEND, sRangeLow,
+    sRangeBox  := box.new(bar_index - minRangeBars, sRangeHigh, bar_index + EXTEND, sRangeLow,
          border_color=C_MAROON_B, bgcolor=C_MAROON, border_width=1,
          text=" mss ", text_color=color.new(color.white, 20), text_halign=text.align_left,
          text_valign=text.align_bottom, text_size=size.small)
     // Linie punctata la nivelul de retest (baza range-ului)
-    sRetestLn  := line.new(bar_index - rangeLookback, sRangeLow, bar_index + EXTEND * 3, sRangeLow,
+    sRetestLn  := line.new(bar_index - minRangeBars, sRangeLow, bar_index + EXTEND * 3, sRangeLow,
          color=color.new(color.white, 40), style=line.style_dashed, width=1)
     // Eticheta "mss" la bara de confirmare
     label.new(bar_index, low - bufferVal(low, 0.05), "mss",
@@ -394,11 +394,11 @@ if shortState == 0 and shortState[1] != 0
 // ── Tranzitie LONG 0 → 1 : MSS confirmat ───
 if longState == 1 and longState[1] == 0 and showBoxes
     lMSSBar    := bar_index
-    lRangeBox  := box.new(bar_index - rangeLookback, lRangeHigh, bar_index + EXTEND, lRangeLow,
+    lRangeBox  := box.new(bar_index - minRangeBars, lRangeHigh, bar_index + EXTEND, lRangeLow,
          border_color=C_TEAL_B, bgcolor=C_TEAL, border_width=1,
          text=" mss ", text_color=color.new(color.white, 20), text_halign=text.align_left,
          text_valign=text.align_top, text_size=size.small)
-    lRetestLn  := line.new(bar_index - rangeLookback, lRangeHigh, bar_index + EXTEND * 3, lRangeHigh,
+    lRetestLn  := line.new(bar_index - minRangeBars, lRangeHigh, bar_index + EXTEND * 3, lRangeHigh,
          color=color.new(color.white, 40), style=line.style_dashed, width=1)
     label.new(bar_index, high + bufferVal(high, 0.05), "mss",
          color=color.new(color.black, 100), textcolor=color.new(color.white, 10),
