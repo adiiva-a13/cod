@@ -87,8 +87,9 @@ if tradeShorts
     // STATE 0: Detectie range + MSS SHORT
     // MSS = 2 consecutive bearish candles closing BELOW range low
     if shortState == 0
-        rHigh = ta.highest(high, rangeLookback)
-        rLow  = ta.lowest(low,   rangeLookback)
+        // Range calculat INAINTE de cele 2 lumanari de breakdown (offset [2])
+        rHigh = ta.highest(high, rangeLookback)[2]
+        rLow  = ta.lowest(low,   rangeLookback)[2]
         // Verifica daca ultimele 2 lumanari sunt bearish si inchid sub rangeLow
         twoBearsBelow = isBearish(0) and isBearish(1) and close[0] < rLow and close[1] < rLow
         if twoBearsBelow
@@ -160,8 +161,9 @@ if tradeLongs
 
     // STATE 0: Detectie range + MSS LONG
     if longState == 0
-        rHigh = ta.highest(high, rangeLookback)
-        rLow  = ta.lowest(low,   rangeLookback)
+        // Range calculat INAINTE de cele 2 lumanari de breakout (offset [2])
+        rHigh = ta.highest(high, rangeLookback)[2]
+        rLow  = ta.lowest(low,   rangeLookback)[2]
         // 2 lumanari bullish inchid DEASUPRA rangeHigh
         twoBullsAbove = isBullish(0) and isBullish(1) and close[0] > rHigh and close[1] > rHigh
         if twoBullsAbove
