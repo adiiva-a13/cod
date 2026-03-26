@@ -23,6 +23,31 @@ grp3 = "Filters"
 tradeShorts     = input.bool(true,  "Trade SHORT",  group=grp3)
 tradeLongs      = input.bool(true,  "Trade LONG",   group=grp3)
 
+grp4 = "Session Filter  (DST automat)"
+useSessions     = input.bool(true,  "Filtru sesiuni activ",              group=grp4)
+// London – ora locala Europa/Londra (GMT iarna, BST vara → DST automat)
+londonOn        = input.bool(true,  "London Session",                    group=grp4)
+londonStart     = input.string("0800", "London start (ora locala)",      group=grp4)
+londonEnd       = input.string("1700", "London end   (ora locala)",      group=grp4)
+// New York – ora locala America/New_York (EST iarna, EDT vara → DST automat)
+nyOn            = input.bool(true,  "New York Session",                  group=grp4)
+nyStart         = input.string("0930", "New York start (ora locala)",    group=grp4)
+nyEnd           = input.string("1600", "New York end   (ora locala)",    group=grp4)
+showSessionBg   = input.bool(true,  "Afiseaza fond sesiuni",             group=grp4)
+
+// ─────────────────────────────────────────────
+// SESIUNI  (time() cu timezone = DST automat)
+// ─────────────────────────────────────────────
+londonSession = londonOn and not na(time(timeframe.period, londonStart + "-" + londonEnd, "Europe/London"))
+nySession     = nyOn     and not na(time(timeframe.period, nyStart     + "-" + nyEnd,     "America/New_York"))
+
+inSession = not useSessions or londonSession or nySession
+
+// Fond colorat per sesiune
+bgcolor(showSessionBg and londonSession and not nySession ? color.new(color.blue,   92) : na, title="London bg")
+bgcolor(showSessionBg and nySession     and not londonSession ? color.new(color.orange, 92) : na, title="NY bg")
+bgcolor(showSessionBg and londonSession and nySession         ? color.new(color.purple, 88) : na, title="Overlap bg")
+
 // ─────────────────────────────────────────────
 // STARE GLOBALA
 // ─────────────────────────────────────────────
@@ -75,7 +100,7 @@ if tradeShorts
 
     // STATE 1: Asteapta retest la sRangeLow
     // Retest = pretul revine la nivelul sRangeLow (zona de sus a range-ului spart)
-    if shortState == 1 and strategy.position_size == 0
+    if shortState == 1 and strategy.position_size == 0 and inSession
         retestZoneTop    = sRangeLow + bufferVal(sRangeLow, zoneBuffer)
         retestZoneBottom = sRangeLow - bufferVal(sRangeLow, zoneBuffer * 2)
 
@@ -146,7 +171,7 @@ if tradeLongs
             longState      := 1
 
     // STATE 1: Asteapta retest la lRangeHigh
-    if longState == 1 and strategy.position_size == 0
+    if longState == 1 and strategy.position_size == 0 and inSession
         retestZoneBottom = lRangeHigh - bufferVal(lRangeHigh, zoneBuffer)
         retestZoneTop    = lRangeHigh + bufferVal(lRangeHigh, zoneBuffer * 2)
 
@@ -259,7 +284,7 @@ if strategy.position_size > 0 and barstate.islast
 // ─────────────────────────────────────────────
 // INFO TABLE
 // ─────────────────────────────────────────────
-var table t = table.new(position.top_right, 2, 7,
+var table t = table.new(position.top_right, 2, 8,
      bgcolor=color.new(color.black, 65), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
@@ -281,3 +306,14 @@ if barstate.islast
     table.cell(t, 1, 5, str.tostring(rangeLookback), text_color=color.white, text_size=size.tiny)
     table.cell(t, 0, 6, "TP1 close %",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 6, str.tostring(tp1ClosePct) + "%", text_color=color.white, text_size=size.tiny)
+    // Sesiune activa
+    sessionLabel = not useSessions ? "OFF" :
+         londonSession and nySession ? "London + NY (Overlap)" :
+         londonSession               ? "London" :
+         nySession                   ? "New York" : "-- In afara sesiunii --"
+    sessionColor = not useSessions ? color.gray :
+         londonSession and nySession ? color.purple :
+         londonSession               ? color.blue :
+         nySession                   ? color.orange : color.red
+    table.cell(t, 0, 7, "Sesiune",      text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 7, sessionLabel,   text_color=sessionColor, text_size=size.tiny)
