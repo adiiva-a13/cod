@@ -1,0 +1,119 @@
+//@version=5
+strategy("Supply Zone Retest - Short Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=2, commission_type=strategy.commission.percent, commission_value=0.05)
+
+// ─────────────────────────────────────────────
+// INPUTS
+// ─────────────────────────────────────────────
+lookback         = input.int(20,    "Lookback pentru Supply Zone (bars)",  minval=5)
+zoneBuffer       = input.float(0.5, "Buffer zona supply (%)",              minval=0.1, step=0.1)
+retestMaxPct     = input.float(70,  "Retest maxim in zona (%)",            minval=10,  maxval=100)
+slBuffer         = input.float(0.3, "SL buffer deasupra zonei (%)",        minval=0.1, step=0.1)
+tp1Ratio         = input.float(1.0, "TP1 Risk:Reward",                    minval=0.5, step=0.5)
+tp2Ratio         = input.float(2.0, "TP2 Risk:Reward",                    minval=1.0, step=0.5)
+useMaFilter      = input.bool(true,  "Filtru MA (trend bearish)")
+maLength         = input.int(50,    "Perioada MA",                         minval=10)
+showZones        = input.bool(true,  "Afiseaza Supply Zones")
+
+// ─────────────────────────────────────────────
+// CALCULE
+// ─────────────────────────────────────────────
+ma = ta.sma(close, maLength)
+
+// Identificare High semnificativ (pivot high)
+pivotHigh = ta.pivothigh(high, lookback, lookback)
+
+// Zona de supply: de la pivot high in jos cu buffer
+var float supplyTop    = na
+var float supplyBottom = na
+var bool  zoneActive   = false
+var bool  breakdown    = false
+var int   breakBar     = na
+
+if not na(pivotHigh)
+    supplyTop    := pivotHigh
+    supplyBottom := pivotHigh * (1 - zoneBuffer / 100)
+    zoneActive   := true
+    breakdown    := false
+
+// Detectie breakdown: close sub supplyBottom cu candela bearish
+if zoneActive and not breakdown
+    if close < supplyBottom and close < open
+        breakdown := true
+        breakBar  := bar_index
+
+// ─────────────────────────────────────────────
+// CONDITIE RETEST
+// ─────────────────────────────────────────────
+retestThreshold = supplyBottom + (supplyTop - supplyBottom) * (retestMaxPct / 100)
+
+inRetest    = breakdown and high >= supplyBottom and high <= retestThreshold
+bearishCandle = close < open
+rejectionWick = (high - math.max(open, close)) > (math.abs(close - open) * 1.5)  // wick mare sus
+
+retestConfirmed = inRetest and (bearishCandle or rejectionWick)
+
+// Filtru trend: MA descendent
+maFilter = not useMaFilter or (close < ma and ma < ma[5])
+
+// ─────────────────────────────────────────────
+// ENTRY / SL / TP
+// ─────────────────────────────────────────────
+var float entryPrice = na
+var float slPrice    = na
+var float tp1Price   = na
+var float tp2Price   = na
+
+shortCondition = retestConfirmed and maFilter and zoneActive and strategy.position_size == 0
+
+if shortCondition
+    entryPrice := close
+    slPrice    := supplyTop * (1 + slBuffer / 100)
+    risk       = slPrice - entryPrice
+    tp1Price   := entryPrice - risk * tp1Ratio
+    tp2Price   := entryPrice - risk * tp2Ratio
+
+    strategy.entry("Short", strategy.short, comment="Retest Short")
+    strategy.exit("TP1",    "Short", qty_percent=50, limit=tp1Price, stop=slPrice, comment="TP1")
+    strategy.exit("TP2",    "Short", qty_percent=50, limit=tp2Price, stop=slPrice, comment="TP2")
+
+// Invalidare zona daca pretul inchide DEASUPRA supplyTop
+if zoneActive and close > supplyTop
+    zoneActive := false
+    breakdown  := false
+
+// ─────────────────────────────────────────────
+// VIZUALIZARE
+// ─────────────────────────────────────────────
+
+// Supply Zone (rosu)
+bgcolor(showZones and zoneActive and high >= supplyBottom and high <= supplyTop ? color.new(color.red, 80) : na)
+
+// Plot MA
+plot(useMaFilter ? ma : na, "MA", color=color.yellow, linewidth=1)
+
+// Semnale pe grafic
+plotshape(shortCondition, "SHORT Entry", shape.labeldown, location.abovebar, color.red, text="SHORT", textcolor=color.white, size=size.small)
+
+// Nivele SL / TP pentru pozitia activa
+plot(strategy.position_size < 0 ? slPrice    : na, "Stop Loss", color.red,   linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? tp1Price   : na, "TP1",       color.green, linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? tp2Price   : na, "TP2",       color.teal,  linewidth=2, style=plot.style_linebr)
+
+// ─────────────────────────────────────────────
+// INFO TABLE
+// ─────────────────────────────────────────────
+var table infoTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 70), border_width=1)
+
+if barstate.islast
+    table.cell(infoTable, 0, 0, "Supply Zone Retest",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.gray, 50))
+    table.cell(infoTable, 1, 0, "SHORT Strategy",       text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.gray, 50))
+    table.cell(infoTable, 0, 1, "Zona activa",         text_color=color.silver, text_size=size.tiny)
+    table.cell(infoTable, 1, 1, zoneActive ? "DA" : "NU", text_color=zoneActive ? color.green : color.red, text_size=size.tiny)
+    table.cell(infoTable, 0, 2, "Breakdown detectat",  text_color=color.silver, text_size=size.tiny)
+    table.cell(infoTable, 1, 2, breakdown ? "DA" : "NU", text_color=breakdown ? color.orange : color.gray, text_size=size.tiny)
+    table.cell(infoTable, 0, 3, "Supply Top",          text_color=color.silver, text_size=size.tiny)
+    table.cell(infoTable, 1, 3, not na(supplyTop) ? str.tostring(supplyTop, "#.####") : "-", text_color=color.red, text_size=size.tiny)
+    table.cell(infoTable, 0, 4, "Supply Bottom",       text_color=color.silver, text_size=size.tiny)
+    table.cell(infoTable, 1, 4, not na(supplyBottom) ? str.tostring(supplyBottom, "#.####") : "-", text_color=color.orange, text_size=size.tiny)
+    table.cell(infoTable, 0, 5, "MA Filter",           text_color=color.silver, text_size=size.tiny)
+    table.cell(infoTable, 1, 5, useMaFilter ? (maFilter ? "BEARISH ✓" : "BULLISH ✗") : "OFF", text_color=useMaFilter ? (maFilter ? color.green : color.red) : color.gray, text_size=size.tiny)
