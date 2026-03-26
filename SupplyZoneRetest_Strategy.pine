@@ -267,6 +267,13 @@ if shortState == 1 and shortState[1] == 0 and showBoxes
     label.new(bar_index, low - bufferVal(low, 0.05), "mss",
          color=color.new(color.black, 100), textcolor=color.new(color.white, 10),
          style=label.style_none, size=size.small, yloc=yloc.belowbar)
+    // Cerc mic rosu sub fiecare din cele 2 lumanari bearish de confirmare
+    label.new(bar_index,     low[0],  "●", color=color.new(color.black, 100),
+         textcolor=color.new(#FF4444, 0), style=label.style_none,
+         size=size.small, yloc=yloc.belowbar)
+    label.new(bar_index - 1, low[1],  "●", color=color.new(color.black, 100),
+         textcolor=color.new(#FF4444, 0), style=label.style_none,
+         size=size.small, yloc=yloc.belowbar)
 
 // ── Extinde boxul short cat timp asteptam retest ──
 if shortState == 1 and not na(sRangeBox) and showBoxes
@@ -343,6 +350,13 @@ if longState == 1 and longState[1] == 0 and showBoxes
     label.new(bar_index, high + bufferVal(high, 0.05), "mss",
          color=color.new(color.black, 100), textcolor=color.new(color.white, 10),
          style=label.style_none, size=size.small, yloc=yloc.abovebar)
+    // Cerc mic verde deasupra fiecareia din cele 2 lumanari bullish de confirmare
+    label.new(bar_index,     high[0], "●", color=color.new(color.black, 100),
+         textcolor=color.new(#00CC88, 0), style=label.style_none,
+         size=size.small, yloc=yloc.abovebar)
+    label.new(bar_index - 1, high[1], "●", color=color.new(color.black, 100),
+         textcolor=color.new(#00CC88, 0), style=label.style_none,
+         size=size.small, yloc=yloc.abovebar)
 
 if longState == 1 and not na(lRangeBox) and showBoxes
     box.set_right(lRangeBox, bar_index + EXTEND)
