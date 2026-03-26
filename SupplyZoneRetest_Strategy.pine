@@ -52,24 +52,30 @@ bgcolor(showSessionBg and londonSession and nySession         ? color.new(color.
 // STARE GLOBALA
 // ─────────────────────────────────────────────
 // SHORT state machine
-var int   shortState    = 0   // 0=wait  1=mss_confirmed  2=in_trade  3=runner_BE
-var float sRangeHigh    = na
-var float sRangeLow     = na
-var float sHighBeforeMSS = na  // SL reference
-var float sEntry        = na
-var float sSL           = na
-var float sTP1          = na
-var bool  sTP1Hit       = false
+var int   shortState     = 0
+var float sRangeHigh     = na
+var float sRangeLow      = na
+var float sHighBeforeMSS = na
+var float sEntry         = na
+var float sSL            = na
+var float sTP1           = na
+var bool  sTP1Hit        = false
+// Tracking dinamic range SHORT (se acumuleaza bar cu bar)
+var float sTrackHigh     = na
+var float sTrackLow      = na
 
 // LONG state machine
-var int   longState     = 0
-var float lRangeHigh    = na
-var float lRangeLow     = na
-var float lLowBeforeMSS = na
-var float lEntry        = na
-var float lSL           = na
-var float lTP1          = na
-var bool  lTP1Hit       = false
+var int   longState      = 0
+var float lRangeHigh     = na
+var float lRangeLow      = na
+var float lLowBeforeMSS  = na
+var float lEntry         = na
+var float lSL            = na
+var float lTP1           = na
+var bool  lTP1Hit        = false
+// Tracking dinamic range LONG
+var float lTrackHigh     = na
+var float lTrackLow      = na
 
 // ─────────────────────────────────────────────
 // HELPER FUNCTIONS
@@ -84,20 +90,25 @@ bufferVal(price, pct) => price * pct / 100
 // ─────────────────────────────────────────────
 if tradeShorts
 
-    // STATE 0: Detectie range + MSS SHORT
-    // MSS = 2 consecutive bearish candles closing BELOW range low
+    // STATE 0: Construieste range dinamic + detectie MSS SHORT
     if shortState == 0
-        // Range calculat INAINTE de cele 2 lumanari de breakdown (offset [2])
-        rHigh = ta.highest(high, rangeLookback)[2]
-        rLow  = ta.lowest(low,   rangeLookback)[2]
-        // Verifica daca ultimele 2 lumanari sunt bearish si inchid sub rangeLow
-        twoBearsBelow = isBearish(0) and isBearish(1) and close[0] < rLow and close[1] < rLow
+        // Adauga bara de acum 2 bare in range (exclude bar[0] si bar[1] = potentialele breakdown candles)
+        if na(sTrackHigh)
+            sTrackHigh := high[2]
+            sTrackLow  := low[2]
+        else
+            sTrackHigh := math.max(sTrackHigh, high[2])
+            sTrackLow  := math.min(sTrackLow,  low[2])
+
+        // MSS: 2 lumanari rosii consecutive inchid SUB range low
+        twoBearsBelow = isBearish(0) and isBearish(1) and close[0] < sTrackLow and close[1] < sTrackLow
         if twoBearsBelow
-            sRangeHigh     := rHigh
-            sRangeLow      := rLow
-            // SL = high-ul de dinainte de MSS (cel mai mare high din ultimele rangeLookback bars)
-            sHighBeforeMSS := rHigh
+            sRangeHigh     := sTrackHigh
+            sRangeLow      := sTrackLow
+            sHighBeforeMSS := sTrackHigh   // SL deasupra high-ului dinaintea MSS
             shortState     := 1
+            sTrackHigh     := na           // reset pentru urmatorul setup
+            sTrackLow      := na
 
     // STATE 1: Asteapta retest la sRangeLow
     // Retest = pretul revine la nivelul sRangeLow (zona de sus a range-ului spart)
@@ -148,29 +159,37 @@ if tradeShorts
             sRangeLow  := na
             sTP1Hit    := false
 
-    // Invalidare MSS daca pretul inchide DEASUPRA sRangeHigh (zona invalidata)
+    // Invalidare MSS daca pretul inchide DEASUPRA sRangeHigh
     if shortState == 1 and close > sRangeHigh
         shortState := 0
         sRangeHigh := na
         sRangeLow  := na
+        sTrackHigh := na
+        sTrackLow  := na
 
 // ─────────────────────────────────────────────
 // LONG LOGIC
 // ─────────────────────────────────────────────
 if tradeLongs
 
-    // STATE 0: Detectie range + MSS LONG
+    // STATE 0: Construieste range dinamic + detectie MSS LONG
     if longState == 0
-        // Range calculat INAINTE de cele 2 lumanari de breakout (offset [2])
-        rHigh = ta.highest(high, rangeLookback)[2]
-        rLow  = ta.lowest(low,   rangeLookback)[2]
-        // 2 lumanari bullish inchid DEASUPRA rangeHigh
-        twoBullsAbove = isBullish(0) and isBullish(1) and close[0] > rHigh and close[1] > rHigh
+        if na(lTrackHigh)
+            lTrackHigh := high[2]
+            lTrackLow  := low[2]
+        else
+            lTrackHigh := math.max(lTrackHigh, high[2])
+            lTrackLow  := math.min(lTrackLow,  low[2])
+
+        // MSS: 2 lumanari verzi consecutive inchid DEASUPRA range high
+        twoBullsAbove = isBullish(0) and isBullish(1) and close[0] > lTrackHigh and close[1] > lTrackHigh
         if twoBullsAbove
-            lRangeHigh     := rHigh
-            lRangeLow      := rLow
-            lLowBeforeMSS  := rLow
-            longState      := 1
+            lRangeHigh    := lTrackHigh
+            lRangeLow     := lTrackLow
+            lLowBeforeMSS := lTrackLow    // SL sub low-ul dinaintea MSS
+            longState     := 1
+            lTrackHigh    := na
+            lTrackLow     := na
 
     // STATE 1: Asteapta retest la lRangeHigh
     if longState == 1 and strategy.position_size == 0 and inSession
@@ -216,9 +235,11 @@ if tradeLongs
 
     // Invalidare daca pretul inchide SUB lRangeLow
     if longState == 1 and close < lRangeLow
-        longState := 0
+        longState  := 0
         lRangeHigh := na
         lRangeLow  := na
+        lTrackHigh := na
+        lTrackLow  := na
 
 // ─────────────────────────────────────────────
 // VIZUALIZARE
