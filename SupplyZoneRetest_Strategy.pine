@@ -10,8 +10,9 @@ strategy("AdiivaMSS", overlay=true,
 // INPUTS
 // ─────────────────────────────────────────────
 grp1 = "Range Settings"
-rangeLookback   = input.int(10,   "Range lookback (bars)",         minval=3, maxval=50, group=grp1)
-zoneBuffer      = input.float(0.1,"Buffer zona (%)",               minval=0.0, step=0.05, group=grp1)
+minRangeBars    = input.int(5,    "Minim candele range (MSS valid)", minval=2, maxval=50, group=grp1,
+     tooltip="Prima lumanare face MSS. Range-ul trebuie sa aiba minim acest numar de candele in spate.")
+zoneBuffer      = input.float(0.1,"Buffer zona retest (%)",        minval=0.0, step=0.05, group=grp1)
 showBoxes       = input.bool(true, "Afiseaza Range Boxes",         group=grp1)
 
 grp2 = "Trade Management"
@@ -63,6 +64,7 @@ var bool  sTP1Hit        = false
 // Tracking dinamic range SHORT (se acumuleaza bar cu bar)
 var float sTrackHigh     = na
 var float sTrackLow      = na
+var int   sTrackCount    = 0   // numar candele acumulate in range
 
 // LONG state machine
 var int   longState      = 0
@@ -76,6 +78,7 @@ var bool  lTP1Hit        = false
 // Tracking dinamic range LONG
 var float lTrackHigh     = na
 var float lTrackLow      = na
+var int   lTrackCount    = 0
 
 // ─────────────────────────────────────────────
 // HELPER FUNCTIONS
@@ -92,23 +95,30 @@ if tradeShorts
 
     // STATE 0: Construieste range dinamic + detectie MSS SHORT
     if shortState == 0
-        // Adauga bara de acum 2 bare in range (exclude bar[0] si bar[1] = potentialele breakdown candles)
+        // Acumuleaza range bara cu bara (offset [2] = exclude bar[0] si bar[1])
         if na(sTrackHigh)
-            sTrackHigh := high[2]
-            sTrackLow  := low[2]
+            sTrackHigh  := high[2]
+            sTrackLow   := low[2]
+            sTrackCount := 1
         else
-            sTrackHigh := math.max(sTrackHigh, high[2])
-            sTrackLow  := math.min(sTrackLow,  low[2])
+            sTrackHigh  := math.max(sTrackHigh, high[2])
+            sTrackLow   := math.min(sTrackLow,  low[2])
+            sTrackCount := sTrackCount + 1
 
-        // MSS: 2 lumanari rosii consecutive inchid SUB range low
-        twoBearsBelow = isBearish(0) and isBearish(1) and close[0] < sTrackLow and close[1] < sTrackLow
-        if twoBearsBelow
+        // MSS valid: prima lumanare (bar[1]) rupe sTrackLow
+        //            + range are minim minRangeBars candele in spate
+        firstBarBreaks  = isBearish(1) and close[1] < sTrackLow
+        secondBarBelow  = isBearish(0) and close[0] < sTrackLow
+        rangeValid      = sTrackCount >= minRangeBars
+
+        if firstBarBreaks and secondBarBelow and rangeValid
             sRangeHigh     := sTrackHigh
             sRangeLow      := sTrackLow
-            sHighBeforeMSS := sTrackHigh   // SL deasupra high-ului dinaintea MSS
+            sHighBeforeMSS := sTrackHigh
             shortState     := 1
-            sTrackHigh     := na           // reset pentru urmatorul setup
+            sTrackHigh     := na
             sTrackLow      := na
+            sTrackCount    := 0
 
     // STATE 1: Asteapta retest la sRangeLow
     // Retest = pretul revine la nivelul sRangeLow (zona de sus a range-ului spart)
@@ -161,11 +171,12 @@ if tradeShorts
 
     // Invalidare MSS daca pretul inchide DEASUPRA sRangeHigh
     if shortState == 1 and close > sRangeHigh
-        shortState := 0
-        sRangeHigh := na
-        sRangeLow  := na
-        sTrackHigh := na
-        sTrackLow  := na
+        shortState  := 0
+        sRangeHigh  := na
+        sRangeLow   := na
+        sTrackHigh  := na
+        sTrackLow   := na
+        sTrackCount := 0
 
 // ─────────────────────────────────────────────
 // LONG LOGIC
@@ -175,21 +186,28 @@ if tradeLongs
     // STATE 0: Construieste range dinamic + detectie MSS LONG
     if longState == 0
         if na(lTrackHigh)
-            lTrackHigh := high[2]
-            lTrackLow  := low[2]
+            lTrackHigh  := high[2]
+            lTrackLow   := low[2]
+            lTrackCount := 1
         else
-            lTrackHigh := math.max(lTrackHigh, high[2])
-            lTrackLow  := math.min(lTrackLow,  low[2])
+            lTrackHigh  := math.max(lTrackHigh, high[2])
+            lTrackLow   := math.min(lTrackLow,  low[2])
+            lTrackCount := lTrackCount + 1
 
-        // MSS: 2 lumanari verzi consecutive inchid DEASUPRA range high
-        twoBullsAbove = isBullish(0) and isBullish(1) and close[0] > lTrackHigh and close[1] > lTrackHigh
-        if twoBullsAbove
+        // MSS valid: prima lumanare (bar[1]) rupe lTrackHigh
+        //            + range are minim minRangeBars candele in spate
+        firstBarBreaks = isBullish(1) and close[1] > lTrackHigh
+        secondBarAbove = isBullish(0) and close[0] > lTrackHigh
+        rangeValidL    = lTrackCount >= minRangeBars
+
+        if firstBarBreaks and secondBarAbove and rangeValidL
             lRangeHigh    := lTrackHigh
             lRangeLow     := lTrackLow
-            lLowBeforeMSS := lTrackLow    // SL sub low-ul dinaintea MSS
+            lLowBeforeMSS := lTrackLow
             longState     := 1
             lTrackHigh    := na
             lTrackLow     := na
+            lTrackCount   := 0
 
     // STATE 1: Asteapta retest la lRangeHigh
     if longState == 1 and strategy.position_size == 0 and inSession
@@ -235,11 +253,12 @@ if tradeLongs
 
     // Invalidare daca pretul inchide SUB lRangeLow
     if longState == 1 and close < lRangeLow
-        longState  := 0
-        lRangeHigh := na
-        lRangeLow  := na
-        lTrackHigh := na
-        lTrackLow  := na
+        longState   := 0
+        lRangeHigh  := na
+        lRangeLow   := na
+        lTrackHigh  := na
+        lTrackLow   := na
+        lTrackCount := 0
 
 // ─────────────────────────────────────────────
 // VIZUALIZARE
@@ -478,8 +497,8 @@ if barstate.islast
     table.cell(t, 0, 4, "TP1 hit Long", text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 4, lTP1Hit ? "DA → Runner BE" : "NU",
          text_color=lTP1Hit ? color.green : color.gray, text_size=size.tiny)
-    table.cell(t, 0, 5, "Range bars",   text_color=color.silver, text_size=size.tiny)
-    table.cell(t, 1, 5, str.tostring(rangeLookback), text_color=color.white, text_size=size.tiny)
+    table.cell(t, 0, 5, "Min range bars", text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 5, str.tostring(minRangeBars), text_color=color.white, text_size=size.tiny)
     table.cell(t, 0, 6, "TP1 close %",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 6, str.tostring(tp1ClosePct) + "%", text_color=color.white, text_size=size.tiny)
     // Sesiune activa
