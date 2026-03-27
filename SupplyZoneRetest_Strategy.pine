@@ -288,6 +288,29 @@ if tradeLongs
         lTrackCount := 0
 
 // ─────────────────────────────────────────────
+// INVALIDARE INCRUCISATA
+// Daca e deschis un LONG → anuleaza SHORT-ul care asteapta retest (si invers)
+// Pretul a confirmat directia opusa → MSS-ul vechi nu mai e valabil
+// ─────────────────────────────────────────────
+if longState == 2 and shortState == 1
+    shortState  := 0
+    sRangeHigh  := na
+    sRangeLow   := na
+    sWaitCount  := 0
+    sTrackHigh  := na
+    sTrackLow   := na
+    sTrackCount := 0
+
+if shortState == 2 and longState == 1
+    longState   := 0
+    lRangeHigh  := na
+    lRangeLow   := na
+    lWaitCount  := 0
+    lTrackHigh  := na
+    lTrackLow   := na
+    lTrackCount := 0
+
+// ─────────────────────────────────────────────
 // VIZUALIZARE
 // ─────────────────────────────────────────────
 C_MAROON   = color.new(#5C1A1A, 55)   // rosu inchis - zona supply/range short
