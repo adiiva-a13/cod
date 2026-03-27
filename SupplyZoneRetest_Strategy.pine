@@ -13,6 +13,8 @@ grp1 = "Range Settings"
 minRangeBars    = input.int(5,    "Minim candele range (MSS valid)", minval=2, maxval=50, group=grp1,
      tooltip="Prima lumanare face MSS. Range-ul trebuie sa aiba minim acest numar de candele in spate.")
 zoneBuffer      = input.float(0.1,"Buffer zona retest (%)",        minval=0.0, step=0.05, group=grp1)
+maxWaitBars     = input.int(100,  "Max bare asteptare retest",     minval=10,  maxval=500, group=grp1,
+     tooltip="Daca retestul nu vine in acest numar de bare, MSS-ul se reseteaza si se cauta urmatorul.")
 showBoxes       = input.bool(true, "Afiseaza Range Boxes",         group=grp1)
 
 grp2 = "Trade Management"
@@ -65,6 +67,7 @@ var bool  sTP1Hit        = false
 var float sTrackHigh     = na
 var float sTrackLow      = na
 var int   sTrackCount    = 0   // numar candele acumulate in range
+var int   sWaitCount     = 0   // bare scurse de la MSS, pentru timeout
 
 // LONG state machine
 var int   longState      = 0
@@ -79,6 +82,7 @@ var bool  lTP1Hit        = false
 var float lTrackHigh     = na
 var float lTrackLow      = na
 var int   lTrackCount    = 0
+var int   lWaitCount     = 0   // bare scurse de la MSS, pentru timeout
 
 // ─────────────────────────────────────────────
 // HELPER FUNCTIONS
@@ -116,20 +120,29 @@ if tradeShorts
             sRangeLow      := sTrackLow
             sHighBeforeMSS := sTrackHigh
             shortState     := 1
+            sWaitCount     := 0
             sTrackHigh     := na
             sTrackLow      := na
             sTrackCount    := 0
 
     // STATE 1: Asteapta retest la sRangeLow
-    // Retest = pretul revine la nivelul sRangeLow (zona de sus a range-ului spart)
+    // Retest = high-ul candelei ATINGE nivelul sRangeLow (cu mic buffer) + candela inchide bearish
+    if shortState == 1 and strategy.position_size == 0
+        sWaitCount := sWaitCount + 1
+        // Timeout: daca nu vine retestul in maxWaitBars bare, reset
+        if sWaitCount > maxWaitBars
+            shortState  := 0
+            sRangeHigh  := na
+            sRangeLow   := na
+            sWaitCount  := 0
+            sTrackHigh  := na
+            sTrackLow   := na
+            sTrackCount := 0
+
     if shortState == 1 and strategy.position_size == 0 and inSession
-        retestZoneTop    = sRangeLow + bufferVal(sRangeLow, zoneBuffer)
-        retestZoneBottom = sRangeLow - bufferVal(sRangeLow, zoneBuffer * 2)
+        touchedLevel = high >= sRangeLow * (1 - zoneBuffer / 100)
 
-        inRetestZone = high >= retestZoneBottom and close <= retestZoneTop
-
-        // Confirmare: candela bearish in zona de retest
-        if inRetestZone and isBearish(0)
+        if touchedLevel and isBearish(0)
             sEntry  := close
             sSL     := sHighBeforeMSS * (1 + slBufferPct / 100)
             risk    = sSL - sEntry
@@ -174,6 +187,7 @@ if tradeShorts
         shortState  := 0
         sRangeHigh  := na
         sRangeLow   := na
+        sWaitCount  := 0
         sTrackHigh  := na
         sTrackLow   := na
         sTrackCount := 0
@@ -205,19 +219,29 @@ if tradeLongs
             lRangeLow     := lTrackLow
             lLowBeforeMSS := lTrackLow
             longState     := 1
+            lWaitCount    := 0
             lTrackHigh    := na
             lTrackLow     := na
             lTrackCount   := 0
 
     // STATE 1: Asteapta retest la lRangeHigh
+    // Retest = low-ul candelei ATINGE nivelul lRangeHigh (cu mic buffer) + candela inchide bullish
+    if longState == 1 and strategy.position_size == 0
+        lWaitCount := lWaitCount + 1
+        // Timeout: daca nu vine retestul in maxWaitBars bare, reset
+        if lWaitCount > maxWaitBars
+            longState   := 0
+            lRangeHigh  := na
+            lRangeLow   := na
+            lWaitCount  := 0
+            lTrackHigh  := na
+            lTrackLow   := na
+            lTrackCount := 0
+
     if longState == 1 and strategy.position_size == 0 and inSession
-        retestZoneBottom = lRangeHigh - bufferVal(lRangeHigh, zoneBuffer)
-        retestZoneTop    = lRangeHigh + bufferVal(lRangeHigh, zoneBuffer * 2)
+        touchedLevel = low <= lRangeHigh * (1 + zoneBuffer / 100)
 
-        inRetestZone = low <= retestZoneTop and close >= retestZoneBottom
-
-        // Confirmare: candela bullish in zona de retest
-        if inRetestZone and isBullish(0)
+        if touchedLevel and isBullish(0)
             lEntry  := close
             lSL     := lLowBeforeMSS * (1 - slBufferPct / 100)
             risk    = lEntry - lSL
@@ -256,6 +280,7 @@ if tradeLongs
         longState   := 0
         lRangeHigh  := na
         lRangeLow   := na
+        lWaitCount  := 0
         lTrackHigh  := na
         lTrackLow   := na
         lTrackCount := 0
@@ -484,7 +509,7 @@ var table t = table.new(position.top_right, 2, 8,
 
 if barstate.islast
     table.cell(t, 0, 0, "AdiivaMSS",    text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 30))
-    table.cell(t, 1, 0, "v2.0",         text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 30))
+    table.cell(t, 1, 0, "v4.0",         text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 30))
     table.cell(t, 0, 1, "SHORT state",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 1, shortState == 0 ? "Watching" : shortState == 1 ? "MSS ✓ Wait Retest" : "IN TRADE",
          text_color=shortState == 0 ? color.gray : shortState == 1 ? color.orange : color.red, text_size=size.tiny)
