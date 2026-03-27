@@ -99,14 +99,15 @@ if tradeShorts
 
     // STATE 0: Construieste range dinamic + detectie MSS SHORT
     if shortState == 0
-        // Acumuleaza range bara cu bara (offset [2] = exclude bar[0] si bar[1])
-        if na(sTrackHigh)
+        // Daca bar[2] face un nou HIGH deasupra range-ului curent → range nou incepe de acolo
+        // (pastreaza doar ULTIMUL swing inainte de MSS, nu toata istoria)
+        if na(sTrackHigh) or high[2] > sTrackHigh
             sTrackHigh  := high[2]
             sTrackLow   := low[2]
             sTrackCount := 1
         else
-            sTrackHigh  := math.max(sTrackHigh, high[2])
-            sTrackLow   := math.min(sTrackLow,  low[2])
+            // high[2] <= sTrackHigh → suntem in range, extinde doar lowul
+            sTrackLow   := math.min(sTrackLow, low[2])
             sTrackCount := sTrackCount + 1
 
         // MSS valid: prima lumanare (bar[1]) rupe sTrackLow
@@ -199,13 +200,14 @@ if tradeLongs
 
     // STATE 0: Construieste range dinamic + detectie MSS LONG
     if longState == 0
-        if na(lTrackHigh)
+        // Daca bar[2] face un nou LOW sub range-ul curent → range nou incepe de acolo
+        if na(lTrackLow) or low[2] < lTrackLow
             lTrackHigh  := high[2]
             lTrackLow   := low[2]
             lTrackCount := 1
         else
+            // low[2] >= lTrackLow → suntem in range, extinde doar highul
             lTrackHigh  := math.max(lTrackHigh, high[2])
-            lTrackLow   := math.min(lTrackLow,  low[2])
             lTrackCount := lTrackCount + 1
 
         // MSS valid: prima lumanare (bar[1]) rupe lTrackHigh
