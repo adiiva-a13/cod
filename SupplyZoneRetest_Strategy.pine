@@ -352,12 +352,6 @@ if shortState == 1 and not na(sRangeBox) and showBoxes
 
 // ── Tranzitie SHORT 1 → 2 : Entry ────────────
 if shortState == 2 and shortState[1] == 1 and showBoxes
-    risk = sSL - sEntry
-    // Sageata entry
-    label.new(bar_index, high + bufferVal(high, 0.08),
-         "▼  SHORT\nintra la retest",
-         color=color.new(#8B2020, 10), textcolor=color.white,
-         style=label.style_label_down, size=size.small)
     // Target box teal (de la entry la TP1 = zona miscarii)
     sTargetBox := box.new(bar_index, sEntry, bar_index + EXTEND * 6, sTP1,
          border_color=C_TEAL_B, bgcolor=C_TARGET_S, border_width=1)
@@ -445,11 +439,6 @@ if longState == 1 and not na(lRangeBox) and showBoxes
 
 // ── Tranzitie LONG 1 → 2 : Entry ─────────────
 if longState == 2 and longState[1] == 1 and showBoxes
-    risk = lEntry - lSL
-    label.new(bar_index, low - bufferVal(low, 0.08),
-         "▲  LONG\nintra la retest",
-         color=color.new(#0D3B38, 10), textcolor=color.white,
-         style=label.style_label_up, size=size.small)
     lTargetBox := box.new(bar_index, lEntry, bar_index + EXTEND * 6, lTP1,
          border_color=C_TEAL_B, bgcolor=C_TEAL, border_width=1)
     lSLLn  := line.new(bar_index, lSL,    bar_index + EXTEND * 5, lSL,
@@ -502,6 +491,39 @@ if longState == 0 and longState[1] != 0
     lSLLbl  := na
     lTP1Lbl := na
     lBELbl  := na
+
+// ─────────────────────────────────────────────
+// SAGETI ENTRY / EXIT
+// ─────────────────────────────────────────────
+// Entry
+shortEntrySignal = shortState == 2 and shortState[1] == 1
+longEntrySignal  = longState  == 2 and longState[1]  == 1
+
+// TP1 partial close: pozitia scade in marime dar ramane in aceeasi directie
+shortTP1Signal   = strategy.position_size < 0 and strategy.position_size[1] < 0 and strategy.position_size > strategy.position_size[1]
+longTP1Signal    = strategy.position_size > 0 and strategy.position_size[1] > 0 and strategy.position_size < strategy.position_size[1]
+
+// Exit complet: pozitia trece la 0
+shortCloseSignal = strategy.position_size == 0 and strategy.position_size[1] < 0
+longCloseSignal  = strategy.position_size == 0 and strategy.position_size[1] > 0
+
+// Entry arrows (mica sageata pe bara de intrare)
+plotshape(shortEntrySignal, title="Short Entry ▼", style=shape.triangledown,
+     location=location.abovebar, color=color.new(#FF4444, 0), size=size.small)
+plotshape(longEntrySignal,  title="Long Entry ▲",  style=shape.triangleup,
+     location=location.belowbar, color=color.new(#00CC88, 0), size=size.small)
+
+// TP1 exit arrow (cerc verde mic)
+plotshape(shortTP1Signal, title="TP1 Exit Short", style=shape.circle,
+     location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
+plotshape(longTP1Signal,  title="TP1 Exit Long",  style=shape.circle,
+     location=location.abovebar, color=color.new(color.green, 0), size=size.tiny)
+
+// Close complet (runner BE/SL): X portocaliu
+plotshape(shortCloseSignal, title="Close Short", style=shape.xcross,
+     location=location.belowbar, color=color.new(color.orange, 0), size=size.tiny)
+plotshape(longCloseSignal,  title="Close Long",  style=shape.xcross,
+     location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny)
 
 // ─────────────────────────────────────────────
 // INFO TABLE
