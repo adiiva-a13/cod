@@ -196,12 +196,7 @@ if tradeShorts
     if shortState == 1 and strategy.position_size == 0 and inSession and vwapOkShort and htfOkShort
         touchedLevel = high >= sRangeLow * (1 - zoneBuffer / 100)
 
-        // DEBUG: punct galben cand nivelul e atins dar candela NU e bearish
-        if touchedLevel and not isBearish(0)
-            label.new(bar_index, high, "?S", color=color.new(color.yellow, 30),
-                 textcolor=color.black, style=label.style_label_down, size=size.tiny)
-
-        if touchedLevel and isBearish(0)
+        if touchedLevel
             sEntry  := close
             sSL     := sHighBeforeMSS * (1 + slBufferPct / 100)
             risk    = sSL - sEntry
@@ -310,12 +305,7 @@ if tradeLongs
     if longState == 1 and strategy.position_size == 0 and inSession and vwapOkLong and htfOkLong
         touchedLevel = low <= lRangeHigh * (1 + zoneBuffer / 100)
 
-        // DEBUG: punct galben cand nivelul e atins dar candela NU e bullish
-        if touchedLevel and not isBullish(0)
-            label.new(bar_index, low, "?L", color=color.new(color.yellow, 30),
-                 textcolor=color.black, style=label.style_label_up, size=size.tiny)
-
-        if touchedLevel and isBullish(0)
+        if touchedLevel
             lEntry  := close
             lSL     := lLowBeforeMSS * (1 - slBufferPct / 100)
             risk    = lEntry - lSL
