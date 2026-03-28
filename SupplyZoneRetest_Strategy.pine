@@ -27,6 +27,9 @@ slBufferPct     = input.float(0.05,"SL buffer deasupra High (%)",  minval=0.0, s
 grp3 = "Filters"
 tradeShorts     = input.bool(true,  "Trade SHORT",  group=grp3)
 tradeLongs      = input.bool(true,  "Trade LONG",   group=grp3)
+useVWAP         = input.bool(false, "Filtru VWAP Weekly (trend bias)", group=grp3,
+     tooltip="ON: SHORT doar sub VWAP weekly, LONG doar deasupra VWAP weekly.")
+showVWAP        = input.bool(true,  "Afiseaza VWAP Weekly pe grafic",  group=grp3)
 
 grp4 = "Session Filter  (DST automat)"
 useSessions     = input.bool(true,  "Filtru sesiuni activ",              group=grp4)
@@ -39,6 +42,21 @@ nyOn            = input.bool(true,  "New York Session",                  group=g
 nyStart         = input.string("0930", "New York start (ora locala)",    group=grp4)
 nyEnd           = input.string("1600", "New York end   (ora locala)",    group=grp4)
 showSessionBg   = input.bool(true,  "Afiseaza fond sesiuni",             group=grp4)
+
+// ─────────────────────────────────────────────
+// VWAP WEEKLY
+// ─────────────────────────────────────────────
+weeklyVWAP   = ta.vwap(hlc3, timeframe.change("W"))
+aboveVWAP    = close > weeklyVWAP
+belowVWAP    = close < weeklyVWAP
+
+// Filtru trend: daca useVWAP activ, SHORT doar sub VWAP, LONG doar deasupra
+vwapOkShort  = not useVWAP or belowVWAP
+vwapOkLong   = not useVWAP or aboveVWAP
+
+plot(showVWAP ? weeklyVWAP : na, title="VWAP Weekly",
+     color=aboveVWAP ? color.new(#00CC88, 20) : color.new(#FF4444, 20),
+     linewidth=2, style=plot.style_line)
 
 // ─────────────────────────────────────────────
 // SESIUNI  (time() cu timezone = DST automat)
@@ -153,7 +171,7 @@ if tradeShorts
             sTrackLow   := na
             sTrackCount := 0
 
-    if shortState == 1 and strategy.position_size == 0 and inSession
+    if shortState == 1 and strategy.position_size == 0 and inSession and vwapOkShort
         touchedLevel = high >= sRangeLow * (1 - zoneBuffer / 100)
 
         if touchedLevel and isBearish(0)
@@ -262,7 +280,7 @@ if tradeLongs
             lTrackLow   := na
             lTrackCount := 0
 
-    if longState == 1 and strategy.position_size == 0 and inSession
+    if longState == 1 and strategy.position_size == 0 and inSession and vwapOkLong
         touchedLevel = low <= lRangeHigh * (1 + zoneBuffer / 100)
 
         if touchedLevel and isBullish(0)
@@ -573,7 +591,7 @@ plotshape(longCloseSignal,  title="Close Long",  style=shape.xcross,
 // ─────────────────────────────────────────────
 // INFO TABLE
 // ─────────────────────────────────────────────
-var table t = table.new(position.top_right, 2, 8,
+var table t = table.new(position.top_right, 2, 9,
      bgcolor=color.new(color.black, 65), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
@@ -606,3 +624,8 @@ if barstate.islast
          nySession                   ? color.orange : color.red
     table.cell(t, 0, 7, "Sesiune",      text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 7, sessionLabel,   text_color=sessionColor, text_size=size.tiny)
+    // VWAP Weekly bias
+    vwapLabel = not useVWAP ? "OFF" : aboveVWAP ? "▲ Bullish (LONG only)" : "▼ Bearish (SHORT only)"
+    vwapColor = not useVWAP ? color.gray : aboveVWAP ? color.new(#00CC88, 0) : color.new(#FF4444, 0)
+    table.cell(t, 0, 8, "VWAP Weekly",  text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 8, vwapLabel,      text_color=vwapColor,    text_size=size.tiny)
