@@ -27,9 +27,16 @@ slBufferPct     = input.float(0.05,"SL buffer deasupra High (%)",  minval=0.0, s
 grp3 = "Filters"
 tradeShorts     = input.bool(true,  "Trade SHORT",  group=grp3)
 tradeLongs      = input.bool(true,  "Trade LONG",   group=grp3)
+// ── Filtru 1: VWAP Weekly ──────────────────────────────────────────────────
 useVWAP         = input.bool(false, "Filtru VWAP Weekly (trend bias)", group=grp3,
      tooltip="ON: SHORT doar sub VWAP weekly, LONG doar deasupra VWAP weekly.")
 showVWAP        = input.bool(true,  "Afiseaza VWAP Weekly pe grafic",  group=grp3)
+// ── Filtru 2: HTF MSS Bias ─────────────────────────────────────────────────
+useHTF          = input.bool(false, "Filtru HTF MSS Bias",             group=grp3,
+     tooltip="ON: SHORT doar daca ultimul BOS pe HTF e bearish, LONG doar daca e bullish. Nu activa ambele filtre simultan.")
+htfTimeframe    = input.timeframe("60", "HTF Timeframe (ex: 60=1H)",   group=grp3)
+htfLookback     = input.int(20, "HTF Lookback bare swing",             minval=5, maxval=100, group=grp3,
+     tooltip="Numarul de bare HTF folosit pentru a detecta swing high/low pe timeframe-ul superior.")
 
 grp4 = "Session Filter  (DST automat)"
 useSessions     = input.bool(true,  "Filtru sesiuni activ",              group=grp4)
@@ -44,19 +51,34 @@ nyEnd           = input.string("1600", "New York end   (ora locala)",    group=g
 showSessionBg   = input.bool(true,  "Afiseaza fond sesiuni",             group=grp4)
 
 // ─────────────────────────────────────────────
-// VWAP WEEKLY
+// FILTRU 1: VWAP WEEKLY
 // ─────────────────────────────────────────────
 weeklyVWAP   = ta.vwap(hlc3, timeframe.change("W"))
 aboveVWAP    = close > weeklyVWAP
 belowVWAP    = close < weeklyVWAP
 
-// Filtru trend: daca useVWAP activ, SHORT doar sub VWAP, LONG doar deasupra
 vwapOkShort  = not useVWAP or belowVWAP
 vwapOkLong   = not useVWAP or aboveVWAP
 
 plot(showVWAP ? weeklyVWAP : na, title="VWAP Weekly",
      color=aboveVWAP ? color.new(#00CC88, 20) : color.new(#FF4444, 20),
      linewidth=2, style=plot.style_line)
+
+// ─────────────────────────────────────────────
+// FILTRU 2: HTF MSS BIAS
+// Detecteaza BOS (Break of Structure) pe timeframe superior
+// Bullish BOS: HTF close rupe deasupra swing high-ului din ultimele N bare
+// Bearish BOS: HTF close rupe sub swing low-ul din ultimele N bare
+// ─────────────────────────────────────────────
+htfSwH      = request.security("", htfTimeframe, ta.highest(high, htfLookback)[1], lookahead=barmerge.lookahead_off)
+htfSwL      = request.security("", htfTimeframe, ta.lowest(low,  htfLookback)[1], lookahead=barmerge.lookahead_off)
+htfClose    = request.security("", htfTimeframe, close, lookahead=barmerge.lookahead_off)
+
+htfBullish  = htfClose > htfSwH   // HTF a spart swing high → bias LONG
+htfBearish  = htfClose < htfSwL   // HTF a spart swing low  → bias SHORT
+
+htfOkShort  = not useHTF or htfBearish
+htfOkLong   = not useHTF or htfBullish
 
 // ─────────────────────────────────────────────
 // SESIUNI  (time() cu timezone = DST automat)
@@ -171,7 +193,7 @@ if tradeShorts
             sTrackLow   := na
             sTrackCount := 0
 
-    if shortState == 1 and strategy.position_size == 0 and inSession and vwapOkShort
+    if shortState == 1 and strategy.position_size == 0 and inSession and vwapOkShort and htfOkShort
         touchedLevel = high >= sRangeLow * (1 - zoneBuffer / 100)
 
         if touchedLevel and isBearish(0)
@@ -280,7 +302,7 @@ if tradeLongs
             lTrackLow   := na
             lTrackCount := 0
 
-    if longState == 1 and strategy.position_size == 0 and inSession and vwapOkLong
+    if longState == 1 and strategy.position_size == 0 and inSession and vwapOkLong and htfOkLong
         touchedLevel = low <= lRangeHigh * (1 + zoneBuffer / 100)
 
         if touchedLevel and isBullish(0)
@@ -591,7 +613,7 @@ plotshape(longCloseSignal,  title="Close Long",  style=shape.xcross,
 // ─────────────────────────────────────────────
 // INFO TABLE
 // ─────────────────────────────────────────────
-var table t = table.new(position.top_right, 2, 9,
+var table t = table.new(position.top_right, 2, 10,
      bgcolor=color.new(color.black, 65), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
@@ -629,3 +651,8 @@ if barstate.islast
     vwapColor = not useVWAP ? color.gray : aboveVWAP ? color.new(#00CC88, 0) : color.new(#FF4444, 0)
     table.cell(t, 0, 8, "VWAP Weekly",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 8, vwapLabel,      text_color=vwapColor,    text_size=size.tiny)
+    // HTF MSS Bias
+    htfLabel = not useHTF ? "OFF" : htfBullish ? "▲ Bullish (LONG only)" : htfBearish ? "▼ Bearish (SHORT only)" : "-- Neutru --"
+    htfColor = not useHTF ? color.gray : htfBullish ? color.new(#00CC88, 0) : htfBearish ? color.new(#FF4444, 0) : color.orange
+    table.cell(t, 0, 9, "HTF " + htfTimeframe + "m Bias", text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 9, htfLabel,        text_color=htfColor,     text_size=size.tiny)
