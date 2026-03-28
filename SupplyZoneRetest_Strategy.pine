@@ -38,17 +38,12 @@ htfTimeframe    = input.timeframe("60", "HTF Timeframe (ex: 60=1H)",   group=grp
 htfLookback     = input.int(20, "HTF Lookback bare swing",             minval=5, maxval=100, group=grp3,
      tooltip="Numarul de bare HTF folosit pentru a detecta swing high/low pe timeframe-ul superior.")
 
-grp4 = "Session Filter  (DST automat)"
-useSessions     = input.bool(true,  "Filtru sesiuni activ",              group=grp4)
-// London – ora locala Europa/Londra (GMT iarna, BST vara → DST automat)
-londonOn        = input.bool(true,  "London Session",                    group=grp4)
-londonStart     = input.string("0800", "London start (ora locala)",      group=grp4)
-londonEnd       = input.string("1700", "London end   (ora locala)",      group=grp4)
-// New York – ora locala America/New_York (EST iarna, EDT vara → DST automat)
-nyOn            = input.bool(true,  "New York Session",                  group=grp4)
-nyStart         = input.string("0930", "New York start (ora locala)",    group=grp4)
-nyEnd           = input.string("1600", "New York end   (ora locala)",    group=grp4)
-showSessionBg   = input.bool(true,  "Afiseaza fond sesiuni",             group=grp4)
+grp4 = "Fereastra Orara  (ora Romaniei, DST automat)"
+useTimeWindow   = input.bool(true,  "Filtru fereastra orara activ",      group=grp4)
+twStart         = input.string("0800", "Start (ora Romaniei)",           group=grp4)
+twEnd           = input.string("2100", "End   (ora Romaniei)",           group=grp4)
+maxTradesPerDay = input.int(2,      "Max trade-uri pe zi",               minval=1, maxval=10, group=grp4)
+showSessionBg   = input.bool(true,  "Afiseaza fond fereastra orara",     group=grp4)
 
 // ─────────────────────────────────────────────
 // FILTRU 1: VWAP WEEKLY
@@ -81,17 +76,25 @@ htfOkShort  = not useHTF or htfBearish
 htfOkLong   = not useHTF or htfBullish
 
 // ─────────────────────────────────────────────
-// SESIUNI  (time() cu timezone = DST automat)
+// FEREASTRA ORARA  (Europa/Bucharest = DST automat)
 // ─────────────────────────────────────────────
-londonSession = londonOn and not na(time(timeframe.period, londonStart + "-" + londonEnd, "Europe/London"))
-nySession     = nyOn     and not na(time(timeframe.period, nyStart     + "-" + nyEnd,     "America/New_York"))
+inTimeWindow = not na(time(timeframe.period, twStart + "-" + twEnd, "Europe/Bucharest"))
 
-inSession = not useSessions or londonSession or nySession
+inSession = not useTimeWindow or inTimeWindow
 
-// Fond colorat per sesiune
-bgcolor(showSessionBg and londonSession and not nySession ? color.new(color.blue,   92) : na, title="London bg")
-bgcolor(showSessionBg and nySession     and not londonSession ? color.new(color.orange, 92) : na, title="NY bg")
-bgcolor(showSessionBg and londonSession and nySession         ? color.new(color.purple, 88) : na, title="Overlap bg")
+// Contor trade-uri pe zi
+var int  dailyTradeCount = 0
+var int  lastTradeDay    = na
+
+currentDay = dayofmonth + month * 100 + year * 10000
+if na(lastTradeDay) or currentDay != lastTradeDay
+    dailyTradeCount := 0
+    lastTradeDay    := currentDay
+
+tradeLimitOk = dailyTradeCount < maxTradesPerDay
+
+// Fond colorat fereastra orara
+bgcolor(showSessionBg and inTimeWindow ? color.new(color.blue, 92) : na, title="Fereastra orara bg")
 
 // ─────────────────────────────────────────────
 // STARE GLOBALA
@@ -193,7 +196,7 @@ if tradeShorts
             sTrackLow   := na
             sTrackCount := 0
 
-    if shortState == 1 and strategy.position_size == 0 and inSession and vwapOkShort and htfOkShort
+    if shortState == 1 and strategy.position_size == 0 and inSession and tradeLimitOk and vwapOkShort and htfOkShort
         touchedLevel = high >= sRangeLow * (1 - zoneBuffer / 100)
 
         if touchedLevel
@@ -204,18 +207,17 @@ if tradeShorts
             sTP1Hit := false
 
             strategy.entry("Short", strategy.short, comment="MSS Short")
-            // 80% la TP1
             strategy.exit("Short_TP1", "Short",
                  qty_percent = tp1ClosePct,
                  limit       = sTP1,
                  stop        = sSL,
                  comment     = "TP1 80%")
-            // 20% runner cu SL la BE (entry)
             strategy.exit("Short_Runner", "Short",
                  qty_percent = 100,
                  stop        = sEntry,
                  comment     = "Runner BE")
 
+            dailyTradeCount := dailyTradeCount + 1
             shortState := 2
 
     // STATE 2: In trade - verifica daca TP1 a fost atins
@@ -302,7 +304,7 @@ if tradeLongs
             lTrackLow   := na
             lTrackCount := 0
 
-    if longState == 1 and strategy.position_size == 0 and inSession and vwapOkLong and htfOkLong
+    if longState == 1 and strategy.position_size == 0 and inSession and tradeLimitOk and vwapOkLong and htfOkLong
         touchedLevel = low <= lRangeHigh * (1 + zoneBuffer / 100)
 
         if touchedLevel
@@ -313,18 +315,17 @@ if tradeLongs
             lTP1Hit := false
 
             strategy.entry("Long", strategy.long, comment="MSS Long")
-            // 80% la TP1
             strategy.exit("Long_TP1", "Long",
                  qty_percent = tp1ClosePct,
                  limit       = lTP1,
                  stop        = lSL,
                  comment     = "TP1 80%")
-            // 20% runner cu SL la BE
             strategy.exit("Long_Runner", "Long",
                  qty_percent = 100,
                  stop        = lEntry,
                  comment     = "Runner BE")
 
+            dailyTradeCount := dailyTradeCount + 1
             longState := 2
 
     // STATE 2: In trade
@@ -619,7 +620,7 @@ plotshape(longCloseSignal, title="Exit Long", style=shape.triangledown,
 // ─────────────────────────────────────────────
 // INFO TABLE
 // ─────────────────────────────────────────────
-var table t = table.new(position.top_right, 2, 10,
+var table t = table.new(position.top_right, 2, 11,
      bgcolor=color.new(color.black, 65), border_width=1, border_color=color.new(color.gray, 50))
 
 if barstate.islast
@@ -641,24 +642,23 @@ if barstate.islast
     table.cell(t, 1, 5, str.tostring(minRangeBars), text_color=color.white, text_size=size.tiny)
     table.cell(t, 0, 6, "TP1 close %",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 6, str.tostring(tp1ClosePct) + "%", text_color=color.white, text_size=size.tiny)
-    // Sesiune activa
-    sessionLabel = not useSessions ? "OFF" :
-         londonSession and nySession ? "London + NY (Overlap)" :
-         londonSession               ? "London" :
-         nySession                   ? "New York" : "-- In afara sesiunii --"
-    sessionColor = not useSessions ? color.gray :
-         londonSession and nySession ? color.purple :
-         londonSession               ? color.blue :
-         nySession                   ? color.orange : color.red
-    table.cell(t, 0, 7, "Sesiune",      text_color=color.silver, text_size=size.tiny)
-    table.cell(t, 1, 7, sessionLabel,   text_color=sessionColor, text_size=size.tiny)
+    // Fereastra orara
+    twLabel = not useTimeWindow ? "OFF" : inTimeWindow ? "✓ " + twStart + "-" + twEnd + " RO" : "-- In afara ferestrei --"
+    twColor = not useTimeWindow ? color.gray : inTimeWindow ? color.new(#00CC88, 0) : color.red
+    table.cell(t, 0, 7, "Fereastra orara", text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 7, twLabel,           text_color=twColor,      text_size=size.tiny)
+    // Trade-uri azi
+    tradeCountColor = dailyTradeCount >= maxTradesPerDay ? color.red : color.new(#00CC88, 0)
+    table.cell(t, 0, 8, "Trade-uri azi",   text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 8, str.tostring(dailyTradeCount) + " / " + str.tostring(maxTradesPerDay),
+         text_color=tradeCountColor, text_size=size.tiny)
     // VWAP Weekly bias
     vwapLabel = not useVWAP ? "OFF" : aboveVWAP ? "▲ Bullish (LONG only)" : "▼ Bearish (SHORT only)"
     vwapColor = not useVWAP ? color.gray : aboveVWAP ? color.new(#00CC88, 0) : color.new(#FF4444, 0)
-    table.cell(t, 0, 8, "VWAP Weekly",  text_color=color.silver, text_size=size.tiny)
-    table.cell(t, 1, 8, vwapLabel,      text_color=vwapColor,    text_size=size.tiny)
+    table.cell(t, 0, 9,  "VWAP Weekly",  text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 9,  vwapLabel,      text_color=vwapColor,    text_size=size.tiny)
     // HTF MSS Bias
     htfLabel = not useHTF ? "OFF" : htfBullish ? "▲ Bullish (LONG only)" : htfBearish ? "▼ Bearish (SHORT only)" : "-- Neutru --"
     htfColor = not useHTF ? color.gray : htfBullish ? color.new(#00CC88, 0) : htfBearish ? color.new(#FF4444, 0) : color.orange
-    table.cell(t, 0, 9, "HTF " + htfTimeframe + "m Bias", text_color=color.silver, text_size=size.tiny)
-    table.cell(t, 1, 9, htfLabel,        text_color=htfColor,     text_size=size.tiny)
+    table.cell(t, 0, 10, "HTF " + htfTimeframe + "m Bias", text_color=color.silver, text_size=size.tiny)
+    table.cell(t, 1, 10, htfLabel,        text_color=htfColor,     text_size=size.tiny)
