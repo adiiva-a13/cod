@@ -578,6 +578,17 @@ if longState == 0 and longState[1] != 0
 // SAGETI ENTRY / EXIT
 // ─────────────────────────────────────────────
 // Entry
+// MSS signals (vizibile la orice zoom cu plotshape)
+mssSHORTSignal = shortState == 1 and shortState[1] == 0
+mssLONGSignal  = longState  == 1 and longState[1]  == 0
+
+plotshape(mssSHORTSignal, title="MSS Short", style=shape.labeldown,
+     location=location.belowbar, color=color.new(#CC2222, 0),
+     textcolor=color.white, text="MSS↓", size=size.normal)
+plotshape(mssLONGSignal, title="MSS Long", style=shape.labelup,
+     location=location.abovebar, color=color.new(#006644, 0),
+     textcolor=color.white, text="MSS↑", size=size.normal)
+
 shortEntrySignal = shortState == 2 and shortState[1] == 1
 longEntrySignal  = longState  == 2 and longState[1]  == 1
 
