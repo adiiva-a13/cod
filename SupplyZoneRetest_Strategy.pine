@@ -414,21 +414,18 @@ if shortState == 1 and shortState[1] == 0 and showBoxes
     sRangeBox  := box.new(bar_index - minRangeBars, sRangeHigh, bar_index + EXTEND, sRangeLow,
          border_color=C_MAROON_B, bgcolor=C_MAROON, border_width=1,
          text=" mss ", text_color=color.new(color.white, 20), text_halign=text.align_left,
-         text_valign=text.align_bottom, text_size=size.small)
-    // Linie punctata la nivelul de retest (baza range-ului)
+         text_valign=text.align_bottom, text_size=size.normal)
     sRetestLn  := line.new(bar_index - minRangeBars, sRangeLow, bar_index + EXTEND * 3, sRangeLow,
          color=color.new(color.white, 40), style=line.style_dashed, width=1)
-    // Eticheta "mss" la bara de confirmare
-    label.new(bar_index, low - bufferVal(low, 0.05), "mss",
-         color=color.new(color.black, 100), textcolor=color.new(color.white, 10),
-         style=label.style_none, size=size.small, yloc=yloc.belowbar)
-    // Cerc mic rosu sub fiecare din cele 2 lumanari bearish de confirmare
-    label.new(bar_index,     low[0],  "●", color=color.new(color.black, 100),
+    label.new(bar_index, na, "mss",
+         color=color.new(#8B2020, 10), textcolor=color.new(color.white, 0),
+         style=label.style_label_up, size=size.normal, yloc=yloc.belowbar)
+    label.new(bar_index,     na, "●", color=color.new(color.black, 100),
          textcolor=color.new(#FF4444, 0), style=label.style_none,
-         size=size.small, yloc=yloc.belowbar)
-    label.new(bar_index - 1, low[1],  "●", color=color.new(color.black, 100),
+         size=size.normal, yloc=yloc.belowbar)
+    label.new(bar_index - 1, na, "●", color=color.new(color.black, 100),
          textcolor=color.new(#FF4444, 0), style=label.style_none,
-         size=size.small, yloc=yloc.belowbar)
+         size=size.normal, yloc=yloc.belowbar)
 
 // ── Extinde boxul short cat timp asteptam retest ──
 if shortState == 1 and not na(sRangeBox) and showBoxes
@@ -504,19 +501,18 @@ if longState == 1 and longState[1] == 0 and showBoxes
     lRangeBox  := box.new(bar_index - minRangeBars, lRangeHigh, bar_index + EXTEND, lRangeLow,
          border_color=C_TEAL_B, bgcolor=C_TEAL, border_width=1,
          text=" mss ", text_color=color.new(color.white, 20), text_halign=text.align_left,
-         text_valign=text.align_top, text_size=size.small)
+         text_valign=text.align_top, text_size=size.normal)
     lRetestLn  := line.new(bar_index - minRangeBars, lRangeHigh, bar_index + EXTEND * 3, lRangeHigh,
          color=color.new(color.white, 40), style=line.style_dashed, width=1)
-    label.new(bar_index, high + bufferVal(high, 0.05), "mss",
-         color=color.new(color.black, 100), textcolor=color.new(color.white, 10),
-         style=label.style_none, size=size.small, yloc=yloc.abovebar)
-    // Cerc mic verde deasupra fiecareia din cele 2 lumanari bullish de confirmare
-    label.new(bar_index,     high[0], "●", color=color.new(color.black, 100),
+    label.new(bar_index, na, "mss",
+         color=color.new(#1A6B65, 10), textcolor=color.new(color.white, 0),
+         style=label.style_label_down, size=size.normal, yloc=yloc.abovebar)
+    label.new(bar_index,     na, "●", color=color.new(color.black, 100),
          textcolor=color.new(#00CC88, 0), style=label.style_none,
-         size=size.small, yloc=yloc.abovebar)
-    label.new(bar_index - 1, high[1], "●", color=color.new(color.black, 100),
+         size=size.normal, yloc=yloc.abovebar)
+    label.new(bar_index - 1, na, "●", color=color.new(color.black, 100),
          textcolor=color.new(#00CC88, 0), style=label.style_none,
-         size=size.small, yloc=yloc.abovebar)
+         size=size.normal, yloc=yloc.abovebar)
 
 if longState == 1 and not na(lRangeBox) and showBoxes
     box.set_right(lRangeBox, bar_index + EXTEND)
@@ -595,26 +591,26 @@ longCloseSignal  = strategy.position_size == 0 and strategy.position_size[1] > 0
 
 // ── ENTRY ─────────────────────────────────────
 plotshape(shortEntrySignal, title="Short Entry", style=shape.triangledown,
-     location=location.abovebar, color=color.new(#FF4444, 0), size=size.small,
+     location=location.abovebar, color=color.new(#FF4444, 0), size=size.normal,
      text="RT ↓\n-1", textcolor=color.new(#FF4444, 0))
 plotshape(longEntrySignal, title="Long Entry", style=shape.triangleup,
-     location=location.belowbar, color=color.new(#00CC88, 0), size=size.small,
+     location=location.belowbar, color=color.new(#00CC88, 0), size=size.normal,
      text="RT ↑\n+1", textcolor=color.new(#00CC88, 0))
 
 // ── TP1 (inchidere partiala 80%) ──────────────
 plotshape(shortTP1Signal, title="TP1 Short", style=shape.triangleup,
-     location=location.belowbar, color=color.new(color.green, 0), size=size.small,
+     location=location.belowbar, color=color.new(color.green, 0), size=size.normal,
      text="TP1\n+1", textcolor=color.new(color.green, 0))
 plotshape(longTP1Signal, title="TP1 Long", style=shape.triangledown,
-     location=location.abovebar, color=color.new(color.green, 0), size=size.small,
+     location=location.abovebar, color=color.new(color.green, 0), size=size.normal,
      text="TP1\n-1", textcolor=color.new(color.green, 0))
 
 // ── EXIT complet (runner BE/SL) ───────────────
 plotshape(shortCloseSignal, title="Exit Short", style=shape.triangleup,
-     location=location.belowbar, color=color.new(#CC44FF, 0), size=size.small,
+     location=location.belowbar, color=color.new(#CC44FF, 0), size=size.normal,
      text="Exit S\n+1", textcolor=color.new(#CC44FF, 0))
 plotshape(longCloseSignal, title="Exit Long", style=shape.triangledown,
-     location=location.abovebar, color=color.new(#CC44FF, 0), size=size.small,
+     location=location.abovebar, color=color.new(#CC44FF, 0), size=size.normal,
      text="Exit L\n-1", textcolor=color.new(#CC44FF, 0))
 
 // ─────────────────────────────────────────────
