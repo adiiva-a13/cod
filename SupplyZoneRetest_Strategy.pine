@@ -157,8 +157,9 @@ if tradeShorts
             sTrackCount := swingLR
 
         // Acumuleaza: track cel mai mic low si numar bare de la swing high
+        // Folosim low[2] ca lag - bara[1] si bara[0] sunt barele de MSS (break)
         if not na(sTrackHigh)
-            sTrackLow   := math.min(sTrackLow, low)
+            sTrackLow   := math.min(sTrackLow, low[2])
             sTrackCount += 1
 
         // MSS valid: prima lumanare (bar[1]) rupe sTrackLow
@@ -257,8 +258,9 @@ if tradeLongs
             lTrackCount := swingLR
 
         // Acumuleaza: track cel mai mare high si numar bare de la swing low
+        // Folosim high[2] ca lag - bara[1] si bara[0] sunt barele de MSS (break)
         if not na(lTrackLow)
-            lTrackHigh  := math.max(lTrackHigh, high)
+            lTrackHigh  := math.max(lTrackHigh, high[2])
             lTrackCount += 1
 
         // MSS valid: prima lumanare (bar[1]) rupe lTrackHigh
