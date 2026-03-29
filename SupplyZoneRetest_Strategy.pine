@@ -10,10 +10,10 @@ strategy("AdiivaMSS", overlay=true,
 // INPUTS
 // ─────────────────────────────────────────────
 grp1 = "Range Settings"
-minRangeBars    = input.int(5,    "Minim candele range (MSS valid)", minval=2, maxval=50, group=grp1,
-     tooltip="Prima lumanare face MSS. Range-ul trebuie sa aiba minim acest numar de candele in spate.")
-minSwingBars    = input.int(3,    "Minim candele bullish/bearish la swing high/low", minval=1, maxval=10, group=grp1,
-     tooltip="HIGH valid: minim N candele bullish consecutive inainte de high. LOW valid: minim N bearish.")
+swingLR         = input.int(2,    "Pivot lookback/lookahead (swing)", minval=1, maxval=5, group=grp1,
+     tooltip="Bare stanga/dreapta pentru confirmare pivot high/low. 2=default, mai mic=mai multe semnale.")
+minRangeBars    = input.int(3,    "Minim bare range dupa pivot",    minval=1, maxval=20, group=grp1,
+     tooltip="Minim bare acumulate dupa pivot inainte de a valida MSS-ul.")
 zoneBuffer      = input.float(0.1,"Buffer zona retest (%)",        minval=0.0, step=0.05, group=grp1)
 maxWaitBars     = input.int(100,  "Max bare asteptare retest",     minval=10,  maxval=500, group=grp1,
      tooltip="Daca retestul nu vine in acest numar de bare, MSS-ul se reseteaza si se cauta urmatorul.")
@@ -112,7 +112,6 @@ var bool  sTP1Hit        = false
 var float sTrackHigh     = na
 var float sTrackLow      = na
 var int   sTrackCount    = 0   // numar candele acumulate in range
-var int   sTrackHighBull = 0   // candele bullish consecutive la momentul high-ului
 var int   sWaitCount     = 0   // bare scurse de la MSS, pentru timeout
 
 // LONG state machine
@@ -128,7 +127,6 @@ var bool  lTP1Hit        = false
 var float lTrackHigh     = na
 var float lTrackLow      = na
 var int   lTrackCount    = 0
-var int   lTrackLowBear  = 0   // candele bearish consecutive la momentul low-ului
 var int   lWaitCount     = 0   // bare scurse de la MSS, pentru timeout
 
 // ─────────────────────────────────────────────
@@ -140,37 +138,34 @@ isBullish(i) => close[i] > open[i]
 bufferVal(price, pct) => price * pct / 100
 
 // ─────────────────────────────────────────────
+// PIVOT DETECTION (pivot confirmat cu swingLR bare stanga + dreapta)
+// ─────────────────────────────────────────────
+pivH = ta.pivothigh(high, swingLR, swingLR)
+pivL = ta.pivotlow(low,  swingLR, swingLR)
+
+// ─────────────────────────────────────────────
 // SHORT LOGIC
 // ─────────────────────────────────────────────
 if tradeShorts
 
     // STATE 0: Construieste range dinamic + detectie MSS SHORT
     if shortState == 0
-        // Daca bar[2] face un nou HIGH deasupra range-ului curent → range nou incepe de acolo
-        // (pastreaza doar ULTIMUL swing inainte de MSS, nu toata istoria)
-        if na(sTrackHigh) or high[2] > sTrackHigh
-            sTrackHigh  := high[2]
-            sTrackLow   := low[2]
-            sTrackCount := 1
-            // Numara candele bullish consecutive care au dus la acest high
-            cntBull = 0
-            for j = 2 to 60
-                if isBullish(j)
-                    cntBull += 1
-                else
-                    break
-            sTrackHighBull := cntBull
-        else
-            // high[2] <= sTrackHigh → suntem in range, extinde doar lowul
-            sTrackLow   := math.min(sTrackLow, low[2])
-            sTrackCount := sTrackCount + 1
+        // Pivot high confirmat → incepe/reseteaza range de la swing high
+        if not na(pivH) and (na(sTrackHigh) or pivH >= sTrackHigh)
+            sTrackHigh  := pivH
+            sTrackLow   := low[swingLR]
+            sTrackCount := swingLR
+
+        // Acumuleaza: track cel mai mic low si numar bare de la swing high
+        if not na(sTrackHigh)
+            sTrackLow   := math.min(sTrackLow, low)
+            sTrackCount += 1
 
         // MSS valid: prima lumanare (bar[1]) rupe sTrackLow
-        //            + range are minim minRangeBars candele in spate
-        //            + high-ul range-ului a fost format de minim minSwingBars candele bullish
+        //            + minim minRangeBars bare de la pivot high
         firstBarBreaks  = isBearish(1) and close[1] < sTrackLow
         secondBarBelow  = isBearish(0) and close[0] < sTrackLow
-        rangeValid      = sTrackCount >= minRangeBars and sTrackHighBull >= minSwingBars
+        rangeValid      = sTrackCount >= minRangeBars and not na(sTrackHigh)
 
         if firstBarBreaks and secondBarBelow and rangeValid
             sRangeHigh     := sTrackHigh
@@ -255,30 +250,22 @@ if tradeLongs
 
     // STATE 0: Construieste range dinamic + detectie MSS LONG
     if longState == 0
-        // Daca bar[2] face un nou LOW sub range-ul curent → range nou incepe de acolo
-        if na(lTrackLow) or low[2] < lTrackLow
-            lTrackHigh  := high[2]
-            lTrackLow   := low[2]
-            lTrackCount := 1
-            // Numara candele bearish consecutive care au dus la acest low
-            cntBear = 0
-            for j = 2 to 60
-                if isBearish(j)
-                    cntBear += 1
-                else
-                    break
-            lTrackLowBear := cntBear
-        else
-            // low[2] >= lTrackLow → suntem in range, extinde doar highul
-            lTrackHigh  := math.max(lTrackHigh, high[2])
-            lTrackCount := lTrackCount + 1
+        // Pivot low confirmat → incepe/reseteaza range de la swing low
+        if not na(pivL) and (na(lTrackLow) or pivL <= lTrackLow)
+            lTrackLow   := pivL
+            lTrackHigh  := high[swingLR]
+            lTrackCount := swingLR
+
+        // Acumuleaza: track cel mai mare high si numar bare de la swing low
+        if not na(lTrackLow)
+            lTrackHigh  := math.max(lTrackHigh, high)
+            lTrackCount += 1
 
         // MSS valid: prima lumanare (bar[1]) rupe lTrackHigh
-        //            + range are minim minRangeBars candele in spate
-        //            + low-ul range-ului a fost format de minim minSwingBars candele bearish
+        //            + minim minRangeBars bare de la pivot low
         firstBarBreaks = isBullish(1) and close[1] > lTrackHigh
         secondBarAbove = isBullish(0) and close[0] > lTrackHigh
-        rangeValidL    = lTrackCount >= minRangeBars and lTrackLowBear >= minSwingBars
+        rangeValidL    = lTrackCount >= minRangeBars and not na(lTrackLow)
 
         if firstBarBreaks and secondBarAbove and rangeValidL
             lRangeHigh    := lTrackHigh
@@ -632,7 +619,7 @@ var table t = table.new(position.top_right, 2, 11,
 
 if barstate.islast
     table.cell(t, 0, 0, "AdiivaMSS",    text_color=color.white,  text_size=size.small, bgcolor=color.new(color.navy, 30))
-    table.cell(t, 1, 0, "v4.0",         text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 30))
+    table.cell(t, 1, 0, "v4.4",         text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.navy, 30))
     table.cell(t, 0, 1, "SHORT state",  text_color=color.silver, text_size=size.tiny)
     table.cell(t, 1, 1, shortState == 0 ? "Watching" : shortState == 1 ? "MSS ✓ Wait Retest" : "IN TRADE",
          text_color=shortState == 0 ? color.gray : shortState == 1 ? color.orange : color.red, text_size=size.tiny)
