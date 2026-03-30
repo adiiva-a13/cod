@@ -307,12 +307,12 @@ if in_sess and day_trades < 2 and n_setups > 0
         f_100 = f_lvl(_dir, _hi, _lo, 1.000)
 
         // ENTRY 1: zona 0.75 - 0.786
+        // Conditie: pretul atinge zona (low/high) si inca nu a spart SL-ul (0.886)
         if not _e1 and day_trades < 2
-            if _dir == 1 and close[1] >= f_750 and low <= f_750 and close >= f_786
-                ep   = math.min(close, f_750)
+            if _dir == 1 and low <= f_750 and close > f_886
+                // LONG: pret a coborat in zona, nu a inchis sub 0.886
                 sl   = f_886 - buf_p
-                risk = math.abs(ep - sl)
-                tp   = ep + risk * rr_ratio
+                tp   = f_750 + math.abs(f_750 - sl) * rr_ratio
                 eid  = "E1L_" + str.tostring(idx)
                 exid = "E1Lx_" + str.tostring(idx)
                 strategy.entry(eid, strategy.long, limit=f_750, comment="E1 BUY")
@@ -320,15 +320,14 @@ if in_sess and day_trades < 2 and n_setups > 0
                 array.set(s_e1, idx, true)
                 day_trades := day_trades + 1
                 label.new(bar_index, low,
-                     "E1 BUY\n(" + str.tostring(ep, "#.##") + ")",
+                     "E1 BUY\n(" + str.tostring(f_750, "#.##") + ")",
                      color=color.new(color.lime, 10), textcolor=color.white,
                      style=label.style_label_up, size=size.small)
 
-            else if _dir == -1 and close[1] <= f_750 and high >= f_750 and close <= f_786
-                ep   = math.max(close, f_750)
+            else if _dir == -1 and high >= f_750 and close < f_886
+                // SHORT: pret a urcat in zona, nu a inchis peste 0.886
                 sl   = f_886 + buf_p
-                risk = math.abs(sl - ep)
-                tp   = ep - risk * rr_ratio
+                tp   = f_750 - math.abs(sl - f_750) * rr_ratio
                 eid  = "E1S_" + str.tostring(idx)
                 exid = "E1Sx_" + str.tostring(idx)
                 strategy.entry(eid, strategy.short, limit=f_750, comment="E1 SELL")
@@ -336,7 +335,7 @@ if in_sess and day_trades < 2 and n_setups > 0
                 array.set(s_e1, idx, true)
                 day_trades := day_trades + 1
                 label.new(bar_index, high,
-                     "E1 SELL\n(" + str.tostring(ep, "#.##") + ")",
+                     "E1 SELL\n(" + str.tostring(f_750, "#.##") + ")",
                      color=color.new(color.red, 10), textcolor=color.white,
                      style=label.style_label_down, size=size.small)
 
@@ -373,7 +372,24 @@ if in_sess and day_trades < 2 and n_setups > 0
                      style=label.style_label_down, size=size.small)
 
 // ============================================================
-// 12. BREAK EVEN la 1:1 - pentru toate tranzactiile deschise
+// 12. CURATARE SETUP dupa ce ambele entries sunt luate
+//     Dupa E1+E2 luate → setup dispare de pe grafic
+// ============================================================
+if array.size(s_hi) > 0
+    i = array.size(s_hi) - 1
+    while i >= 0
+        _e1_done = array.get(s_e1, i)
+        _e2_done = array.get(s_e2, i)
+        if _e1_done and _e2_done
+            array.remove(s_hi,  i)
+            array.remove(s_lo,  i)
+            array.remove(s_dir, i)
+            array.remove(s_e1,  i)
+            array.remove(s_e2,  i)
+        i := i - 1
+
+// ============================================================
+// 13. BREAK EVEN la 1:1 - pentru toate tranzactiile deschise
 // ============================================================
 n_open = strategy.opentrades
 if n_open > 0
