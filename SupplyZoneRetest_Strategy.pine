@@ -589,29 +589,29 @@ longTP1Signal    = strategy.position_size > 0 and strategy.position_size[1] > 0 
 shortCloseSignal = strategy.position_size == 0 and strategy.position_size[1] < 0
 longCloseSignal  = strategy.position_size == 0 and strategy.position_size[1] > 0
 
-// ── ENTRY ─────────────────────────────────────
-plotshape(shortEntrySignal, title="Short Entry", style=shape.triangledown,
-     location=location.abovebar, color=color.new(#FF4444, 0), size=size.normal,
-     text="RT ↓\n-1", textcolor=color.new(#FF4444, 0))
-plotshape(longEntrySignal, title="Long Entry", style=shape.triangleup,
-     location=location.belowbar, color=color.new(#00CC88, 0), size=size.normal,
-     text="RT ↑\n+1", textcolor=color.new(#00CC88, 0))
+// ── ENTRY la pretul exact (location.absolute = la nivelul entry) ──────────
+plotshape(shortEntrySignal ? sEntry : na, title="Short Entry", style=shape.triangledown,
+     location=location.absolute, color=color.new(#FF4444, 0), size=size.normal,
+     text="SELL", textcolor=color.white)
+plotshape(longEntrySignal ? lEntry : na, title="Long Entry", style=shape.triangleup,
+     location=location.absolute, color=color.new(#00CC88, 0), size=size.normal,
+     text="BUY", textcolor=color.white)
 
 // ── TP1 (inchidere partiala 80%) ──────────────
 plotshape(shortTP1Signal, title="TP1 Short", style=shape.triangleup,
-     location=location.belowbar, color=color.new(color.green, 0), size=size.normal,
-     text="TP1\n+1", textcolor=color.new(color.green, 0))
+     location=location.belowbar, color=color.new(color.green, 0), size=size.small,
+     text="TP1", textcolor=color.new(color.green, 0))
 plotshape(longTP1Signal, title="TP1 Long", style=shape.triangledown,
-     location=location.abovebar, color=color.new(color.green, 0), size=size.normal,
-     text="TP1\n-1", textcolor=color.new(color.green, 0))
+     location=location.abovebar, color=color.new(color.green, 0), size=size.small,
+     text="TP1", textcolor=color.new(color.green, 0))
 
 // ── EXIT complet (runner BE/SL) ───────────────
-plotshape(shortCloseSignal, title="Exit Short", style=shape.triangleup,
-     location=location.belowbar, color=color.new(#CC44FF, 0), size=size.normal,
-     text="Exit S\n+1", textcolor=color.new(#CC44FF, 0))
-plotshape(longCloseSignal, title="Exit Long", style=shape.triangledown,
-     location=location.abovebar, color=color.new(#CC44FF, 0), size=size.normal,
-     text="Exit L\n-1", textcolor=color.new(#CC44FF, 0))
+plotshape(shortCloseSignal, title="Exit Short", style=shape.xcross,
+     location=location.abovebar, color=color.new(#CC44FF, 0), size=size.small,
+     text="Exit", textcolor=color.new(#CC44FF, 0))
+plotshape(longCloseSignal, title="Exit Long", style=shape.xcross,
+     location=location.belowbar, color=color.new(#CC44FF, 0), size=size.small,
+     text="Exit", textcolor=color.new(#CC44FF, 0))
 
 // ─────────────────────────────────────────────
 // INFO TABLE
