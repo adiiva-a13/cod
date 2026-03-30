@@ -6,13 +6,14 @@
 //    MSS Bullish : close > pivot_high → BUY setup
 //    MSS Bearish : close < pivot_low  → SELL setup
 //    Fibonacci   : FIXED pe swing-ul MSS (nu se muta)
-//    Nivele      : 0.0 / 0.5 / 0.75 / 0.786 / 0.886 / 1.0 / 1.123
-//    Entry 1     : zona 0.75-0.786  |  SL dincolo de 0.886
-//    Entry 2     : nivel 0.886      |  SL dincolo de 1.0
-//    TP          : RR 1:2  |  BE automat la 1:1
-//    Sesiune     : Londra -> NY
-//    Max         : 2 trade-uri/zi
-//    Setups      : multiple simultane, fiecare fix pana e atins/invalidat
+//    Nivele      : 0.0 / 0.5 / 0.75 / 0.886 / 1.0 / 1.123
+//    Entry 1     : nivel 0.75   |  SL dincolo de 0.886
+//    Entry 2     : nivel 0.886  |  SL dincolo de 1.0  (doar daca E1 SL)
+//    TP          : RR 1:2
+//    Sesiune     : Londra -> NY  |  Max 2 trade-uri/zi
+//    Setups      : max 2 active simultan, fiecare fix pana e atins/invalidat
+//    E1 TP       : setup dispare imediat
+//    E1 SL       : E2 se activeaza la 0.886
 // ============================================================
 strategy(
   title             = "AdiivaGold",
@@ -33,33 +34,31 @@ var string G_SWG  = "Swing / MSS"
 var string G_SES  = "Sesiune"
 var string G_VIZ  = "Vizualizare"
 
-rr_ratio   = input.float(2.0,   "RR Ratio",                group=G_RISK, minval=0.5, step=0.5)
-fib_e1_bot = input.float(0.750, "Entry 1 - nivel inferior", group=G_FIB,  step=0.001)
-fib_e1_top = input.float(0.786, "Entry 1 - nivel superior", group=G_FIB,  step=0.001)
-fib_e2     = input.float(0.886, "Entry 2 - nivel",          group=G_FIB,  step=0.001)
-sl_buf_tck = input.int(20,      "Buffer SL (ticks)",         group=G_FIB,  minval=1)
+rr_ratio   = input.float(2.0,   "RR Ratio",             group=G_RISK, minval=0.5, step=0.5)
+fib_e1     = input.float(0.750, "Entry 1 (0.75)",        group=G_FIB,  step=0.001)
+fib_e2     = input.float(0.886, "Entry 2 (0.886)",       group=G_FIB,  step=0.001)
+sl_buf_tck = input.int(20,      "Buffer SL (ticks)",     group=G_FIB,  minval=1)
 
-piv_bars   = input.int(5,     "Pivot Bars",             group=G_SWG, minval=2, maxval=20)
-min_sw_pct = input.float(1.0, "Range minim swing (%)",  group=G_SWG, minval=0.1, step=0.1)
+piv_bars   = input.int(5,     "Pivot Bars",              group=G_SWG, minval=2, maxval=20)
+min_sw_pct = input.float(1.0, "Range minim swing (%)",   group=G_SWG, minval=0.1, step=0.1)
+mss_cool   = input.int(10,    "Cooldown MSS (bare)",     group=G_SWG, minval=3,   maxval=50)
 
 sess_h_s = input.int(8,  "Start ora (Londra local)", group=G_SES, minval=0, maxval=23)
 sess_m_s = input.int(0,  "Start minut",              group=G_SES, minval=0, maxval=59)
 sess_h_e = input.int(21, "Sfarsit ora UTC (NY)",     group=G_SES, minval=0, maxval=23)
 sess_m_e = input.int(0,  "Sfarsit minut UTC",        group=G_SES, minval=0, maxval=59)
 
-show_fib_05  = input.bool(true, "Arata nivel 0.5",  group=G_VIZ)
-show_aoi_box = input.bool(true, "Arata AOI box",    group=G_VIZ)
+show_fib_05  = input.bool(true,  "Arata nivel 0.5",  group=G_VIZ)
+show_aoi_box = input.bool(true,  "Arata AOI box",    group=G_VIZ)
 
 // ============================================================
-// 2. HELPER - calcul nivel Fibonacci
-//    dir= 1: 0.0=HIGH, 1.0=LOW  (retrasare in jos pentru LONG)
-//    dir=-1: 0.0=HIGH, 1.0=LOW  (bounce in sus pentru SHORT)
+// 2. HELPER
 // ============================================================
 f_lvl(dir, hi, lo, lvl) =>
     dir == 1 ? hi - lvl * (hi - lo) : lo + lvl * (hi - lo)
 
 // ============================================================
-// 3. DST AUTO (EU: ultima duminica martie -> ultima duminica oct)
+// 3. DST AUTO (EU)
 // ============================================================
 _ts31m     = timestamp(year, 3, 31, 12, 0)
 _dow31m    = dayofweek(_ts31m)
@@ -119,21 +118,22 @@ if not na(pl_raw)
         array.pop(a_pl_b)
 
 // ============================================================
-// 7. SETUP ARRAYS (multiple setups active simultan)
-//    Fiecare setup = (hi, lo, dir) FIXAT la momentul MSS
-//    e1/e2 = flags entry luate
+// 7. SETUP ARRAYS  (max 2 active simultan)
 // ============================================================
-MAX_SETUPS = 5
+MAX_SETUPS = 2
 
-var float[]  s_hi    = array.new_float(0)   // swing HIGH (fix)
-var float[]  s_lo    = array.new_float(0)   // swing LOW  (fix)
-var int[]    s_dir   = array.new_int(0)     // 1=bull, -1=bear
-var bool[]   s_e1    = array.new_bool(0)    // E1 luat?
-var bool[]   s_e2    = array.new_bool(0)    // E2 luat?
-var string[] s_e1id  = array.new_string(0)  // entry_id al E1 (pt detectie TP)
-var bool[]   s_del   = array.new_bool(0)    // flagged pentru stergere (E1 TP)
+var float[]  s_hi   = array.new_float(0)
+var float[]  s_lo   = array.new_float(0)
+var int[]    s_dir  = array.new_int(0)
+var bool[]   s_e1   = array.new_bool(0)
+var bool[]   s_e2   = array.new_bool(0)
+var string[] s_e1id = array.new_string(0)
+var bool[]   s_del  = array.new_bool(0)
 
-// Reset zilnic
+// Cooldown - bara la care s-a detectat ultimul MSS (bull si bear separat)
+var int last_bull_bar = -999
+var int last_bear_bar = -999
+
 if is_new_day
     array.clear(s_hi)
     array.clear(s_lo)
@@ -142,31 +142,31 @@ if is_new_day
     array.clear(s_e2)
     array.clear(s_e1id)
     array.clear(s_del)
-    day_trades := 0
+    day_trades    := 0
+    last_bull_bar := -999
+    last_bear_bar := -999
 
 buf_p = sl_buf_tck * syminfo.mintick
 
 // ============================================================
-// 8. MSS DETECTION + adaugare setup
+// 8. MSS DETECTION
 // ============================================================
-// Verificam daca un setup identic exista deja (evitam duplicate)
 setup_exists(hi, lo, dir) =>
     found = false
     n = array.size(s_hi)
     if n > 0
         for i = 0 to n - 1
-            if math.abs(array.get(s_hi, i) - hi) < syminfo.mintick and
-               math.abs(array.get(s_lo, i) - lo) < syminfo.mintick and
+            if math.abs(array.get(s_hi, i) - hi) < syminfo.mintick * 10 and
+               math.abs(array.get(s_lo, i) - lo) < syminfo.mintick * 10 and
                array.get(s_dir, i) == dir
                 found := true
                 break
     found
 
-// MSS Bullish: close > pivot high → Low dinaintea acelui high = ancora FIXA
 detect_bull_mss() =>
-    found    = false
-    new_hi   = float(na)
-    new_lo   = float(na)
+    found  = false
+    new_hi = float(na)
+    new_lo = float(na)
     n_ph = array.size(a_ph_p)
     n_pl = array.size(a_pl_p)
     if n_ph > 0 and n_pl > 0
@@ -180,8 +180,7 @@ detect_bull_mss() =>
                     pl  = array.get(a_pl_p, j)
                     plb = array.get(a_pl_b, j)
                     if plb < phb and ph > pl
-                        rng = (ph - pl) / pl
-                        if rng >= min_sw_pct / 100.0
+                        if (ph - pl) / pl >= min_sw_pct / 100.0
                             if not setup_exists(ph, pl, 1)
                                 new_hi := ph
                                 new_lo := pl
@@ -191,11 +190,10 @@ detect_bull_mss() =>
                     break
     [found, new_hi, new_lo]
 
-// MSS Bearish: close < pivot low → High dinaintea acelui low = ancora FIXA
 detect_bear_mss() =>
-    found    = false
-    new_hi   = float(na)
-    new_lo   = float(na)
+    found  = false
+    new_hi = float(na)
+    new_lo = float(na)
     n_ph = array.size(a_ph_p)
     n_pl = array.size(a_pl_p)
     if n_ph > 0 and n_pl > 0
@@ -209,8 +207,7 @@ detect_bear_mss() =>
                     ph  = array.get(a_ph_p, j)
                     phb = array.get(a_ph_b, j)
                     if phb < plb and ph > pl
-                        rng = (ph - pl) / pl
-                        if rng >= min_sw_pct / 100.0
+                        if (ph - pl) / pl >= min_sw_pct / 100.0
                             if not setup_exists(ph, pl, -1)
                                 new_hi := ph
                                 new_lo := pl
@@ -220,8 +217,8 @@ detect_bear_mss() =>
                     break
     [found, new_hi, new_lo]
 
-// Detectare si adaugare setup-uri noi
-if array.size(s_hi) < MAX_SETUPS
+// Detectare cu cooldown (evita CHoCH spam)
+if array.size(s_hi) < MAX_SETUPS and (bar_index - last_bull_bar) >= mss_cool
     [bull_ok, bull_hi, bull_lo] = detect_bull_mss()
     if bull_ok
         array.push(s_hi,   bull_hi)
@@ -231,13 +228,13 @@ if array.size(s_hi) < MAX_SETUPS
         array.push(s_e2,   false)
         array.push(s_e1id, "")
         array.push(s_del,  false)
+        last_bull_bar := bar_index
         label.new(bar_index, low,
-             "CHoCH▲\n(" + str.tostring(close, "#.##") + ")",
-             color      = color.new(color.teal, 10),
-             textcolor  = color.white,
-             style      = label.style_label_up,
-             size       = size.small)
+             "CHoCH▲\n" + str.tostring(close, "#.##"),
+             color=color.new(color.teal, 10), textcolor=color.white,
+             style=label.style_label_up, size=size.small)
 
+if array.size(s_hi) < MAX_SETUPS and (bar_index - last_bear_bar) >= mss_cool
     [bear_ok, bear_hi, bear_lo] = detect_bear_mss()
     if bear_ok
         array.push(s_hi,   bear_hi)
@@ -247,17 +244,14 @@ if array.size(s_hi) < MAX_SETUPS
         array.push(s_e2,   false)
         array.push(s_e1id, "")
         array.push(s_del,  false)
+        last_bear_bar := bar_index
         label.new(bar_index, high,
-             "CHoCH▼\n(" + str.tostring(close, "#.##") + ")",
-             color      = color.new(color.red, 10),
-             textcolor  = color.white,
-             style      = label.style_label_down,
-             size       = size.small)
+             "CHoCH▼\n" + str.tostring(close, "#.##"),
+             color=color.new(color.red, 10), textcolor=color.white,
+             style=label.style_label_down, size=size.small)
 
 // ============================================================
 // 9. INVALIDARE SETUP-URI
-//    Bull: close < s_lo (rupe ancora fixa)
-//    Bear: close > s_hi (rupe ancora fixa)
 // ============================================================
 if array.size(s_hi) > 0
     i = array.size(s_hi) - 1
@@ -265,7 +259,7 @@ if array.size(s_hi) > 0
         _hi  = array.get(s_hi,  i)
         _lo  = array.get(s_lo,  i)
         _dir = array.get(s_dir, i)
-        invalid = (_dir == 1 and close < _lo - buf_p) or
+        invalid = (_dir == 1  and close < _lo - buf_p) or
                   (_dir == -1 and close > _hi + buf_p)
         if invalid
             array.remove(s_hi,   i)
@@ -278,7 +272,7 @@ if array.size(s_hi) > 0
         i := i - 1
 
 // ============================================================
-// 10. DETECTIE INCHIDERE TRADE (PnL label)
+// 10. DETECTIE INCHIDERE TRADE
 // ============================================================
 var int prev_closed = 0
 if strategy.closedtrades > prev_closed
@@ -290,11 +284,9 @@ if strategy.closedtrades > prev_closed
         _pnl   = (_prof >= 0 ? "TP " : "SL ") + str.tostring(_exp, "#.##")
         _clr   = _prof >= 0 ? color.new(color.lime, 10) : color.new(color.red, 10)
         _sty   = _dir_c == 1 ? label.style_label_down : label.style_label_up
-        _y     = _dir_c == 1 ? high : low
-        label.new(bar_index, _y, _pnl,
-                  color=_clr, textcolor=color.white,
-                  style=_sty, size=size.small)
-        // E1 inchis cu TP → flagam setup-ul: nu mai e nevoie de E2, setup dispare
+        label.new(bar_index, _dir_c == 1 ? high : low, _pnl,
+                  color=_clr, textcolor=color.white, style=_sty, size=size.small)
+        // E1 TP → setup flagat pentru stergere (no E2)
         if _prof > 0
             _ns = array.size(s_e1id)
             if _ns > 0
@@ -305,7 +297,7 @@ if strategy.closedtrades > prev_closed
     prev_closed := strategy.closedtrades
 
 // ============================================================
-// 11. ENTRY LOGIC - scanam toate setup-urile active
+// 11. ENTRY LOGIC
 // ============================================================
 n_setups = array.size(s_hi)
 
@@ -320,24 +312,20 @@ if in_sess and day_trades < 2 and n_setups > 0
         _e1  = array.get(s_e1,  idx)
         _e2  = array.get(s_e2,  idx)
 
-        f_750 = f_lvl(_dir, _hi, _lo, fib_e1_bot)
-        f_786 = f_lvl(_dir, _hi, _lo, fib_e1_top)
+        f_750 = f_lvl(_dir, _hi, _lo, fib_e1)
         f_886 = f_lvl(_dir, _hi, _lo, fib_e2)
         f_100 = f_lvl(_dir, _hi, _lo, 1.000)
 
-        // ENTRY 1: zona 0.75 - 0.786
-        // Conditie: pretul atinge zona (low/high) si inca nu a spart SL-ul (0.886)
+        // ENTRY 1: nivel 0.75
         if not _e1 and day_trades < 2
             if _dir == 1 and low <= f_750 and close > f_886
-                // LONG: pret a coborat in zona, nu a inchis sub 0.886
-                sl   = f_886 - buf_p
-                tp   = f_750 + math.abs(f_750 - sl) * rr_ratio
-                eid  = "E1L_" + str.tostring(idx)
-                exid = "E1Lx_" + str.tostring(idx)
-                strategy.entry(eid, strategy.long, limit=f_750, comment="E1 BUY")
-                strategy.exit(exid, eid, stop=sl, limit=tp)
+                sl  = f_886 - buf_p
+                tp  = f_750 + math.abs(f_750 - sl) * rr_ratio
+                eid = "E1L_" + str.tostring(idx)
+                strategy.entry(eid, strategy.long,  limit=f_750, comment="E1 BUY")
+                strategy.exit("E1Lx_"+str.tostring(idx), eid, stop=sl, limit=tp)
                 array.set(s_e1,   idx, true)
-                array.set(s_e1id, idx, eid)   // stocam ID pentru detectie TP
+                array.set(s_e1id, idx, eid)
                 day_trades := day_trades + 1
                 label.new(bar_index, low,
                      "E1 BUY\n(" + str.tostring(f_750, "#.##") + ")",
@@ -345,32 +333,27 @@ if in_sess and day_trades < 2 and n_setups > 0
                      style=label.style_label_up, size=size.small)
 
             else if _dir == -1 and high >= f_750 and close < f_886
-                // SHORT: pret a urcat in zona, nu a inchis peste 0.886
-                sl   = f_886 + buf_p
-                tp   = f_750 - math.abs(sl - f_750) * rr_ratio
-                eid  = "E1S_" + str.tostring(idx)
-                exid = "E1Sx_" + str.tostring(idx)
+                sl  = f_886 + buf_p
+                tp  = f_750 - math.abs(sl - f_750) * rr_ratio
+                eid = "E1S_" + str.tostring(idx)
                 strategy.entry(eid, strategy.short, limit=f_750, comment="E1 SELL")
-                strategy.exit(exid, eid, stop=sl, limit=tp)
+                strategy.exit("E1Sx_"+str.tostring(idx), eid, stop=sl, limit=tp)
                 array.set(s_e1,   idx, true)
-                array.set(s_e1id, idx, eid)   // stocam ID pentru detectie TP
+                array.set(s_e1id, idx, eid)
                 day_trades := day_trades + 1
                 label.new(bar_index, high,
                      "E1 SELL\n(" + str.tostring(f_750, "#.##") + ")",
                      color=color.new(color.red, 10), textcolor=color.white,
                      style=label.style_label_down, size=size.small)
 
-        // ENTRY 2: nivel 0.886 — DOAR daca E1 a fost deja luat (e1_done)
-        // Daca E1 a lovit SL, pretul continua spre 0.886 → E2 se activeaza
+        // ENTRY 2: nivel 0.886 — DOAR daca E1 a fost luat si merge spre SL
         if not _e2 and _e1 and day_trades < 2
             if _dir == 1 and close <= f_886 and close > f_100
-                sl   = f_100 - buf_p
-                risk = math.abs(close - sl)
-                tp   = close + risk * rr_ratio
-                eid  = "E2L_" + str.tostring(idx)
-                exid = "E2Lx_" + str.tostring(idx)
-                strategy.entry(eid, strategy.long, comment="E2 BUY")
-                strategy.exit(exid, eid, stop=sl, limit=tp)
+                sl  = f_100 - buf_p
+                tp  = close + math.abs(close - sl) * rr_ratio
+                eid = "E2L_" + str.tostring(idx)
+                strategy.entry(eid, strategy.long,  comment="E2 BUY")
+                strategy.exit("E2Lx_"+str.tostring(idx), eid, stop=sl, limit=tp)
                 array.set(s_e2, idx, true)
                 day_trades := day_trades + 1
                 label.new(bar_index, low,
@@ -379,13 +362,11 @@ if in_sess and day_trades < 2 and n_setups > 0
                      style=label.style_label_up, size=size.small)
 
             else if _dir == -1 and close >= f_886 and close < f_100
-                sl   = f_100 + buf_p
-                risk = math.abs(sl - close)
-                tp   = close - risk * rr_ratio
-                eid  = "E2S_" + str.tostring(idx)
-                exid = "E2Sx_" + str.tostring(idx)
+                sl  = f_100 + buf_p
+                tp  = close - math.abs(sl - close) * rr_ratio
+                eid = "E2S_" + str.tostring(idx)
                 strategy.entry(eid, strategy.short, comment="E2 SELL")
-                strategy.exit(exid, eid, stop=sl, limit=tp)
+                strategy.exit("E2Sx_"+str.tostring(idx), eid, stop=sl, limit=tp)
                 array.set(s_e2, idx, true)
                 day_trades := day_trades + 1
                 label.new(bar_index, high,
@@ -394,17 +375,16 @@ if in_sess and day_trades < 2 and n_setups > 0
                      style=label.style_label_down, size=size.small)
 
 // ============================================================
-// 12. CURATARE SETUP - 3 cazuri de stergere:
-//     a) E1 TP atins (s_del=true) → dispare imediat, fara E2
-//     b) E1 luat + E2 luat (SL sau TP) → ambele done → dispare
-//     c) Invalidare (sectiunea 9) → deja sterse
+// 12. CURATARE SETUP
+//     a) E1 TP → dispare imediat
+//     b) E1 + E2 ambele luate → dispare
 // ============================================================
 if array.size(s_hi) > 0
     i = array.size(s_hi) - 1
     while i >= 0
-        _del  = array.get(s_del, i)
-        _e1d  = array.get(s_e1,  i)
-        _e2d  = array.get(s_e2,  i)
+        _del = array.get(s_del, i)
+        _e1d = array.get(s_e1,  i)
+        _e2d = array.get(s_e2,  i)
         if _del or (_e1d and _e2d)
             array.remove(s_hi,   i)
             array.remove(s_lo,   i)
@@ -416,39 +396,14 @@ if array.size(s_hi) > 0
         i := i - 1
 
 // ============================================================
-// 13. BREAK EVEN la 1:1 - pentru toate tranzactiile deschise
-// ============================================================
-n_open = strategy.opentrades
-if n_open > 0
-    for i = 0 to n_open - 1
-        _eid   = strategy.opentrades.entry_id(i)
-        _ep    = strategy.opentrades.entry_price(i)
-        _sz    = strategy.opentrades.size(i)
-        _dir_o = _sz > 0 ? 1 : -1
-
-        // Calculam SL curent din exit-ul asociat
-        // BE: mutam SL la entry cand pretul atinge 1:1
-        // Folosim o abordare simpla: daca tradeul e in profit de risk * 1
-        // Aceasta necesita stocarea SL-ului initial per trade
-        // Pine Script nu expune SL din strategy.exit direct,
-        // asa ca folosim o conventie: BE se aplica la miscarea de 1R
-        // unde R = distanta de la entry la primul SL rezonabil
-
-// ============================================================
-// 13. VIZUALIZARE - Fibonacci pentru fiecare setup activ
-//     Linii si labels recreate pe fiecare bara (setups sunt fixe)
+// 13. VIZUALIZARE
 // ============================================================
 bgcolor(in_sess ? color.new(color.blue, 93) : na, title="Sesiune activa")
 
-// Stergem liniile vechi de vizualizare si redesenam
-// (folosim o metoda de tip "draw on change" cu linii persistente)
-// Pentru ca setups pot fi max 5 si fiecare are 7 linii = 35 linii max
-
-var line[] viz_lines  = array.new_line(0)
+var line[]  viz_lines  = array.new_line(0)
 var label[] viz_labels = array.new_label(0)
-var box[]  viz_boxes  = array.new_box(0)
+var box[]   viz_boxes  = array.new_box(0)
 
-// Stergem toate liniile/labelele/box-urile de vizualizare din bara precedenta
 if array.size(viz_lines) > 0
     for i = 0 to array.size(viz_lines) - 1
         line.delete(array.get(viz_lines, i))
@@ -464,7 +419,6 @@ if array.size(viz_boxes) > 0
         box.delete(array.get(viz_boxes, i))
 array.clear(viz_boxes)
 
-// Redesenam pentru fiecare setup activ
 n_draw = array.size(s_hi)
 if n_draw > 0
     for idx = 0 to n_draw - 1
@@ -472,12 +426,11 @@ if n_draw > 0
         _lo  = array.get(s_lo,  idx)
         _dir = array.get(s_dir, idx)
 
-        f_000 = _hi                                      // 0.0
+        f_000 = _hi
         f_050 = f_lvl(_dir, _hi, _lo, 0.500)
-        f_750 = f_lvl(_dir, _hi, _lo, fib_e1_bot)
-        f_786 = f_lvl(_dir, _hi, _lo, fib_e1_top)
+        f_750 = f_lvl(_dir, _hi, _lo, fib_e1)
         f_886 = f_lvl(_dir, _hi, _lo, fib_e2)
-        f_100 = _lo                                      // 1.0
+        f_100 = _lo
         f_112 = f_lvl(_dir, _hi, _lo, 1.123)
 
         look  = 60
@@ -485,119 +438,65 @@ if n_draw > 0
 
         _c_hi  = _dir == 1 ? color.new(color.teal, 30) : color.new(color.red, 30)
         _c_lo  = _dir == 1 ? color.new(color.red, 30)  : color.new(color.teal, 30)
-        _c_box = _dir == 1 ? color.new(color.teal, 82) : color.new(color.red, 82)
-        _c_brd = _dir == 1 ? color.new(color.teal, 45) : color.new(color.red, 45)
-        _c_txt = _dir == 1 ? color.teal                : color.red
+        _c_box = _dir == 1 ? color.new(color.teal, 80) : color.new(color.red, 80)
+        _c_brd = _dir == 1 ? color.new(color.teal, 40) : color.new(color.red, 40)
 
-        // Linii swing Hi/Lo
-        array.push(viz_lines, line.new(bar_index - look, _hi, ext_r, _hi,
-             extend=extend.none, color=_c_hi, style=line.style_solid, width=2))
-        array.push(viz_lines, line.new(bar_index - look, _lo, ext_r, _lo,
-             extend=extend.none, color=_c_lo, style=line.style_solid, width=2))
+        // Swing Hi / Lo
+        array.push(viz_lines, line.new(bar_index-look, _hi,   ext_r, _hi,   extend=extend.none, color=_c_hi,                       style=line.style_solid,  width=2))
+        array.push(viz_lines, line.new(bar_index-look, _lo,   ext_r, _lo,   extend=extend.none, color=_c_lo,                       style=line.style_solid,  width=2))
 
-        // Fib 0.5
+        // 0.5
         if show_fib_05
-            array.push(viz_lines, line.new(bar_index - look, f_050, ext_r, f_050,
-                 extend=extend.none, color=color.new(color.gray, 55),
-                 style=line.style_dotted, width=1))
-            array.push(viz_labels, label.new(ext_r, f_050,
-                 "0.5 (" + str.tostring(f_050, "#.####") + ")",
-                 color=color.new(color.gray, 85), textcolor=color.new(color.gray, 20),
-                 style=label.style_label_left, size=size.tiny))
+            array.push(viz_lines,  line.new(bar_index-look, f_050, ext_r, f_050, extend=extend.none, color=color.new(color.gray,55), style=line.style_dotted, width=1))
+            array.push(viz_labels, label.new(ext_r, f_050, "0.5 (" +str.tostring(f_050,"#.##")+")", color=color.new(color.gray,85), textcolor=color.new(color.gray,30), style=label.style_label_left, size=size.tiny))
 
-        // Fib 0.75
-        array.push(viz_lines, line.new(bar_index - look, f_750, ext_r, f_750,
-             extend=extend.none, color=color.new(color.orange, 25),
-             style=line.style_dashed, width=1))
+        // 0.75 - entry
+        array.push(viz_lines, line.new(bar_index-look, f_750, ext_r, f_750, extend=extend.none, color=color.orange, style=line.style_dashed, width=2))
 
-        // Fib 0.786
-        array.push(viz_lines, line.new(bar_index - look, f_786, ext_r, f_786,
-             extend=extend.none, color=color.orange,
-             style=line.style_dashed, width=2))
+        // 0.886 - SL E1
+        array.push(viz_lines, line.new(bar_index-look, f_886, ext_r, f_886, extend=extend.none, color=color.new(color.red, 15), style=line.style_dashed, width=2))
 
-        // Fib 0.886 (SL E1)
-        array.push(viz_lines, line.new(bar_index - look, f_886, ext_r, f_886,
-             extend=extend.none, color=color.new(color.red, 15),
-             style=line.style_dashed, width=2))
+        // 1.0
+        array.push(viz_lines, line.new(bar_index-look, f_100, ext_r, f_100, extend=extend.none, color=color.new(color.gray, 40), style=line.style_dotted, width=1))
 
-        // Fib 1.0
-        array.push(viz_lines, line.new(bar_index - look, f_100, ext_r, f_100,
-             extend=extend.none, color=color.new(color.gray, 40),
-             style=line.style_dotted, width=1))
+        // 1.123 - SL E2
+        array.push(viz_lines, line.new(bar_index-look, f_112, ext_r, f_112, extend=extend.none, color=color.new(color.red, 55),  style=line.style_dotted, width=1))
 
-        // Fib 1.123 (SL E2)
-        array.push(viz_lines, line.new(bar_index - look, f_112, ext_r, f_112,
-             extend=extend.none, color=color.new(color.red, 55),
-             style=line.style_dotted, width=1))
-
-        // AOI Box (zona entry 0.75-0.786)
+        // AOI box: de la 0.0 pana la 0.886 (zona de interes completa)
         if show_aoi_box
-            _z_top = math.max(f_750, f_786)
-            _z_bot = math.min(f_750, f_786)
-            array.push(viz_boxes, box.new(bar_index - look, _z_top, ext_r, _z_bot,
+            _z_top = _dir == 1 ? _hi   : f_886
+            _z_bot = _dir == 1 ? f_886 : _lo
+            array.push(viz_boxes, box.new(bar_index-look, _z_top, ext_r, _z_bot,
                  bgcolor=_c_box, border_color=_c_brd, border_width=1))
 
-        // Labels cu pret in paranteza
-        array.push(viz_labels, label.new(ext_r, f_000,
-             "0.0 (" + str.tostring(f_000, "#.####") + ")",
-             color=color.new(_c_hi, 80), textcolor=_c_hi,
-             style=label.style_label_left, size=size.tiny))
-
-        array.push(viz_labels, label.new(ext_r, f_750,
-             "0.75 (" + str.tostring(f_750, "#.####") + ")",
-             color=color.new(color.orange, 85), textcolor=color.orange,
-             style=label.style_label_left, size=size.tiny))
-
-        array.push(viz_labels, label.new(ext_r, f_786,
-             "0.786 (" + str.tostring(f_786, "#.####") + ")",
-             color=color.new(color.orange, 85), textcolor=color.orange,
-             style=label.style_label_left, size=size.tiny))
-
-        array.push(viz_labels, label.new(ext_r, f_886,
-             "0.886 SL E1 (" + str.tostring(f_886, "#.####") + ")",
-             color=color.new(color.red, 85), textcolor=color.red,
-             style=label.style_label_left, size=size.tiny))
-
-        array.push(viz_labels, label.new(ext_r, f_100,
-             "1.0 (" + str.tostring(f_100, "#.####") + ")",
-             color=color.new(_c_lo, 80), textcolor=_c_lo,
-             style=label.style_label_left, size=size.tiny))
-
-        array.push(viz_labels, label.new(ext_r, f_112,
-             "1.123 SL E2 (" + str.tostring(f_112, "#.####") + ")",
-             color=color.new(color.red, 90), textcolor=color.new(color.red, 30),
-             style=label.style_label_left, size=size.tiny))
+        // Labels
+        array.push(viz_labels, label.new(ext_r, f_000, "0.0 ("         +str.tostring(f_000,"#.##")+")",   color=color.new(_c_hi,80),        textcolor=_c_hi,                   style=label.style_label_left, size=size.tiny))
+        array.push(viz_labels, label.new(ext_r, f_750, "0.75 ("        +str.tostring(f_750,"#.##")+")",   color=color.new(color.orange,85), textcolor=color.orange,            style=label.style_label_left, size=size.tiny))
+        array.push(viz_labels, label.new(ext_r, f_886, "0.886 SL ("    +str.tostring(f_886,"#.##")+")",   color=color.new(color.red,85),    textcolor=color.red,               style=label.style_label_left, size=size.tiny))
+        array.push(viz_labels, label.new(ext_r, f_100, "1.0 ("         +str.tostring(f_100,"#.##")+")",   color=color.new(_c_lo,80),        textcolor=_c_lo,                   style=label.style_label_left, size=size.tiny))
+        array.push(viz_labels, label.new(ext_r, f_112, "1.123 SL E2 (" +str.tostring(f_112,"#.##")+")",  color=color.new(color.red,90),    textcolor=color.new(color.red,30), style=label.style_label_left, size=size.tiny))
 
 // ============================================================
 // 14. STATUS TABLE
 // ============================================================
 var table tbl = table.new(position.top_right, 1, 5,
-     bgcolor      = color.new(color.black, 75),
-     border_color = color.new(color.gray, 60),
-     border_width = 1)
+     bgcolor=color.new(color.black, 75), border_color=color.new(color.gray,60), border_width=1)
 
-_n_act    = array.size(s_hi)
-_mss_bull = 0
-_mss_bear = 0
+_n_act = array.size(s_hi)
+_bull  = 0
+_bear  = 0
 if _n_act > 0
     for i = 0 to _n_act - 1
         if array.get(s_dir, i) == 1
-            _mss_bull := _mss_bull + 1
+            _bull := _bull + 1
         else
-            _mss_bear := _mss_bear + 1
+            _bear := _bear + 1
 
-mss_txt = _n_act == 0 ? "MSS: ASTEPTAM" :
-     "MSS ▲:" + str.tostring(_mss_bull) + "  ▼:" + str.tostring(_mss_bear)
-mss_clr = _n_act == 0 ? color.gray : _mss_bull > _mss_bear ? color.teal : color.red
+mss_txt = _n_act == 0 ? "MSS: ASTEPTAM" : "MSS ▲:" + str.tostring(_bull) + "  ▼:" + str.tostring(_bear)
+mss_clr = _n_act == 0 ? color.gray : _bull > _bear ? color.teal : color.red
 
-sess_txt  = in_sess ? "Sesiune activa" : "Afara sesiunii"
-setup_txt = str.tostring(_n_act) + " setup-uri active"
-trade_txt = str.tostring(day_trades) + "/2 trades azi"
-dst_txt   = _is_summer ? "Ora vara (BST UTC+1)" : "Ora iarna (GMT UTC+0)"
-dst_clr   = _is_summer ? color.yellow : color.new(color.white, 40)
-
-table.cell(tbl, 0, 0, mss_txt,   text_color=mss_clr,              text_size=size.small)
-table.cell(tbl, 0, 1, sess_txt,  text_color=color.white,          text_size=size.small)
-table.cell(tbl, 0, 2, setup_txt, text_color=color.orange,         text_size=size.small)
-table.cell(tbl, 0, 3, trade_txt, text_color=color.white,          text_size=size.small)
-table.cell(tbl, 0, 4, dst_txt,   text_color=dst_clr,              text_size=size.tiny)
+table.cell(tbl, 0, 0, mss_txt,                                       text_color=mss_clr,    text_size=size.small)
+table.cell(tbl, 0, 1, in_sess ? "Sesiune activa" : "Afara sesiunii", text_color=color.white, text_size=size.small)
+table.cell(tbl, 0, 2, str.tostring(_n_act) + " setup-uri active",    text_color=color.orange,text_size=size.small)
+table.cell(tbl, 0, 3, str.tostring(day_trades) + "/2 trades azi",    text_color=color.white, text_size=size.small)
+table.cell(tbl, 0, 4, _is_summer ? "BST UTC+1" : "GMT UTC+0",        text_color=_is_summer ? color.yellow : color.new(color.white,40), text_size=size.tiny)
