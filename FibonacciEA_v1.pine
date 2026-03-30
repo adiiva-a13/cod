@@ -125,19 +125,23 @@ if not na(pl_raw)
 // ============================================================
 MAX_SETUPS = 5
 
-var float[] s_hi  = array.new_float(0)   // swing HIGH al setup-ului (fix)
-var float[] s_lo  = array.new_float(0)   // swing LOW al setup-ului (fix)
-var int[]   s_dir = array.new_int(0)     // 1=bull, -1=bear
-var bool[]  s_e1  = array.new_bool(0)    // E1 luat?
-var bool[]  s_e2  = array.new_bool(0)    // E2 luat?
+var float[]  s_hi    = array.new_float(0)   // swing HIGH (fix)
+var float[]  s_lo    = array.new_float(0)   // swing LOW  (fix)
+var int[]    s_dir   = array.new_int(0)     // 1=bull, -1=bear
+var bool[]   s_e1    = array.new_bool(0)    // E1 luat?
+var bool[]   s_e2    = array.new_bool(0)    // E2 luat?
+var string[] s_e1id  = array.new_string(0)  // entry_id al E1 (pt detectie TP)
+var bool[]   s_del   = array.new_bool(0)    // flagged pentru stergere (E1 TP)
 
-// Reset zilnic - curatam toate setup-urile
+// Reset zilnic
 if is_new_day
     array.clear(s_hi)
     array.clear(s_lo)
     array.clear(s_dir)
     array.clear(s_e1)
     array.clear(s_e2)
+    array.clear(s_e1id)
+    array.clear(s_del)
     day_trades := 0
 
 buf_p = sl_buf_tck * syminfo.mintick
@@ -220,11 +224,13 @@ detect_bear_mss() =>
 if array.size(s_hi) < MAX_SETUPS
     [bull_ok, bull_hi, bull_lo] = detect_bull_mss()
     if bull_ok
-        array.push(s_hi,  bull_hi)
-        array.push(s_lo,  bull_lo)
-        array.push(s_dir, 1)
-        array.push(s_e1,  false)
-        array.push(s_e2,  false)
+        array.push(s_hi,   bull_hi)
+        array.push(s_lo,   bull_lo)
+        array.push(s_dir,  1)
+        array.push(s_e1,   false)
+        array.push(s_e2,   false)
+        array.push(s_e1id, "")
+        array.push(s_del,  false)
         label.new(bar_index, low,
              "CHoCH▲\n(" + str.tostring(close, "#.##") + ")",
              color      = color.new(color.teal, 10),
@@ -234,11 +240,13 @@ if array.size(s_hi) < MAX_SETUPS
 
     [bear_ok, bear_hi, bear_lo] = detect_bear_mss()
     if bear_ok
-        array.push(s_hi,  bear_hi)
-        array.push(s_lo,  bear_lo)
-        array.push(s_dir, -1)
-        array.push(s_e1,  false)
-        array.push(s_e2,  false)
+        array.push(s_hi,   bear_hi)
+        array.push(s_lo,   bear_lo)
+        array.push(s_dir,  -1)
+        array.push(s_e1,   false)
+        array.push(s_e2,   false)
+        array.push(s_e1id, "")
+        array.push(s_del,  false)
         label.new(bar_index, high,
              "CHoCH▼\n(" + str.tostring(close, "#.##") + ")",
              color      = color.new(color.red, 10),
@@ -260,11 +268,13 @@ if array.size(s_hi) > 0
         invalid = (_dir == 1 and close < _lo - buf_p) or
                   (_dir == -1 and close > _hi + buf_p)
         if invalid
-            array.remove(s_hi,  i)
-            array.remove(s_lo,  i)
-            array.remove(s_dir, i)
-            array.remove(s_e1,  i)
-            array.remove(s_e2,  i)
+            array.remove(s_hi,   i)
+            array.remove(s_lo,   i)
+            array.remove(s_dir,  i)
+            array.remove(s_e1,   i)
+            array.remove(s_e2,   i)
+            array.remove(s_e1id, i)
+            array.remove(s_del,  i)
         i := i - 1
 
 // ============================================================
@@ -273,6 +283,7 @@ if array.size(s_hi) > 0
 var int prev_closed = 0
 if strategy.closedtrades > prev_closed
     for i = prev_closed to strategy.closedtrades - 1
+        _eid_c = strategy.closedtrades.entry_id(i)
         _prof  = strategy.closedtrades.profit(i)
         _exp   = strategy.closedtrades.exit_price(i)
         _dir_c = strategy.closedtrades.size(i) > 0 ? 1 : -1
@@ -283,6 +294,14 @@ if strategy.closedtrades > prev_closed
         label.new(bar_index, _y, _pnl,
                   color=_clr, textcolor=color.white,
                   style=_sty, size=size.small)
+        // E1 inchis cu TP → flagam setup-ul: nu mai e nevoie de E2, setup dispare
+        if _prof > 0
+            _ns = array.size(s_e1id)
+            if _ns > 0
+                for si = 0 to _ns - 1
+                    if array.get(s_e1id, si) == _eid_c
+                        array.set(s_del, si, true)
+                        break
     prev_closed := strategy.closedtrades
 
 // ============================================================
@@ -317,7 +336,8 @@ if in_sess and day_trades < 2 and n_setups > 0
                 exid = "E1Lx_" + str.tostring(idx)
                 strategy.entry(eid, strategy.long, limit=f_750, comment="E1 BUY")
                 strategy.exit(exid, eid, stop=sl, limit=tp)
-                array.set(s_e1, idx, true)
+                array.set(s_e1,   idx, true)
+                array.set(s_e1id, idx, eid)   // stocam ID pentru detectie TP
                 day_trades := day_trades + 1
                 label.new(bar_index, low,
                      "E1 BUY\n(" + str.tostring(f_750, "#.##") + ")",
@@ -332,15 +352,17 @@ if in_sess and day_trades < 2 and n_setups > 0
                 exid = "E1Sx_" + str.tostring(idx)
                 strategy.entry(eid, strategy.short, limit=f_750, comment="E1 SELL")
                 strategy.exit(exid, eid, stop=sl, limit=tp)
-                array.set(s_e1, idx, true)
+                array.set(s_e1,   idx, true)
+                array.set(s_e1id, idx, eid)   // stocam ID pentru detectie TP
                 day_trades := day_trades + 1
                 label.new(bar_index, high,
                      "E1 SELL\n(" + str.tostring(f_750, "#.##") + ")",
                      color=color.new(color.red, 10), textcolor=color.white,
                      style=label.style_label_down, size=size.small)
 
-        // ENTRY 2: nivel 0.886
-        if not _e2 and day_trades < 2
+        // ENTRY 2: nivel 0.886 — DOAR daca E1 a fost deja luat (e1_done)
+        // Daca E1 a lovit SL, pretul continua spre 0.886 → E2 se activeaza
+        if not _e2 and _e1 and day_trades < 2
             if _dir == 1 and close <= f_886 and close > f_100
                 sl   = f_100 - buf_p
                 risk = math.abs(close - sl)
@@ -372,20 +394,25 @@ if in_sess and day_trades < 2 and n_setups > 0
                      style=label.style_label_down, size=size.small)
 
 // ============================================================
-// 12. CURATARE SETUP dupa ce ambele entries sunt luate
-//     Dupa E1+E2 luate → setup dispare de pe grafic
+// 12. CURATARE SETUP - 3 cazuri de stergere:
+//     a) E1 TP atins (s_del=true) → dispare imediat, fara E2
+//     b) E1 luat + E2 luat (SL sau TP) → ambele done → dispare
+//     c) Invalidare (sectiunea 9) → deja sterse
 // ============================================================
 if array.size(s_hi) > 0
     i = array.size(s_hi) - 1
     while i >= 0
-        _e1_done = array.get(s_e1, i)
-        _e2_done = array.get(s_e2, i)
-        if _e1_done and _e2_done
-            array.remove(s_hi,  i)
-            array.remove(s_lo,  i)
-            array.remove(s_dir, i)
-            array.remove(s_e1,  i)
-            array.remove(s_e2,  i)
+        _del  = array.get(s_del, i)
+        _e1d  = array.get(s_e1,  i)
+        _e2d  = array.get(s_e2,  i)
+        if _del or (_e1d and _e2d)
+            array.remove(s_hi,   i)
+            array.remove(s_lo,   i)
+            array.remove(s_dir,  i)
+            array.remove(s_e1,   i)
+            array.remove(s_e2,   i)
+            array.remove(s_e1id, i)
+            array.remove(s_del,  i)
         i := i - 1
 
 // ============================================================
