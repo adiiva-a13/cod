@@ -218,61 +218,55 @@ if cLTH and not cLTH[1]
 // BULL CHoCH: close sparge deasupra ultimului LT high
 if not na(ltH.p2) and close > ltH.p2 and not ltHcross
     ltHcross := true
-    if ltDir == -1  // era bearish → CHoCH bullish
-        ltDir := 1
-        // Gaseste lowest low intre ltH.i2 si acum
-        lo_v = low
-        lo_b = bar_index
-        if not na(ltH.i2)
-            lim = math.min(bar_index - ltH.i2, 498)
-            if lim > 0
-                for i = 1 to lim
-                    if low[i] < lo_v
-                        lo_v := low[i]
-                        lo_b := bar_index - i
-        // Filtru: range >= 1%
-        rng_ok = (ltH.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
-        if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(ltH.p2, lo_v, 1)
-            add_setup(ltH.p2, lo_v, 1, ltH.i2, lo_b)
-            // CHoCH marker (LuxAlgo style)
-            line.new(ltH.i2, ltH.p2, bar_index, ltH.p2,
-                 color=C_BULL, style=ln_s(choch_style), width=choch_width)
-            box.new(ltH.i2, ltH.p2, bar_index, ltH.p2,
-                 border_color=color(na), bgcolor=color(na),
-                 text="CHoCH", text_size=size.tiny,
-                 text_halign=text.align_left, text_valign=text.align_bottom,
-                 text_color=color.new(C_BULL, 17))
-    else if ltDir == 0
-        ltDir := 1
+    ltDir := 1
+    // Gaseste lowest low intre ltH.i2 si acum
+    lo_v = low
+    lo_b = bar_index
+    if not na(ltH.i2)
+        lim = math.min(bar_index - ltH.i2, 498)
+        if lim > 0
+            for i = 1 to lim
+                if low[i] < lo_v
+                    lo_v := low[i]
+                    lo_b := bar_index - i
+    // Filtru: range >= 1%
+    rng_ok = (ltH.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
+    if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(ltH.p2, lo_v, 1)
+        add_setup(ltH.p2, lo_v, 1, ltH.i2, lo_b)
+        // CHoCH marker (LuxAlgo style)
+        line.new(ltH.i2, ltH.p2, bar_index, ltH.p2,
+             color=C_BULL, style=ln_s(choch_style), width=choch_width)
+        box.new(ltH.i2, ltH.p2, bar_index, ltH.p2,
+             border_color=color(na), bgcolor=color(na),
+             text="CHoCH", text_size=size.tiny,
+             text_halign=text.align_left, text_valign=text.align_bottom,
+             text_color=color.new(C_BULL, 17))
 
 // BEAR CHoCH: close sparge sub ultimul LT low
 if not na(ltL.p2) and close < ltL.p2 and not ltLcross
     ltLcross := true
-    if ltDir == 1  // era bullish → CHoCH bearish
-        ltDir := -1
-        // Gaseste highest high intre ltL.i2 si acum
-        hi_v = high
-        hi_b = bar_index
-        if not na(ltL.i2)
-            lim = math.min(bar_index - ltL.i2, 498)
-            if lim > 0
-                for i = 1 to lim
-                    if high[i] > hi_v
-                        hi_v := high[i]
-                        hi_b := bar_index - i
-        // Filtru: range >= 1%
-        rng_ok = (hi_v - ltL.p2) / ltL.p2 >= min_sw_pct / 100.0
-        if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(hi_v, ltL.p2, -1)
-            add_setup(hi_v, ltL.p2, -1, ltL.i2, hi_b)
-            line.new(ltL.i2, ltL.p2, bar_index, ltL.p2,
-                 color=C_BEAR, style=ln_s(choch_style), width=choch_width)
-            box.new(ltL.i2, ltL.p2, bar_index, ltL.p2,
-                 border_color=color(na), bgcolor=color(na),
-                 text="CHoCH", text_size=size.tiny,
-                 text_halign=text.align_left, text_valign=text.align_top,
-                 text_color=color.new(C_BEAR, 17))
-    else if ltDir == 0
-        ltDir := -1
+    ltDir := -1
+    // Gaseste highest high intre ltL.i2 si acum
+    hi_v = high
+    hi_b = bar_index
+    if not na(ltL.i2)
+        lim = math.min(bar_index - ltL.i2, 498)
+        if lim > 0
+            for i = 1 to lim
+                if high[i] > hi_v
+                    hi_v := high[i]
+                    hi_b := bar_index - i
+    // Filtru: range >= 1%
+    rng_ok = (hi_v - ltL.p2) / ltL.p2 >= min_sw_pct / 100.0
+    if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(hi_v, ltL.p2, -1)
+        add_setup(hi_v, ltL.p2, -1, ltL.i2, hi_b)
+        line.new(ltL.i2, ltL.p2, bar_index, ltL.p2,
+             color=C_BEAR, style=ln_s(choch_style), width=choch_width)
+        box.new(ltL.i2, ltL.p2, bar_index, ltL.p2,
+             border_color=color(na), bgcolor=color(na),
+             text="CHoCH", text_size=size.tiny,
+             text_halign=text.align_left, text_valign=text.align_top,
+             text_color=color.new(C_BEAR, 17))
 
 // ============================================================
 // 10. INVALIDARE SETUP-URI
