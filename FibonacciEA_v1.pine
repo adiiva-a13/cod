@@ -330,15 +330,13 @@ if in_sess and day_trades < 2 and n_s > 0
         f886 = f_lvl(_d, _hi, _lo, fib_e2)
         f100 = f_lvl(_d, _hi, _lo, 1.0)
 
-        // ── ENTRY 1 @ 0.75 ──────────────────────────────────
-        // Folosim market order (process_orders_on_close=true → se executa pe bara curenta)
-        // SL si TP fixate pe nivelurile fib, nu pe pretul de fill
+        // ── ENTRY 1 @ 0.75 — fill la atingerea nivelului ────
         if not _e1 and day_trades < 2
             if _d == 1 and low <= f75 and close > f886
                 sl  = f886 - buf_p
                 tp  = f75 + math.abs(f75 - sl) * rr_ratio
                 eid = "E1L_" + str.tostring(idx)
-                strategy.entry(eid, strategy.long,  comment="E1 BUY @" + str.tostring(f75, format.mintick))
+                strategy.entry(eid, strategy.long,  limit=f75, comment="E1 BUY @" + str.tostring(f75, format.mintick))
                 strategy.exit("X" + eid, eid, stop=sl, limit=tp)
                 array.set(s_e1, idx, true)
                 array.set(s_id, idx, eid)
@@ -352,7 +350,7 @@ if in_sess and day_trades < 2 and n_s > 0
                 sl  = f886 + buf_p
                 tp  = f75 - math.abs(sl - f75) * rr_ratio
                 eid = "E1S_" + str.tostring(idx)
-                strategy.entry(eid, strategy.short, comment="E1 SELL @" + str.tostring(f75, format.mintick))
+                strategy.entry(eid, strategy.short, limit=f75, comment="E1 SELL @" + str.tostring(f75, format.mintick))
                 strategy.exit("X" + eid, eid, stop=sl, limit=tp)
                 array.set(s_e1, idx, true)
                 array.set(s_id, idx, eid)
@@ -362,13 +360,13 @@ if in_sess and day_trades < 2 and n_s > 0
                      color=color.new(C_BEAR,10), textcolor=color.white,
                      style=label.style_label_down, size=size.small)
 
-        // ── ENTRY 2 @ 0.886 (doar daca E1 SL) ───────────────
+        // ── ENTRY 2 @ 0.886 — fill la atingere (doar daca E1 SL) ──
         if not _e2 and _e1 and day_trades < 2
             if _d == 1 and low <= f886 and close > f100
                 sl  = f100 - buf_p
                 tp  = f886 + math.abs(f886 - sl) * rr_ratio
                 eid = "E2L_" + str.tostring(idx)
-                strategy.entry(eid, strategy.long,  comment="E2 BUY @" + str.tostring(f886, format.mintick))
+                strategy.entry(eid, strategy.long,  limit=f886, comment="E2 BUY @" + str.tostring(f886, format.mintick))
                 strategy.exit("X" + eid, eid, stop=sl, limit=tp)
                 array.set(s_e2, idx, true)
                 day_trades := day_trades + 1
@@ -381,7 +379,7 @@ if in_sess and day_trades < 2 and n_s > 0
                 sl  = f100 + buf_p
                 tp  = f886 - math.abs(sl - f886) * rr_ratio
                 eid = "E2S_" + str.tostring(idx)
-                strategy.entry(eid, strategy.short, comment="E2 SELL @" + str.tostring(f886, format.mintick))
+                strategy.entry(eid, strategy.short, limit=f886, comment="E2 SELL @" + str.tostring(f886, format.mintick))
                 strategy.exit("X" + eid, eid, stop=sl, limit=tp)
                 array.set(s_e2, idx, true)
                 day_trades := day_trades + 1
