@@ -122,6 +122,8 @@ sw_l(SW s) => not na(s.p0) and s.p0 > s.p1 and s.p1 <= s.p2
 var int  ltDir    = 0   // 1=bull, -1=bear, 0=nedefinit
 var bool ltHcross = false
 var bool ltLcross = false
+var bool itHcross = false
+var bool itLcross = false
 
 // ============================================================
 // 7. SETUP ARRAYS (max 5 simultan)
@@ -146,6 +148,8 @@ if is_new_day
     day_trades := 0
     ltHcross   := false
     ltLcross   := false
+    itHcross   := false
+    itLcross   := false
 
 // Verifica daca setup-ul exista deja
 setup_dup(hi, lo, dir) =>
@@ -194,10 +198,12 @@ if not na(high[2])
 // NIVEL 2 — Intermediate: pattern din pivotii ST
 cITL = sw_l(stL)
 if cITL and not cITL[1]
+    itLcross := false
     sw_up(itL, stL.p1, stL.i1)
 
 cITH = sw_h(stH)
 if cITH and not cITH[1]
+    itHcross := false
     sw_up(itH, stH.p1, stH.i1)
 
 // NIVEL 3 — Long Term: pattern din pivotii IT
@@ -215,54 +221,53 @@ if cLTH and not cLTH[1]
 // 9. CHoCH DETECTIE + PLASARE FIB
 // ============================================================
 
-// BULL CHoCH: close sparge deasupra ultimului LT high
-if not na(ltH.p2) and close > ltH.p2 and not ltHcross
-    ltHcross := true
+// BULL CHoCH: close sparge deasupra ultimului IT high
+if not na(itH.p2) and close > itH.p2 and not itHcross
+    itHcross := true
     ltDir := 1
-    // Gaseste lowest low intre ltH.i2 si acum
+    // Gaseste lowest low intre itH.i2 si acum
     lo_v = low
     lo_b = bar_index
-    if not na(ltH.i2)
-        lim = math.min(bar_index - ltH.i2, 498)
+    if not na(itH.i2)
+        lim = math.min(bar_index - itH.i2, 498)
         if lim > 0
             for i = 1 to lim
                 if low[i] < lo_v
                     lo_v := low[i]
                     lo_b := bar_index - i
     // Filtru: range >= 1%
-    rng_ok = (ltH.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
-    if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(ltH.p2, lo_v, 1)
-        add_setup(ltH.p2, lo_v, 1, ltH.i2, lo_b)
-        // CHoCH marker (LuxAlgo style)
-        line.new(ltH.i2, ltH.p2, bar_index, ltH.p2,
+    rng_ok = (itH.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
+    if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(itH.p2, lo_v, 1)
+        add_setup(itH.p2, lo_v, 1, itH.i2, lo_b)
+        line.new(itH.i2, itH.p2, bar_index, itH.p2,
              color=C_BULL, style=ln_s(choch_style), width=choch_width)
-        box.new(ltH.i2, ltH.p2, bar_index, ltH.p2,
+        box.new(itH.i2, itH.p2, bar_index, itH.p2,
              border_color=color(na), bgcolor=color(na),
              text="CHoCH", text_size=size.tiny,
              text_halign=text.align_left, text_valign=text.align_bottom,
              text_color=color.new(C_BULL, 17))
 
-// BEAR CHoCH: close sparge sub ultimul LT low
-if not na(ltL.p2) and close < ltL.p2 and not ltLcross
-    ltLcross := true
+// BEAR CHoCH: close sparge sub ultimul IT low
+if not na(itL.p2) and close < itL.p2 and not itLcross
+    itLcross := true
     ltDir := -1
-    // Gaseste highest high intre ltL.i2 si acum
+    // Gaseste highest high intre itL.i2 si acum
     hi_v = high
     hi_b = bar_index
-    if not na(ltL.i2)
-        lim = math.min(bar_index - ltL.i2, 498)
+    if not na(itL.i2)
+        lim = math.min(bar_index - itL.i2, 498)
         if lim > 0
             for i = 1 to lim
                 if high[i] > hi_v
                     hi_v := high[i]
                     hi_b := bar_index - i
     // Filtru: range >= 1%
-    rng_ok = (hi_v - ltL.p2) / ltL.p2 >= min_sw_pct / 100.0
-    if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(hi_v, ltL.p2, -1)
-        add_setup(hi_v, ltL.p2, -1, ltL.i2, hi_b)
-        line.new(ltL.i2, ltL.p2, bar_index, ltL.p2,
+    rng_ok = (hi_v - itL.p2) / itL.p2 >= min_sw_pct / 100.0
+    if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(hi_v, itL.p2, -1)
+        add_setup(hi_v, itL.p2, -1, itL.i2, hi_b)
+        line.new(itL.i2, itL.p2, bar_index, itL.p2,
              color=C_BEAR, style=ln_s(choch_style), width=choch_width)
-        box.new(ltL.i2, ltL.p2, bar_index, ltL.p2,
+        box.new(itL.i2, itL.p2, bar_index, itL.p2,
              border_color=color(na), bgcolor=color(na),
              text="CHoCH", text_size=size.tiny,
              text_halign=text.align_left, text_valign=text.align_top,
