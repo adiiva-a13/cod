@@ -443,17 +443,17 @@ if nd > 0
         array.push(vb, label.new(ext, f112, "1.123 · " + str.tostring(f112, format.mintick),
              color=color(na), textcolor=color.new(C_BEAR, 40), style=label.style_label_left, size=size.small))
 
-        // TP / SL pentru E1 (discrete)
+        // TP / SL pentru E1
         _sl1 = _d == 1 ? f886 - buf_p : f886 + buf_p
         _tp1 = _d == 1 ? f75 + math.abs(f75 - _sl1) * rr_ratio : f75 - math.abs(_sl1 - f75) * rr_ratio
         array.push(vl, line.new(_pb, _sl1, ext, _sl1,
-             color=color.new(C_BEAR, 55), style=line.style_dotted, width=1))
-        array.push(vb, label.new(ext, _sl1, "SL · " + str.tostring(_sl1, format.mintick),
-             color=color(na), textcolor=color.new(C_BEAR, 40), style=label.style_label_left, size=size.tiny))
+             color=color.new(C_BEAR, 20), style=line.style_dashed, width=1))
+        array.push(vb, label.new(ext, _sl1, "SL " + str.tostring(_sl1, format.mintick),
+             color=color.new(C_BEAR, 20), textcolor=color.white, style=label.style_label_left, size=size.tiny))
         array.push(vl, line.new(_pb, _tp1, ext, _tp1,
-             color=color.new(C_BULL, 55), style=line.style_dotted, width=1))
-        array.push(vb, label.new(ext, _tp1, "TP · " + str.tostring(_tp1, format.mintick),
-             color=color(na), textcolor=color.new(C_BULL, 40), style=label.style_label_left, size=size.tiny))
+             color=color.new(C_BULL, 20), style=line.style_dashed, width=1))
+        array.push(vb, label.new(ext, _tp1, "TP " + str.tostring(_tp1, format.mintick),
+             color=color.new(C_BULL, 20), textcolor=color.white, style=label.style_label_left, size=size.tiny))
 
 // ============================================================
 // 15. STATUS TABLE
