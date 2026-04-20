@@ -95,7 +95,7 @@ pmtQty(slDist) =>
 
 // Cantitate finala pentru entry (toate instrumentele):
 // >= 2: runner activ, risc <= i_riskUSD
-//    2: twoRisk <= i_riskUSD+$50 → runner activ, usor peste buget
+//    2: twoRisk <= i_riskUSD+$60 → runner activ, usor peste buget
 //    1: SL larg, TP1 100% fara runner
 //    0: SL prea mare, nu intra
 entryQty(riskAmt) =>
@@ -103,9 +103,9 @@ entryQty(riskAmt) =>
     _oneRisk = (riskAmt / syminfo.mintick) * pmtTickVal
     if _base >= 2
         _base
-    else if 2.0 * _oneRisk <= i_riskUSD + 50.0
+    else if 2.0 * _oneRisk <= i_riskUSD + 60.0
         2
-    else if _oneRisk <= i_riskUSD + 50.0
+    else if _oneRisk <= i_riskUSD + 60.0
         1
     else
         0
