@@ -31,6 +31,7 @@ i_lonRunEODH    = input.int(10,    "LON Runner: exit ora (NY)",        minval=0,
 i_lonRunEODM    = input.int(0,     "LON Runner: exit minut (NY)",      minval=0,   maxval=59, group="Runner Strategy")
 
 // ── New York Session ─────────────────────────────────────────
+i_nyEnabled = input.bool(true, "Enable New York Session",  group="New York Session")
 i_nyRSH  = input.int(9,  "Range Start Hour (NY) [Custom]",   minval=0, maxval=23, group="New York Session")
 i_nyRSM  = input.int(30, "Range Start Minute (NY) [Custom]", minval=0, maxval=59, group="New York Session")
 i_nyREH  = input.int(9,  "Range End Hour (NY) [Custom]",     minval=0, maxval=23, group="New York Session")
@@ -149,13 +150,13 @@ var bool _nyRED = false
 if newDay
     _nyRED := false
 
-nyRangeJustEnd = not _nyRED and not na(nyRH) and not inRangeNY and
+nyRangeJustEnd = i_nyEnabled and not _nyRED and not na(nyRH) and not inRangeNY and
                  nyMins > nyREMins and nyMins < eodMins
 if nyRangeJustEnd
     _nyRED := true
 
 // Trade active / entry allowed
-nyTradeActive  = nyMins > nyREMins and nyMins < eodMins
+nyTradeActive  = i_nyEnabled and nyMins > nyREMins and nyMins < eodMins
 nyEntryAllowed = nyTradeActive and nyMins < nyEEMins
 
 if nyRangeJustEnd and not na(nyRH)
@@ -864,7 +865,8 @@ if barstate.islast
     table.cell(infoT, 1, 0,  presetLabel,   text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.blue, 50))
 
     // NY section
-    table.cell(infoT, 0, 1,  "── NY ──",    text_color=color.blue,   text_size=size.small, bgcolor=color.new(color.blue, 85))
+    nyHeader = i_nyEnabled ? "── NY ──" : "── NY (OFF) ──"
+    table.cell(infoT, 0, 1,  nyHeader,      text_color=i_nyEnabled ? color.blue : color.gray, text_size=size.small, bgcolor=color.new(color.blue, 85))
     table.cell(infoT, 1, 1,  nyRangeLabel,  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 85))
     table.cell(infoT, 0, 2,  "Range H",     text_color=color.gray,   text_size=size.small)
     table.cell(infoT, 1, 2,  not na(nyRH)  ? str.tostring(nyRH,  "#.##") : "—", text_color=color.white,  text_size=size.small)
@@ -877,8 +879,8 @@ if barstate.islast
     table.cell(infoT, 0, 6,  "VAL",         text_color=color.red,    text_size=size.small)
     table.cell(infoT, 1, 6,  not na(nyVal) ? str.tostring(nyVal, "#.##") : "—", text_color=color.red,    text_size=size.small)
     table.cell(infoT, 0, 7,  "NY Mode",     text_color=color.gray,   text_size=size.small)
-    table.cell(infoT, 1, 7,  nyIsVolatile  ? "VOLATILE" : "NORMAL",
-               text_color=nyIsVolatile ? color.orange : color.green, text_size=size.small)
+    table.cell(infoT, 1, 7,  i_nyEnabled ? (nyIsVolatile ? "VOLATILE" : "NORMAL") : "—",
+               text_color=i_nyEnabled ? (nyIsVolatile ? color.orange : color.green) : color.gray, text_size=size.small)
 
     // London section
     lonHeader = i_lonEnabled ? "── LON ──" : "── LON (OFF) ──"
