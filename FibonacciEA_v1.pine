@@ -1,5 +1,5 @@
 //@version=5
-// AdiivaGold v8
+// AdiivaGold v9
 strategy(
   title                  = "AdiivaGold",
   overlay                = true,
@@ -30,19 +30,17 @@ sess_m_s = input.int(0,  "Start minut",      group=G_SES, minval=0, maxval=59)
 sess_h_e = input.int(21, "Sfarsit ora NY",   group=G_SES, minval=0, maxval=23)
 sess_m_e = input.int(0,  "Sfarsit minut",    group=G_SES, minval=0, maxval=59)
 
-C_BULL       = input.color(#089981, "Culoare Bull",    group=G_VIZ)
-C_BEAR       = input.color(#f23645, "Culoare Bear",    group=G_VIZ)
-show_fib_05  = input.bool(true,     "Nivel 0.5",       group=G_VIZ)
-show_fib_ref = input.bool(true,     "Linie swing ref", group=G_VIZ)
-show_aoi_box = input.bool(true,     "AOI box",         group=G_VIZ)
-choch_style  = input.string("Solid","Stil CHoCH",      group=G_VIZ, options=["Solid","Dashed","Dotted"])
-choch_width  = input.int(2,         "Grosime CHoCH",   group=G_VIZ, minval=1, maxval=4)
+C_BULL      = input.color(#089981, "Culoare Bull",    group=G_VIZ)
+C_BEAR      = input.color(#f23645, "Culoare Bear",    group=G_VIZ)
+show_fib_05 = input.bool(true,     "Nivel 0.5",       group=G_VIZ)
+show_aoi    = input.bool(true,     "AOI box",         group=G_VIZ)
+choch_style = input.string("Solid","Stil CHoCH",      group=G_VIZ, options=["Solid","Dashed","Dotted"])
+choch_width = input.int(2,         "Grosime CHoCH",   group=G_VIZ, minval=1, maxval=4)
 
 // ============================================================
 // 2. HELPERS
 // ============================================================
 f_lvl(dir, hi, lo, lvl) => dir == 1 ? hi - lvl*(hi-lo) : lo + lvl*(hi-lo)
-
 ln_s(s) =>
     switch s
         "Solid"  => line.style_solid
@@ -111,8 +109,6 @@ var bool itLcross = false
 // ============================================================
 // 7. SETUP ARRAYS
 // ============================================================
-MAX_S = 5
-
 var float[]  s_hi  = array.new_float(0)
 var float[]  s_lo  = array.new_float(0)
 var int[]    s_dir = array.new_int(0)
@@ -132,28 +128,24 @@ if is_new_day
     itHcross   := false
     itLcross   := false
 
-setup_dup(hi, lo, dir) =>
-    found = false
-    n = array.size(s_hi)
-    if n > 0
-        for i = 0 to n - 1
-            if math.abs(array.get(s_hi, i) - hi) < buf_p * 5 and
-               math.abs(array.get(s_lo, i) - lo) < buf_p * 5 and
-               array.get(s_dir, i) == dir
-                found := true
-                break
-    found
+// sterge toate setup-urile de o anumita directie
+clear_dir(d) =>
+    i = array.size(s_hi) - 1
+    while i >= 0
+        if array.get(s_dir, i) == d
+            array.remove(s_hi,  i),  array.remove(s_lo,  i)
+            array.remove(s_dir, i),  array.remove(s_pb,  i)
+            array.remove(s_ab,  i),  array.remove(s_e1,  i)
+            array.remove(s_e2,  i),  array.remove(s_id,  i)
+            array.remove(s_del, i)
+        i := i - 1
 
 add_setup(hi, lo, dir, piv_bar, anc_bar) =>
-    array.push(s_hi,  hi)
-    array.push(s_lo,  lo)
-    array.push(s_dir, dir)
-    array.push(s_pb,  piv_bar)
+    array.push(s_hi,  hi),   array.push(s_lo,  lo)
+    array.push(s_dir, dir),  array.push(s_pb,  piv_bar)
     array.push(s_ab,  anc_bar)
-    array.push(s_e1,  false)
-    array.push(s_e2,  false)
-    array.push(s_id,  "")
-    array.push(s_del, false)
+    array.push(s_e1,  false), array.push(s_e2,  false)
+    array.push(s_id,  ""),    array.push(s_del, false)
 
 rem_setup(i) =>
     array.remove(s_hi,  i),  array.remove(s_lo,  i)
@@ -184,9 +176,6 @@ if cITH and not cITH[1]
 
 // ============================================================
 // 9. CHoCH + FIBONACCI
-// Ancora = extremul OPUS dinaintea pivotului IT
-// BULL: ancora LOW = cel mai mic low INAINTE de IT HIGH pivot
-// BEAR: ancora HIGH = cel mai mare high INAINTE de IT LOW pivot
 // ============================================================
 
 // BULL CHoCH
@@ -197,7 +186,6 @@ if not na(itH.p2) and close > itH.p2 and not itHcross
         lo_v = float(na)
         lo_b = bar_index
         if not na(itH.i2)
-            // cauta INAINTE (mai vechi) de pivotul IT HIGH
             poff = bar_index - itH.i2
             lim  = math.min(poff + 300, 499)
             if lim >= poff
@@ -208,7 +196,8 @@ if not na(itH.p2) and close > itH.p2 and not itHcross
         if na(lo_v)
             lo_v := low
         rng_ok = (itH.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
-        if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(itH.p2, lo_v, 1)
+        if rng_ok
+            clear_dir(1)   // inlocuieste orice setup bull vechi
             add_setup(itH.p2, lo_v, 1, itH.i2, lo_b)
         line.new(itH.i2, itH.p2, bar_index, itH.p2,
              color=C_BULL, style=ln_s(choch_style), width=choch_width)
@@ -228,7 +217,6 @@ if not na(itL.p2) and close < itL.p2 and not itLcross
         hi_v = float(na)
         hi_b = bar_index
         if not na(itL.i2)
-            // cauta INAINTE (mai vechi) de pivotul IT LOW
             poff = bar_index - itL.i2
             lim  = math.min(poff + 300, 499)
             if lim >= poff
@@ -239,7 +227,8 @@ if not na(itL.p2) and close < itL.p2 and not itLcross
         if na(hi_v)
             hi_v := high
         rng_ok = (hi_v - itL.p2) / itL.p2 >= min_sw_pct / 100.0
-        if rng_ok and array.size(s_hi) < MAX_S and not setup_dup(hi_v, itL.p2, -1)
+        if rng_ok
+            clear_dir(-1)  // inlocuieste orice setup bear vechi
             add_setup(hi_v, itL.p2, -1, itL.i2, hi_b)
         line.new(itL.i2, itL.p2, bar_index, itL.p2,
              color=C_BEAR, style=ln_s(choch_style), width=choch_width)
@@ -332,7 +321,7 @@ if in_sess and day_trades < 2 and n_s > 0
                 day_trades := day_trades + 1
 
 // ============================================================
-// 12. CURATARE (doar SL/TP hit sau end-of-day)
+// 12. CURATARE
 // ============================================================
 if array.size(s_hi) > 0
     i = array.size(s_hi) - 1
@@ -354,12 +343,10 @@ if array.size(vl) > 0
     for i = 0 to array.size(vl) - 1
         line.delete(array.get(vl, i))
 array.clear(vl)
-
 if array.size(vb) > 0
     for i = 0 to array.size(vb) - 1
         label.delete(array.get(vb, i))
 array.clear(vb)
-
 if array.size(vx) > 0
     for i = 0 to array.size(vx) - 1
         box.delete(array.get(vx, i))
@@ -379,24 +366,16 @@ if nd > 0
         f75  = f_lvl(_d, _hi, _lo, fib_e1)
         f886 = f_lvl(_d, _hi, _lo, fib_e2)
         f1   = f_lvl(_d, _hi, _lo, 1.0)
-        f112 = f_lvl(_d, _hi, _lo, 1.123)
 
         _sl  = _d == 1 ? f886 - buf_p : f886 + buf_p
-        _tp  = _d == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio
-                       : f75 - math.abs(_sl - f75) * rr_ratio
+        _tp  = _d == 1 ? f75  + math.abs(f75  - _sl) * rr_ratio
+                       : f75  - math.abs(_sl  - f75)  * rr_ratio
 
-        ext  = bar_index + 50
-        c    = _d == 1 ? C_BULL : C_BEAR
+        ext = bar_index + 50
+        c   = _d == 1 ? C_BULL : C_BEAR
 
-        // linie diagonala ancora -> pivot
-        if show_fib_ref
-            array.push(vl, line.new(
-                 _ab, _d == 1 ? _lo : _hi,
-                 _pb, _d == 1 ? _hi : _lo,
-                 color=color.new(c, 55), style=line.style_dashed, width=1))
-
-        // AOI box intre 0 si 0.75
-        if show_aoi_box
+        // AOI box (zona de intrare intre 0 si E1)
+        if show_aoi
             zt = _d == 1 ? f0  : f75
             zb = _d == 1 ? f75 : f0
             array.push(vx, box.new(_pb, zt, ext, zb,
@@ -404,60 +383,56 @@ if nd > 0
 
         // nivel 0 (CHoCH)
         array.push(vl, line.new(_pb, f0, ext, f0,
-             color=color.new(c, 30), style=line.style_solid, width=1))
+             color=color.new(c, 40), style=line.style_solid, width=1))
         array.push(vb, label.new(ext, f0, "0  " + str.tostring(f0, format.mintick),
-             color=color(na), textcolor=color.new(c, 30),
+             color=color(na), textcolor=color.new(c, 40),
              style=label.style_label_left, size=size.tiny))
 
         // nivel 0.5
         if show_fib_05
             array.push(vl, line.new(_pb, f05, ext, f05,
-                 color=color.new(c, 60), style=line.style_dotted, width=1))
+                 color=color.new(c, 65), style=line.style_dotted, width=1))
             array.push(vb, label.new(ext, f05, "0.5  " + str.tostring(f05, format.mintick),
-                 color=color(na), textcolor=color.new(c, 55),
+                 color=color(na), textcolor=color.new(c, 60),
                  style=label.style_label_left, size=size.tiny))
 
-        // E1 @ 0.75 - portocaliu solid
+        // ENTRY E1 @ 0.75
         array.push(vl, line.new(_pb, f75, ext, f75,
              color=color.orange, style=line.style_solid, width=2))
-        array.push(vb, label.new(ext, f75, "E1  " + str.tostring(f75, format.mintick),
-             color=color.new(color.orange, 10), textcolor=color.white,
-             style=label.style_label_left, size=size.tiny))
+        array.push(vb, label.new(ext, f75, str.tostring(f75, format.mintick),
+             color=color.orange, textcolor=color.white,
+             style=_d == 1 ? label.style_arrowup : label.style_arrowdown,
+             size=size.small))
 
-        // E2 @ 0.886
+        // ENTRY E2 @ 0.886
         array.push(vl, line.new(_pb, f886, ext, f886,
-             color=color.new(color.orange, 50), style=line.style_dashed, width=1))
-        array.push(vb, label.new(ext, f886, "E2  " + str.tostring(f886, format.mintick),
-             color=color(na), textcolor=color.new(color.orange, 30),
+             color=color.new(color.orange, 55), style=line.style_dashed, width=1))
+        array.push(vb, label.new(ext, f886, "E2 " + str.tostring(f886, format.mintick),
+             color=color(na), textcolor=color.new(color.orange, 40),
              style=label.style_label_left, size=size.tiny))
 
         // nivel 1 (ancora)
         array.push(vl, line.new(_ab, f1, ext, f1,
-             color=color.new(c, 30), style=line.style_solid, width=1))
+             color=color.new(c, 40), style=line.style_solid, width=1))
         array.push(vb, label.new(ext, f1, "1  " + str.tostring(f1, format.mintick),
-             color=color(na), textcolor=color.new(c, 30),
+             color=color(na), textcolor=color.new(c, 40),
              style=label.style_label_left, size=size.tiny))
 
-        // nivel 1.123
-        array.push(vl, line.new(_ab, f112, ext, f112,
-             color=color.new(c, 70), style=line.style_dotted, width=1))
-        array.push(vb, label.new(ext, f112, "1.123  " + str.tostring(f112, format.mintick),
-             color=color(na), textcolor=color.new(c, 60),
-             style=label.style_label_left, size=size.tiny))
-
-        // SL - rosu solid
+        // SL
         array.push(vl, line.new(_pb, _sl, ext, _sl,
              color=C_BEAR, style=line.style_solid, width=2))
-        array.push(vb, label.new(ext, _sl, "SL  " + str.tostring(_sl, format.mintick),
+        array.push(vb, label.new(ext, _sl, str.tostring(_sl, format.mintick),
              color=C_BEAR, textcolor=color.white,
-             style=label.style_label_left, size=size.tiny))
+             style=_d == 1 ? label.style_arrowdown : label.style_arrowup,
+             size=size.small))
 
-        // TP - verde solid
+        // TP
         array.push(vl, line.new(_pb, _tp, ext, _tp,
              color=C_BULL, style=line.style_solid, width=2))
-        array.push(vb, label.new(ext, _tp, "TP  " + str.tostring(_tp, format.mintick),
+        array.push(vb, label.new(ext, _tp, str.tostring(_tp, format.mintick),
              color=C_BULL, textcolor=color.white,
-             style=label.style_label_left, size=size.tiny))
+             style=_d == 1 ? label.style_arrowdown : label.style_arrowup,
+             size=size.small))
 
 // ============================================================
 // 14. STATUS TABLE
