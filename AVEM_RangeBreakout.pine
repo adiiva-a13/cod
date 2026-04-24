@@ -652,8 +652,11 @@ bgcolor(inRangeNY  ? color.new(color.blue,   88) : na, title="NY Range Window")
 bgcolor(inRangeLon ? color.new(color.purple, 88) : na, title="LON Range Window")
 bgcolor(nyIsVolatile  and nyTradeActive  ? color.new(color.orange, 92) : na, title="NY Volatile")
 bgcolor(lonIsVolatile and lonTradeActive ? color.new(color.red,    92) : na, title="LON Volatile")
+nySlBar  = nyOpen[1]  and not nyOpen  and nyTradeDone  and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+lonSlBar = lonOpen[1] and not lonOpen and lonTradeDone and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
 bgcolor(nyOpen  ? color.new(color.green, 88) : na, title="NY Trade Activ")
 bgcolor(lonOpen ? color.new(color.green, 88) : na, title="LON Trade Activ")
+bgcolor(nySlBar or lonSlBar ? color.new(color.red, 85) : na, title="SL Hit")
 
 // ── NY Range + SVP ──────────────────────────────────────────
 plot(not na(nyRH) ? nyRH : na, "NY Range H", color.new(color.blue, 0), 2, plot.style_linebr)
