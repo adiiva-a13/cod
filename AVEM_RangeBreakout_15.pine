@@ -1,0 +1,771 @@
+//@version=5
+strategy("AdiivaBreakout1.5", overlay=true,
+         default_qty_type=strategy.fixed, default_qty_value=1,
+         max_bars_back=500, calc_on_every_tick=false,
+         process_orders_on_close=true, max_labels_count=500,
+         pyramiding=1,
+         commission_type=strategy.commission.cash_per_order, commission_value=0)
+
+// ═══════════════════════════════════════════════════════════
+//  INPUTS
+// ═══════════════════════════════════════════════════════════
+
+// ── Preset ──────────────────────────────────────────────────
+i_preset      = input.string("Auto", "Instrument Preset",         options=["Auto","Custom","NQ","CL","6E"], group="Preset")
+
+// ── Volume Profile ───────────────────────────────────────────
+i_vaPercent   = input.float(68.0, "Value Area %",                 minval=1,  maxval=99, step=1,   group="Volume Profile (SVP)")
+i_ticksPerRow = input.int(10,     "Row Size (ticks) [Custom]",    minval=1,                        group="Volume Profile (SVP)")
+
+// ── Risk ────────────────────────────────────────────────────
+i_slBuf   = input.float(0.0, "SL Buffer (pts)", minval=0.0, step=0.25, group="Risk")
+
+// ── Exit Strategy ────────────────────────────────────────────
+i_tpR = input.float(1.5, "TP la (R)", minval=0.5, step=0.5, group="Exit Strategy")
+
+// ── New York Session ─────────────────────────────────────────
+i_nyEnabled = input.bool(true, "Enable New York Session",  group="New York Session")
+i_nyRSH  = input.int(9,  "Range Start Hour (NY) [Custom]",   minval=0, maxval=23, group="New York Session")
+i_nyRSM  = input.int(30, "Range Start Minute (NY) [Custom]", minval=0, maxval=59, group="New York Session")
+i_nyREH  = input.int(9,  "Range End Hour (NY) [Custom]",     minval=0, maxval=23, group="New York Session")
+i_nyREM  = input.int(45, "Range End Minute (NY) [Custom]",   minval=0, maxval=59, group="New York Session")
+i_nyEEH  = input.int(11, "Entry cutoff Hour (NY) [Custom]",  minval=0, maxval=23, group="New York Session")
+i_nyEEM  = input.int(0,  "Entry cutoff Min (NY) [Custom]",   minval=0, maxval=59, group="New York Session")
+i_eodH   = input.int(16, "EOD Close Hour (NY)",              minval=9, maxval=22, group="New York Session")
+i_eodMin = input.int(0,  "EOD Close Minute (NY)",            minval=0, maxval=59, group="New York Session")
+
+// ── London Session ───────────────────────────────────────────
+i_lonEnabled = input.bool(false, "Enable London Session",  group="London Session")
+i_lonRSH = input.int(3,  "Range Start Hour (NY)",   minval=0, maxval=23, group="London Session")
+i_lonRSM = input.int(0,  "Range Start Minute (NY)", minval=0, maxval=59, group="London Session")
+i_lonREH = input.int(3,  "Range End Hour (NY)",     minval=0, maxval=23, group="London Session")
+i_lonREM = input.int(15, "Range End Minute (NY)",   minval=0, maxval=59, group="London Session")
+i_lonEEH = input.int(5,  "Entry cutoff Hour (NY)",  minval=0, maxval=23, group="London Session")
+i_lonEEM = input.int(0,  "Entry cutoff Minute (NY)",minval=0, maxval=59, group="London Session")
+
+// ── Pick My Trade ────────────────────────────────────────────
+i_pmtEnabled = input.bool(false,    "Activeaza PMT Alerts",   group="Pick My Trade")
+i_pmtToken   = input.string("",     "PMT Token",              group="Pick My Trade")
+i_pmtSymbol  = input.string("MNQ1!", "Simbol Tradovate",      group="Pick My Trade")
+i_riskUSD    = input.float(200.0,   "Risc per tranzactie ($)", minval=10, step=10, group="Pick My Trade")
+
+// ═══════════════════════════════════════════════════════════
+//  TIMEFRAME GUARD
+// ═══════════════════════════════════════════════════════════
+if timeframe.period != "1"
+    runtime.error("⚠️ Acest script functioneaza DOAR pe graficul de 1 MINUT!")
+
+// ═══════════════════════════════════════════════════════════
+//  PRESET RESOLUTION
+//  Cand preset != Custom, valorile individuale sunt ignorate
+// ═══════════════════════════════════════════════════════════
+// Auto-detect instrument from chart symbol
+autoInstr = str.contains(syminfo.root, "NQ") or syminfo.root == "MNQ" ? "NQ" : str.contains(syminfo.root, "CL") or syminfo.root == "MCL" ? "CL" : str.contains(syminfo.root, "6E") ? "6E" : "NQ"
+effPreset = i_preset == "Auto" ? autoInstr : i_preset
+
+effTicks  = effPreset == "NQ" ? 10 : effPreset == "CL" ? 5  : effPreset == "6E" ? 2  : i_ticksPerRow
+effNyRSH  = effPreset == "NQ" ? 9  : effPreset == "CL" ? 9  : effPreset == "6E" ? 9  : i_nyRSH
+effNyRSM  = effPreset == "NQ" ? 30 : effPreset == "CL" ? 30 : effPreset == "6E" ? 30 : i_nyRSM
+effNyREH  = effPreset == "NQ" ? 9  : effPreset == "CL" ? 9  : effPreset == "6E" ? 9  : i_nyREH
+effNyREM  = effPreset == "NQ" ? 45 : effPreset == "CL" ? 45 : effPreset == "6E" ? 45 : i_nyREM
+effNyEEH  = effPreset == "NQ" ? 11 : effPreset == "CL" ? 11 : effPreset == "6E" ? 11 : i_nyEEH
+effNyEEM  = effPreset == "NQ" ? 0  : effPreset == "CL" ? 0  : effPreset == "6E" ? 0  : i_nyEEM
+
+
+// Valoarea unui tick per contract (USD)
+// MNQ: 1 punct = $2 => 1 tick (0.25pt) = $0.50
+// MCL: 1 tick (0.01) = $1.00
+// 6E:  1 tick (0.00005) = $6.25
+pmtTickVal = effPreset == "NQ" ? 0.50 : effPreset == "CL" ? 1.00 : effPreset == "6E" ? 6.25 : 0.50
+
+// Calcul cantitate contracte: floor (nu round) ca sa evitam fractii de contract
+// 6E: max 6 contracte
+// Returneaza 0 daca SL prea mare pentru i_riskUSD (fara minim fortat)
+pmtQty(slDist) =>
+    ticks  = slDist / syminfo.mintick
+    rawQty = math.floor(i_riskUSD / (ticks * pmtTickVal))
+    maxQty = effPreset == "6E" ? 6 : 999
+    math.min(maxQty, rawQty)
+
+// Cantitate finala pentru entry (toate instrumentele):
+// >= 2: intra cu mai multe contracte, risc <= i_riskUSD
+//    2: twoRisk <= i_riskUSD+$60 → intra cu 2 contracte
+//    1: SL larg, intra cu 1 contract
+//    0: SL prea mare, nu intra
+entryQty(riskAmt) =>
+    _base    = pmtQty(riskAmt)
+    _oneRisk = (riskAmt / syminfo.mintick) * pmtTickVal
+    if _base >= 2
+        _base
+    else if 2.0 * _oneRisk <= i_riskUSD + 60.0
+        2
+    else if _oneRisk <= i_riskUSD + 60.0
+        1
+    else
+        0
+
+// ═══════════════════════════════════════════════════════════
+//  NEW YORK TIME
+// ═══════════════════════════════════════════════════════════
+nyH    = hour(time,   "America/New_York")
+nyM    = minute(time, "America/New_York")
+nyMins = nyH * 60 + nyM
+
+newDay  = ta.change(dayofmonth) != 0
+eodMins = i_eodH * 60 + i_eodMin
+eod     = nyMins >= eodMins
+
+// ═══════════════════════════════════════════════════════════
+//  ██  NY SESSION  ██
+// ═══════════════════════════════════════════════════════════
+nyRSMins = effNyRSH * 60 + effNyRSM
+nyREMins = effNyREH * 60 + effNyREM
+nyEEMins = effNyEEH * 60 + effNyEEM
+
+inRangeNY = nyMins >= nyRSMins and nyMins <= nyREMins
+
+// Range H/L
+var float nyRH     = na
+var float nyRL     = na
+var bool  nyRReady = false
+
+if newDay
+    nyRH     := na
+    nyRL     := na
+    nyRReady := false
+
+if inRangeNY
+    nyRH := na(nyRH) ? high : math.max(nyRH, high)
+    nyRL := na(nyRL) ? low  : math.min(nyRL, low)
+
+// Range just ended – one-shot
+var bool _nyRED = false
+if newDay
+    _nyRED := false
+
+nyRangeJustEnd = i_nyEnabled and not _nyRED and not na(nyRH) and not inRangeNY and
+                 nyMins > nyREMins and nyMins < eodMins
+if nyRangeJustEnd
+    _nyRED := true
+
+// Trade active / entry allowed
+nyTradeActive  = i_nyEnabled and nyMins > nyREMins and nyMins < eodMins
+nyEntryAllowed = nyTradeActive and nyMins < nyEEMins
+
+if nyRangeJustEnd and not na(nyRH)
+    nyRReady := true
+
+// VP bars
+var array<float> _nyBH = array.new_float(0)
+var array<float> _nyBL = array.new_float(0)
+var array<float> _nyBV = array.new_float(0)
+
+if newDay
+    array.clear(_nyBH)
+    array.clear(_nyBL)
+    array.clear(_nyBV)
+
+if inRangeNY
+    array.push(_nyBH, high)
+    array.push(_nyBL, low)
+    array.push(_nyBV, volume)
+
+// VP calculation
+var float nyPoc  = na
+var float nyVah  = na
+var float nyVal  = na
+var bool  nyVpOk = false
+
+if newDay
+    nyPoc  := na
+    nyVah  := na
+    nyVal  := na
+    nyVpOk := false
+
+if nyRangeJustEnd and not nyVpOk and not na(nyRH) and nyRH != nyRL
+    rowSize  = effTicks * syminfo.mintick
+    gridBase = math.floor(nyRL / rowSize) * rowSize
+    rows     = math.max(2, int(math.ceil((nyRH - gridBase) / rowSize)))
+    volBins  = array.new_float(rows, 0.0)
+    n = array.size(_nyBH)
+    for i = 0 to n - 1
+        bH = math.min(array.get(_nyBH, i), nyRH)
+        bL = math.max(array.get(_nyBL, i), nyRL)
+        bV = array.get(_nyBV, i)
+        if bH <= bL
+            continue
+        loBin = math.max(0, math.min(rows - 1, int(math.floor((bL - gridBase) / rowSize))))
+        hiBin = math.max(0, math.min(rows - 1, int(math.floor((bH - gridBase) / rowSize))))
+        nBins = hiBin - loBin + 1
+        vpp   = bV / nBins
+        for b = loBin to hiBin
+            array.set(volBins, b, array.get(volBins, b) + vpp)
+    maxVol = array.max(volBins)
+    pocBin = array.indexof(volBins, maxVol)
+    nyPoc := gridBase + (pocBin + 0.5) * rowSize
+    totalVol = array.sum(volBins)
+    vaTarget = totalVol * i_vaPercent / 100.0
+    vaLo = pocBin
+    vaHi = pocBin
+    vaVol = maxVol
+    for _i = 0 to rows - 1
+        if vaVol >= vaTarget or (vaHi >= rows - 1 and vaLo <= 0)
+            break
+        addUp   = vaHi < rows - 1 ? array.get(volBins, vaHi + 1) : 0.0
+        addDown = vaLo > 0         ? array.get(volBins, vaLo - 1) : 0.0
+        if addUp >= addDown
+            vaHi  += 1
+            vaVol += addUp
+        else
+            vaLo  -= 1
+            vaVol += addDown
+    nyVah  := gridBase + (vaHi + 1) * rowSize
+    nyVal  := gridBase + vaLo * rowSize
+    nyVpOk := true
+
+// Post-range extremes
+var float nyPrH = na
+var float nyPrL = na
+
+if newDay
+    nyPrH := na
+    nyPrL := na
+
+if nyTradeActive and nyVpOk
+    if high > nyVah
+        nyPrH := na(nyPrH) ? high : math.max(nyPrH, high)
+    if low < nyVal
+        nyPrL := na(nyPrL) ? low  : math.min(nyPrL, low)
+
+// Volatility
+nyHalfRange  = not na(nyRH) and not na(nyRL) ? (nyRH + nyRL) / 2.0 : na
+nyAllInUpper = nyVpOk and not na(nyHalfRange) and nyVal >= nyHalfRange
+nyAllInLower = nyVpOk and not na(nyHalfRange) and nyVah <= nyHalfRange
+nyIsVolatile = nyAllInUpper or nyAllInLower
+
+// State machine
+var int  nyState     = 0
+var bool nyTradeDone = false
+
+if newDay
+    nyState     := 0
+    nyTradeDone := false
+
+bool nyBrkUp = nyState == 0 and not nyTradeDone and nyEntryAllowed and nyRReady and close > nyRH
+bool nyBrkDn = nyState == 0 and not nyTradeDone and nyEntryAllowed and nyRReady and close < nyRL
+
+if nyBrkUp
+    nyState := 1
+if nyBrkDn
+    nyState := 2
+
+bool nyRetestL = nyState == 1 and nyEntryAllowed and close >= nyRL and close <= nyRH
+bool nyRetestS = nyState == 2 and nyEntryAllowed and close >= nyRL and close <= nyRH
+
+// Dynamic SL tracking
+var float nyWaitLow  = na
+var float nyWaitHigh = na
+
+if newDay
+    nyWaitLow  := na
+    nyWaitHigh := na
+
+if nyVpOk and nyTradeActive and not nyTradeDone and not na(nyVal)
+    if low < nyVal and low > nyRL
+        nyWaitLow := na(nyWaitLow) ? low : math.min(nyWaitLow, low)
+
+if nyVpOk and nyTradeActive and not nyTradeDone and not na(nyVah)
+    if high > nyVah and high < nyRH
+        nyWaitHigh := na(nyWaitHigh) ? high : math.max(nyWaitHigh, high)
+
+// SL functions
+nySlLong() =>
+    float sl = not na(nyWaitLow) ? nyWaitLow - i_slBuf : not na(nyVal) and nyVpOk ? nyVal - i_slBuf : not na(nyRL) ? nyRL - i_slBuf : close - 10 * syminfo.mintick
+    if nyVpOk and not na(nyVal)
+        sl := math.min(sl, nyVal - i_slBuf)
+    if na(sl) or sl >= close
+        sl := not na(nyVal) and not na(nyRL) ? close - (nyVal - nyRL) / 2 : not na(nyRL) ? nyRL - i_slBuf : close - 10 * syminfo.mintick
+    // Garda finala: SL trebuie sa fie INTOTDEAUNA sub close (VAL=RL => impart by zero)
+    if na(sl) or sl >= close
+        sl := close - 10 * syminfo.mintick
+    sl
+
+nySlShort() =>
+    float sl = not na(nyWaitHigh) ? nyWaitHigh + i_slBuf : not na(nyVah) and nyVpOk ? nyVah + i_slBuf : not na(nyRH) ? nyRH + i_slBuf : close + 10 * syminfo.mintick
+    if nyVpOk and not na(nyVah)
+        sl := math.max(sl, nyVah + i_slBuf)
+    if na(sl) or sl <= close
+        sl := not na(nyRH) ? nyRH + i_slBuf : close + 10 * syminfo.mintick
+    sl
+
+// Trade tracking – NY
+var float nyEntryPx  = na
+var float nyRiskAmt  = na
+var int   nyDir      = 0
+var int   nyEntryBar = na
+var int   nyEntryQty = 0
+
+// Trade tracking – LON
+var float lonEntryPx  = na
+var float lonRiskAmt  = na
+var int   lonDir      = 0
+var int   lonEntryBar = na
+var int   lonEntryQty = 0
+
+if newDay
+    nyEntryPx  := na
+    nyRiskAmt  := na
+    nyDir      := 0
+    nyEntryBar := na
+    nyEntryQty := 0
+
+// ── Stare deschisa per-sesiune (independent) ────────────────
+var bool nyOpen  = false
+var bool lonOpen = false
+nyOpen  := false
+lonOpen := false
+for _i = 0 to strategy.opentrades - 1
+    _id = strategy.opentrades.entry_id(_i)
+    if _id == "NY Long"  or _id == "NY Short"
+        nyOpen  := true
+    if _id == "LON Long" or _id == "LON Short"
+        lonOpen := true
+
+
+// Daca NY vrea sa intre si LON e inca activ → inchidem pozitia LON mai intai
+// (evita overlap pozitii: LON activ + NY entry = pozitie combinata falsa)
+// State cleanup LON se face automat pe barul urmator via blocul de reset existent
+if (nyRetestL or nyRetestS) and not nyOpen and not nyTradeDone and lonOpen
+    strategy.close("LON Long",  comment="LON→NY")
+    strategy.close("LON Short", comment="LON→NY")
+    // strategy.cancel nu functioneaza pe exit orders; strategy.close de mai sus inchide pozitia
+    if i_pmtEnabled and i_pmtToken != ""
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+
+// Entries – SL + TP la 1.5R
+if nyRetestL and not nyOpen and not nyTradeDone
+    sl       = nySlLong()
+    _riskAmt = close - sl
+    eqty     = entryQty(_riskAmt)
+    if eqty > 0
+        tp         = close + _riskAmt * i_tpR
+        nyEntryPx  := close
+        nyRiskAmt  := _riskAmt
+        nyDir      := 1
+        nyEntryQty := eqty
+        strategy.entry("NY Long",  strategy.long,  qty=eqty,  comment="NY RT L")
+        strategy.exit("NY XL", "NY Long",  stop=sl, limit=tp)
+        if i_pmtEnabled and i_pmtToken != ""
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        nyState     := 0
+        nyTradeDone := true
+        nyEntryBar  := bar_index
+        nyWaitLow   := na
+
+if nyRetestS and not nyOpen and not nyTradeDone
+    sl       = nySlShort()
+    _riskAmt = sl - close
+    eqty     = entryQty(_riskAmt)
+    if eqty > 0
+        tp         = close - _riskAmt * i_tpR
+        nyEntryPx  := close
+        nyRiskAmt  := _riskAmt
+        nyDir      := -1
+        nyEntryQty := eqty
+        strategy.entry("NY Short", strategy.short, qty=eqty, comment="NY RT S")
+        strategy.exit("NY XS", "NY Short", stop=sl, limit=tp)
+        if i_pmtEnabled and i_pmtToken != ""
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        nyState     := 0
+        nyTradeDone := true
+        nyEntryBar  := bar_index
+        nyWaitHigh  := na
+
+// Reset NY cand pozitia e inchisa (SL sau TP)
+if nyTradeDone and not nyOpen and not na(nyEntryPx) and not eod and bar_index > nz(nyEntryBar, -1)
+    if i_pmtEnabled and i_pmtToken != ""
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    nyEntryPx := na
+    nyRiskAmt := na
+
+// ═══════════════════════════════════════════════════════════
+//  ██  LONDON SESSION  ██
+// ═══════════════════════════════════════════════════════════
+lonRSMins = i_lonRSH * 60 + i_lonRSM
+lonREMins = i_lonREH * 60 + i_lonREM
+lonEEMins = i_lonEEH * 60 + i_lonEEM
+
+inRangeLon = i_lonEnabled and nyMins >= lonRSMins and nyMins <= lonREMins
+
+// Range H/L
+var float lonRH     = na
+var float lonRL     = na
+var bool  lonRReady = false
+
+if newDay
+    lonRH     := na
+    lonRL     := na
+    lonRReady := false
+
+if inRangeLon
+    lonRH := na(lonRH) ? high : math.max(lonRH, high)
+    lonRL := na(lonRL) ? low  : math.min(lonRL, low)
+
+// Range just ended – one-shot
+var bool _lonRED = false
+if newDay
+    _lonRED := false
+
+lonRangeJustEnd = i_lonEnabled and not _lonRED and not na(lonRH) and not inRangeLon and
+                  nyMins > lonREMins and nyMins < eodMins
+if lonRangeJustEnd
+    _lonRED := true
+
+// Trade active / entry allowed
+lonTradeActive  = i_lonEnabled and nyMins > lonREMins and nyMins < eodMins
+lonEntryAllowed = lonTradeActive and nyMins < lonEEMins
+
+if lonRangeJustEnd and not na(lonRH)
+    lonRReady := true
+
+// VP bars
+var array<float> _lonBH = array.new_float(0)
+var array<float> _lonBL = array.new_float(0)
+var array<float> _lonBV = array.new_float(0)
+
+if newDay
+    array.clear(_lonBH)
+    array.clear(_lonBL)
+    array.clear(_lonBV)
+
+if inRangeLon
+    array.push(_lonBH, high)
+    array.push(_lonBL, low)
+    array.push(_lonBV, volume)
+
+// VP calculation
+var float lonPoc  = na
+var float lonVah  = na
+var float lonVal  = na
+var bool  lonVpOk = false
+
+if newDay
+    lonPoc  := na
+    lonVah  := na
+    lonVal  := na
+    lonVpOk := false
+
+if lonRangeJustEnd and not lonVpOk and not na(lonRH) and lonRH != lonRL
+    rowSize  = effTicks * syminfo.mintick
+    gridBase = math.floor(lonRL / rowSize) * rowSize
+    rows     = math.max(2, int(math.ceil((lonRH - gridBase) / rowSize)))
+    volBins  = array.new_float(rows, 0.0)
+    n = array.size(_lonBH)
+    for i = 0 to n - 1
+        bH = math.min(array.get(_lonBH, i), lonRH)
+        bL = math.max(array.get(_lonBL, i), lonRL)
+        bV = array.get(_lonBV, i)
+        if bH <= bL
+            continue
+        loBin = math.max(0, math.min(rows - 1, int(math.floor((bL - gridBase) / rowSize))))
+        hiBin = math.max(0, math.min(rows - 1, int(math.floor((bH - gridBase) / rowSize))))
+        nBins = hiBin - loBin + 1
+        vpp   = bV / nBins
+        for b = loBin to hiBin
+            array.set(volBins, b, array.get(volBins, b) + vpp)
+    maxVol = array.max(volBins)
+    pocBin = array.indexof(volBins, maxVol)
+    lonPoc := gridBase + (pocBin + 0.5) * rowSize
+    totalVol = array.sum(volBins)
+    vaTarget = totalVol * i_vaPercent / 100.0
+    vaLo = pocBin
+    vaHi = pocBin
+    vaVol = maxVol
+    for _i = 0 to rows - 1
+        if vaVol >= vaTarget or (vaHi >= rows - 1 and vaLo <= 0)
+            break
+        addUp   = vaHi < rows - 1 ? array.get(volBins, vaHi + 1) : 0.0
+        addDown = vaLo > 0         ? array.get(volBins, vaLo - 1) : 0.0
+        if addUp >= addDown
+            vaHi  += 1
+            vaVol += addUp
+        else
+            vaLo  -= 1
+            vaVol += addDown
+    lonVah  := gridBase + (vaHi + 1) * rowSize
+    lonVal  := gridBase + vaLo * rowSize
+    lonVpOk := true
+
+// Post-range extremes
+var float lonPrH = na
+var float lonPrL = na
+
+if newDay
+    lonPrH := na
+    lonPrL := na
+
+if lonTradeActive and lonVpOk
+    if high > lonVah
+        lonPrH := na(lonPrH) ? high : math.max(lonPrH, high)
+    if low < lonVal
+        lonPrL := na(lonPrL) ? low  : math.min(lonPrL, low)
+
+// Volatility
+lonHalfRange  = not na(lonRH) and not na(lonRL) ? (lonRH + lonRL) / 2.0 : na
+lonAllInUpper = lonVpOk and not na(lonHalfRange) and lonVal >= lonHalfRange
+lonAllInLower = lonVpOk and not na(lonHalfRange) and lonVah <= lonHalfRange
+lonIsVolatile = lonAllInUpper or lonAllInLower
+
+// State machine
+var int  lonState     = 0
+var bool lonTradeDone = false
+
+if newDay
+    lonState     := 0
+    lonTradeDone := false
+
+bool lonBrkUp = lonState == 0 and not lonTradeDone and lonEntryAllowed and lonRReady and close > lonRH
+bool lonBrkDn = lonState == 0 and not lonTradeDone and lonEntryAllowed and lonRReady and close < lonRL
+
+if lonBrkUp
+    lonState := 1
+if lonBrkDn
+    lonState := 2
+
+bool lonRetestL = lonState == 1 and lonEntryAllowed and close >= lonRL and close <= lonRH
+bool lonRetestS = lonState == 2 and lonEntryAllowed and close >= lonRL and close <= lonRH
+
+
+// Dynamic SL tracking
+var float lonWaitLow  = na
+var float lonWaitHigh = na
+
+if newDay
+    lonWaitLow  := na
+    lonWaitHigh := na
+
+if lonVpOk and lonTradeActive and not lonTradeDone and not na(lonVal)
+    if low < lonVal and low > lonRL
+        lonWaitLow := na(lonWaitLow) ? low : math.min(lonWaitLow, low)
+
+if lonVpOk and lonTradeActive and not lonTradeDone and not na(lonVah)
+    if high > lonVah and high < lonRH
+        lonWaitHigh := na(lonWaitHigh) ? high : math.max(lonWaitHigh, high)
+
+// SL functions
+lonSlLong() =>
+    // SL la cel mai jos low format sub VAL in timpul retestului (dar nu mai sus de VAL)
+    float sl = not na(lonWaitLow) ? lonWaitLow - i_slBuf : not na(lonVal) and lonVpOk ? lonVal - i_slBuf : not na(lonRL) ? lonRL - i_slBuf : close - 10 * syminfo.mintick
+    // Garanteaza SL <= VAL (nu deasupra VAL)
+    if lonVpOk and not na(lonVal)
+        sl := math.min(sl, lonVal - i_slBuf)
+    if na(sl) or sl >= close
+        sl := not na(lonVal) and not na(lonRL) ? close - (lonVal - lonRL) / 2 : not na(lonRL) ? lonRL - i_slBuf : close - 10 * syminfo.mintick
+    // Garda finala: SL trebuie sa fie INTOTDEAUNA sub close (VAL=RL => impart by zero)
+    if na(sl) or sl >= close
+        sl := close - 10 * syminfo.mintick
+    sl
+
+lonSlShort() =>
+    // SL la cel mai inalt high format deasupra VAH in timpul retestului (dar nu mai jos de VAH)
+    float sl = not na(lonWaitHigh) ? lonWaitHigh + i_slBuf : not na(lonVah) and lonVpOk ? lonVah + i_slBuf : not na(lonRH) ? lonRH + i_slBuf : close + 10 * syminfo.mintick
+    // Garanteaza SL >= VAH (nu sub VAH)
+    if lonVpOk and not na(lonVah)
+        sl := math.max(sl, lonVah + i_slBuf)
+    if na(sl) or sl <= close
+        sl := not na(lonRH) ? lonRH + i_slBuf : close + 10 * syminfo.mintick
+    sl
+
+// Trade tracking – LON reset zilnic
+
+if newDay
+    lonEntryPx  := na
+    lonRiskAmt  := na
+    lonDir      := 0
+    lonEntryBar := na
+    lonEntryQty := 0
+
+// Entries – SL + TP la 1.5R
+if lonRetestL and not lonOpen and not lonTradeDone
+    sl       = lonSlLong()
+    _riskAmt = close - sl
+    eqty     = entryQty(_riskAmt)
+    if eqty > 0
+        tp          = close + _riskAmt * i_tpR
+        lonEntryPx  := close
+        lonRiskAmt  := _riskAmt
+        lonDir      := 1
+        lonEntryQty := eqty
+        strategy.entry("LON Long",  strategy.long,  qty=eqty,  comment="LON RT L")
+        strategy.exit("LON XL", "LON Long",  stop=sl, limit=tp)
+        if i_pmtEnabled and i_pmtToken != ""
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        lonState      := 0
+        lonTradeDone  := true
+        lonEntryBar   := bar_index
+        lonWaitLow    := na
+
+if lonRetestS and not lonOpen and not lonTradeDone
+    sl       = lonSlShort()
+    _riskAmt = sl - close
+    eqty     = entryQty(_riskAmt)
+    if eqty > 0
+        tp          = close - _riskAmt * i_tpR
+        lonEntryPx  := close
+        lonRiskAmt  := _riskAmt
+        lonDir      := -1
+        lonEntryQty := eqty
+        strategy.entry("LON Short", strategy.short, qty=eqty, comment="LON RT S")
+        strategy.exit("LON XS", "LON Short", stop=sl, limit=tp)
+        if i_pmtEnabled and i_pmtToken != ""
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        lonState      := 0
+        lonTradeDone  := true
+        lonEntryBar   := bar_index
+        lonWaitHigh   := na
+
+// Reset LON cand pozitia e inchisa (SL sau TP)
+if lonTradeDone and not lonOpen and not na(lonEntryPx) and not eod and bar_index > nz(lonEntryBar, -1)
+    if i_pmtEnabled and i_pmtToken != ""
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    lonEntryPx := na
+    lonRiskAmt := na
+
+// ═══════════════════════════════════════════════════════════
+//  EOD CLOSE
+// ═══════════════════════════════════════════════════════════
+if eod and (nyOpen or lonOpen)
+    strategy.close_all(comment="EOD")
+    if i_pmtEnabled and i_pmtToken != ""
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    nyState  := 0
+    lonState := 0
+
+// ═══════════════════════════════════════════════════════════
+//  VISUALS
+// ═══════════════════════════════════════════════════════════
+bgcolor(inRangeNY  ? color.new(color.blue,   88) : na, title="NY Range Window")
+bgcolor(inRangeLon ? color.new(color.purple, 88) : na, title="LON Range Window")
+bgcolor(nyIsVolatile  and nyTradeActive  ? color.new(color.orange, 92) : na, title="NY Volatile")
+bgcolor(lonIsVolatile and lonTradeActive ? color.new(color.red,    92) : na, title="LON Volatile")
+
+// ── NY Range + SVP ──────────────────────────────────────────
+plot(not na(nyRH) ? nyRH : na, "NY Range H", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(not na(nyRL) ? nyRL : na, "NY Range L", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(nyVpOk ? nyVah : na, "NY VAH", color.new(color.lime,   0), 2, plot.style_linebr)
+plot(nyVpOk ? nyPoc : na, "NY POC", color.new(color.yellow, 0), 2, plot.style_linebr)
+plot(nyVpOk ? nyVal : na, "NY VAL", color.new(color.red,    0), 2, plot.style_linebr)
+
+
+// ── LON Range + SVP ─────────────────────────────────────────
+plot(not na(lonRH) ? lonRH : na, "LON Range H", color.new(color.purple, 0), 2, plot.style_stepline)
+plot(not na(lonRL) ? lonRL : na, "LON Range L", color.new(color.purple, 0), 2, plot.style_stepline)
+plot(lonVpOk ? lonVah : na, "LON VAH", color.new(color.teal,   0), 2, plot.style_stepline)
+plot(lonVpOk ? lonPoc : na, "LON POC", color.new(color.silver, 0), 2, plot.style_stepline_diamond)
+plot(lonVpOk ? lonVal : na, "LON VAL", color.new(color.maroon, 0), 2, plot.style_stepline)
+
+
+// ── Shapes ──────────────────────────────────────────────────
+plotshape(nyBrkUp,   "NY BRK UP",   shape.triangleup,   location.belowbar, color.new(color.lime,  0), size=size.small, title="NY Breakout Up")
+plotshape(nyBrkDn,   "NY BRK DN",   shape.triangledown, location.abovebar, color.new(color.red,   0), size=size.small, title="NY Breakout Down")
+plotshape(nyRetestL, "NY RT Long",  shape.circle,       location.belowbar, color.new(color.green, 0), size=size.tiny,  title="NY Retest Long")
+plotshape(nyRetestS, "NY RT Short", shape.circle,       location.abovebar, color.new(color.orange,0), size=size.tiny,  title="NY Retest Short")
+
+plotshape(lonBrkUp,   "LON BRK UP",   shape.triangleup,   location.belowbar, color.new(color.aqua,   0), size=size.small, title="LON Breakout Up")
+plotshape(lonBrkDn,   "LON BRK DN",   shape.triangledown, location.abovebar, color.new(color.fuchsia,0), size=size.small, title="LON Breakout Down")
+plotshape(lonRetestL, "LON RT Long",  shape.circle,       location.belowbar, color.new(color.aqua,   0), size=size.tiny,  title="LON Retest Long")
+plotshape(lonRetestS, "LON RT Short", shape.circle,       location.abovebar, color.new(color.fuchsia,0), size=size.tiny,  title="LON Retest Short")
+
+// ═══════════════════════════════════════════════════════════
+//  INFO TABLE
+// ═══════════════════════════════════════════════════════════
+var table infoT = table.new(position.top_right, 2, 13,
+     bgcolor=color.new(color.black, 70),
+     border_color=color.gray, border_width=1,
+     frame_color=color.gray, frame_width=1)
+
+if barstate.islast
+    // Use timenow to get today's date in NY tz – correct even in replay mode
+    tnYear  = year(timenow,       "America/New_York")
+    tnMonth = month(timenow,      "America/New_York")
+    tnDay   = dayofmonth(timenow, "America/New_York")
+
+    // NY range timestamps -> Romania hours/minutes
+    nyRSTs  = timestamp("America/New_York", tnYear, tnMonth, tnDay, effNyRSH, effNyRSM)
+    nyRETs  = timestamp("America/New_York", tnYear, tnMonth, tnDay, effNyREH, effNyREM)
+    roNyRSH = hour(nyRSTs,   "Europe/Bucharest")
+    roNyRSM = minute(nyRSTs, "Europe/Bucharest")
+    roNyREH = hour(nyRETs,   "Europe/Bucharest")
+    roNyREM = minute(nyRETs, "Europe/Bucharest")
+
+    // London range timestamps -> Romania hours/minutes
+    lonRSTs  = timestamp("America/New_York", tnYear, tnMonth, tnDay, i_lonRSH, i_lonRSM)
+    lonRETs  = timestamp("America/New_York", tnYear, tnMonth, tnDay, i_lonREH, i_lonREM)
+    roLonRSH = hour(lonRSTs,   "Europe/Bucharest")
+    roLonRSM = minute(lonRSTs, "Europe/Bucharest")
+    roLonREH = hour(lonRETs,   "Europe/Bucharest")
+    roLonREM = minute(lonRETs, "Europe/Bucharest")
+
+    presetLabel  = "Preset: " + (i_preset == "Auto" ? "Auto(" + autoInstr + ")" : i_preset) + "  |  " + str.tostring(effTicks) + " ticks/row"
+    nyRangeLabel = str.tostring(effNyRSH, "00") + ":" + str.tostring(effNyRSM, "00") +
+                   "-" + str.tostring(effNyREH, "00") + ":" + str.tostring(effNyREM, "00") + " NY" +
+                   "  (" + str.tostring(roNyRSH, "00") + ":" + str.tostring(roNyRSM, "00") +
+                   "-" + str.tostring(roNyREH, "00") + ":" + str.tostring(roNyREM, "00") + " RO)"
+
+    table.cell(infoT, 0, 0,  "AVEM Range",  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 50))
+    table.cell(infoT, 1, 0,  presetLabel,   text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.blue, 50))
+
+    // NY section
+    nyHeader = i_nyEnabled ? "── NY ──" : "── NY (OFF) ──"
+    table.cell(infoT, 0, 1,  nyHeader,      text_color=i_nyEnabled ? color.blue : color.gray, text_size=size.small, bgcolor=color.new(color.blue, 85))
+    table.cell(infoT, 1, 1,  nyRangeLabel,  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 85))
+    table.cell(infoT, 0, 2,  "Range H",     text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 2,  not na(nyRH)  ? str.tostring(nyRH,  "#.##") : "—", text_color=color.white,  text_size=size.small)
+    table.cell(infoT, 0, 3,  "Range L",     text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 3,  not na(nyRL)  ? str.tostring(nyRL,  "#.##") : "—", text_color=color.white,  text_size=size.small)
+    table.cell(infoT, 0, 4,  "VAH",         text_color=color.lime,   text_size=size.small)
+    table.cell(infoT, 1, 4,  not na(nyVah) ? str.tostring(nyVah, "#.##") : "—", text_color=color.lime,   text_size=size.small)
+    table.cell(infoT, 0, 5,  "POC",         text_color=color.yellow, text_size=size.small)
+    table.cell(infoT, 1, 5,  not na(nyPoc) ? str.tostring(nyPoc, "#.##") : "—", text_color=color.yellow, text_size=size.small)
+    table.cell(infoT, 0, 6,  "VAL",         text_color=color.red,    text_size=size.small)
+    table.cell(infoT, 1, 6,  not na(nyVal) ? str.tostring(nyVal, "#.##") : "—", text_color=color.red,    text_size=size.small)
+    table.cell(infoT, 0, 7,  "NY Mode",     text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 7,  i_nyEnabled ? (nyIsVolatile ? "VOLATILE" : "NORMAL") : "—",
+               text_color=i_nyEnabled ? (nyIsVolatile ? color.orange : color.green) : color.gray, text_size=size.small)
+
+    // London section
+    lonHeader = i_lonEnabled ? "── LON ──" : "── LON (OFF) ──"
+    lonTimeLabel = i_lonEnabled
+         ? str.tostring(i_lonRSH, "00") + ":" + str.tostring(i_lonRSM, "00") +
+           "-" + str.tostring(i_lonREH, "00") + ":" + str.tostring(i_lonREM, "00") + " NY" +
+           "  (" + str.tostring(roLonRSH, "00") + ":" + str.tostring(roLonRSM, "00") +
+           "-" + str.tostring(roLonREH, "00") + ":" + str.tostring(roLonREM, "00") + " RO)"
+         : "dezactivat"
+    table.cell(infoT, 0, 8,  lonHeader,     text_color=color.purple, text_size=size.small, bgcolor=color.new(color.purple, 88))
+    table.cell(infoT, 1, 8,  lonTimeLabel,  text_color=i_lonEnabled ? color.white : color.gray, text_size=size.small, bgcolor=color.new(color.purple, 88))
+    table.cell(infoT, 0, 9,  "VAH",         text_color=color.teal,   text_size=size.small)
+    table.cell(infoT, 1, 9,  not na(lonVah) ? str.tostring(lonVah, "#.##") : "—", text_color=color.teal,   text_size=size.small)
+    table.cell(infoT, 0, 10, "POC",         text_color=color.silver, text_size=size.small)
+    table.cell(infoT, 1, 10, not na(lonPoc) ? str.tostring(lonPoc, "#.##") : "—", text_color=color.silver, text_size=size.small)
+    table.cell(infoT, 0, 11, "VAL",         text_color=color.maroon, text_size=size.small)
+    table.cell(infoT, 1, 11, not na(lonVal) ? str.tostring(lonVal, "#.##") : "—", text_color=color.maroon, text_size=size.small)
+    table.cell(infoT, 0, 12, "LON Mode",    text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 12, i_lonEnabled ? (lonIsVolatile ? "VOLATILE" : "NORMAL") : "—",
+               text_color=i_lonEnabled ? (lonIsVolatile ? color.orange : color.green) : color.gray, text_size=size.small)
+
+
+// ═══════════════════════════════════════════════════════════
+//  ALERTS
+// ═══════════════════════════════════════════════════════════
+alertcondition(nyRetestL,  "NY LONG Entry",       "AVEM NY ↑ Long retest @ {{close}}")
+alertcondition(nyRetestS,  "NY SHORT Entry",      "AVEM NY ↓ Short retest @ {{close}}")
+alertcondition(nyBrkUp,    "NY Breakout UP",      "AVEM NY: Range spart sus – asteapta retest")
+alertcondition(nyBrkDn,    "NY Breakout DOWN",    "AVEM NY: Range spart jos – asteapta retest")
+alertcondition(lonRetestL, "LON LONG Entry",      "AVEM LON ↑ Long retest @ {{close}}")
+alertcondition(lonRetestS, "LON SHORT Entry",     "AVEM LON ↓ Short retest @ {{close}}")
+alertcondition(lonBrkUp,   "LON Breakout UP",     "AVEM LON: Range spart sus – asteapta retest")
+alertcondition(lonBrkDn,   "LON Breakout DOWN",   "AVEM LON: Range spart jos – asteapta retest")
