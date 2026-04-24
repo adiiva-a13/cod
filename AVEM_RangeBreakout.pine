@@ -3,7 +3,7 @@ strategy("AdiivaBreakout", overlay=true,
          default_qty_type=strategy.fixed, default_qty_value=1,
          max_bars_back=500, calc_on_every_tick=false,
          process_orders_on_close=true, max_labels_count=500,
-         pyramiding=2,
+         pyramiding=1,
          commission_type=strategy.commission.cash_per_order, commission_value=0)
 
 // ═══════════════════════════════════════════════════════════
@@ -20,15 +20,8 @@ i_ticksPerRow = input.int(10,     "Row Size (ticks) [Custom]",    minval=1,     
 // ── Risk ────────────────────────────────────────────────────
 i_slBuf   = input.float(0.0, "SL Buffer (pts)", minval=0.0, step=0.25, group="Risk")
 
-// ── Runner Strategy ──────────────────────────────────────────
-i_tp1R          = input.float(1.0, "TP1 - inchide partial la (R)",    minval=0.5, step=0.5, group="Runner Strategy")
-i_tp1Pct        = input.int(80,    "TP1 - procent de inchis (%)",      minval=10,  maxval=90, step=10, group="Runner Strategy")
-i_runnerSLR     = input.float(0.5, "Runner SL la (R) - protectie",    minval=0.1, step=0.1, group="Runner Strategy")
-i_tp2R          = input.float(3.0, "Runner TP la (R) - tinta maxima", minval=1.5, step=0.5, group="Runner Strategy")
-i_nyRunEODH     = input.int(15,    "NY Runner: exit ora (NY)",         minval=9,   maxval=22, group="Runner Strategy")
-i_nyRunEODM     = input.int(30,    "NY Runner: exit minut (NY)",       minval=0,   maxval=59, group="Runner Strategy")
-i_lonRunEODH    = input.int(10,    "LON Runner: exit ora (NY)",        minval=0,   maxval=22, group="Runner Strategy")
-i_lonRunEODM    = input.int(0,     "LON Runner: exit minut (NY)",      minval=0,   maxval=59, group="Runner Strategy")
+// ── Exit Strategy ────────────────────────────────────────────
+i_tpR = input.float(1.0, "TP la (R)", minval=0.5, step=0.5, group="Exit Strategy")
 
 // ── New York Session ─────────────────────────────────────────
 i_nyEnabled = input.bool(true, "Enable New York Session",  group="New York Session")
@@ -95,9 +88,9 @@ pmtQty(slDist) =>
     math.min(maxQty, rawQty)
 
 // Cantitate finala pentru entry (toate instrumentele):
-// >= 2: runner activ, risc <= i_riskUSD
-//    2: twoRisk <= i_riskUSD+$60 → runner activ, usor peste buget
-//    1: SL larg, TP1 100% fara runner
+// >= 2: intra cu mai multe contracte, risc <= i_riskUSD
+//    2: twoRisk <= i_riskUSD+$60 → intra cu 2 contracte
+//    1: SL larg, intra cu 1 contract
 //    0: SL prea mare, nu intra
 entryQty(riskAmt) =>
     _base    = pmtQty(riskAmt)
@@ -305,37 +298,25 @@ nySlShort() =>
         sl := not na(nyRH) ? nyRH + i_slBuf : close + 10 * syminfo.mintick
     sl
 
-// Trade tracking + Runner state – NY
+// Trade tracking – NY
 var float nyEntryPx  = na
 var float nyRiskAmt  = na
-var int   nyDir      = 0    // 1=long, -1=short
-var bool  nyTp1Done  = false
-var int   nyTp1Bar   = na
+var int   nyDir      = 0
 var int   nyEntryBar = na
-var float nyRunTP    = na
-var float nyRunSL    = na
+var int   nyEntryQty = 0
 
-// Trade tracking + Runner state – LON (declarate devreme pt. acces din blocul NY)
+// Trade tracking – LON
 var float lonEntryPx  = na
 var float lonRiskAmt  = na
-var int   lonDir      = 0    // 1=long, -1=short
-var bool  lonTp1Done  = false
-var int   lonTp1Bar   = na
+var int   lonDir      = 0
 var int   lonEntryBar = na
-var float lonRunTP    = na
-var float lonRunSL    = na
 var int   lonEntryQty = 0
-var int   nyEntryQty = 0
 
 if newDay
     nyEntryPx  := na
     nyRiskAmt  := na
     nyDir      := 0
-    nyTp1Done  := false
-    nyTp1Bar   := na
     nyEntryBar := na
-    nyRunTP    := na
-    nyRunSL    := na
     nyEntryQty := 0
 
 // ── Stare deschisa per-sesiune (independent) ────────────────
@@ -352,7 +333,7 @@ for _i = 0 to strategy.opentrades - 1
 
 
 // Daca NY vrea sa intre si LON e inca activ → inchidem pozitia LON mai intai
-// (evita overlap pozitii: LON runner + NY entry = pozitie combinata falsa)
+// (evita overlap pozitii: LON activ + NY entry = pozitie combinata falsa)
 // State cleanup LON se face automat pe barul urmator via blocul de reset existent
 if (nyRetestL or nyRetestS) and not nyOpen and not nyTradeDone and lonOpen
     strategy.close("LON Long",  comment="LON→NY")
@@ -362,22 +343,21 @@ if (nyRetestL or nyRetestS) and not nyOpen and not nyTradeDone and lonOpen
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
 
-// Entries – SL only (TP1 si TP2 gestionate de runner logic)
+// Entries – SL + TP la 1R
 if nyRetestL and not nyOpen and not nyTradeDone
     sl       = nySlLong()
     _riskAmt = close - sl
     eqty     = entryQty(_riskAmt)
     if eqty > 0
+        tp         = close + _riskAmt * i_tpR
         nyEntryPx  := close
         nyRiskAmt  := _riskAmt
         nyDir      := 1
-        nyTp1Done  := false
         nyEntryQty := eqty
         strategy.entry("NY Long",  strategy.long,  qty=eqty,  comment="NY RT L")
-        strategy.exit("NY XL", "NY Long",  stop=sl)
+        strategy.exit("NY XL", "NY Long",  stop=sl, limit=tp)
         if i_pmtEnabled and i_pmtToken != ""
-            tp1 = close + _riskAmt * i_tp1R
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp1) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         nyState     := 0
         nyTradeDone := true
         nyEntryBar  := bar_index
@@ -388,82 +368,27 @@ if nyRetestS and not nyOpen and not nyTradeDone
     _riskAmt = sl - close
     eqty     = entryQty(_riskAmt)
     if eqty > 0
+        tp         = close - _riskAmt * i_tpR
         nyEntryPx  := close
         nyRiskAmt  := _riskAmt
         nyDir      := -1
-        nyTp1Done  := false
         nyEntryQty := eqty
         strategy.entry("NY Short", strategy.short, qty=eqty, comment="NY RT S")
-        strategy.exit("NY XS", "NY Short", stop=sl)
+        strategy.exit("NY XS", "NY Short", stop=sl, limit=tp)
         if i_pmtEnabled and i_pmtToken != ""
-            tp1 = close - _riskAmt * i_tp1R
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp1) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         nyState     := 0
         nyTradeDone := true
         nyEntryBar  := bar_index
         nyWaitHigh  := na
 
-// ── NY Runner Logic ──────────────────────────────────────────
-// TP1: inchide i_tp1Pct% si seteaza runner cu SL la 0.5BE si TP la 3R
-nyRunEODMins = i_nyRunEODH * 60 + i_nyRunEODM
-
-if nyTradeDone and not nyTp1Done and nyOpen and not na(nyEntryPx) and not na(nyRiskAmt)
-    isLong  = nyDir == 1
-    tp1px   = isLong ? nyEntryPx + nyRiskAmt * i_tp1R : nyEntryPx - nyRiskAmt * i_tp1R
-    tp1hit  = (isLong and high >= tp1px) or (not isLong and low <= tp1px)
-    if tp1hit
-        nyTp1Done  := true
-        nyTp1Bar   := bar_index
-        eid         = isLong ? "NY Long" : "NY Short"
-        xid         = isLong ? "NY XL"   : "NY XS"
-        slBuf       = 2 * syminfo.mintick
-        runSL       = isLong ? nyEntryPx + nyRiskAmt * i_runnerSLR - slBuf : nyEntryPx - nyRiskAmt * i_runnerSLR + slBuf
-        runTP       = isLong ? nyEntryPx + nyRiskAmt * i_tp2R               : nyEntryPx - nyRiskAmt * i_tp2R
-        nyRunTP    := runTP
-        nyRunSL    := runSL
-        if nyEntryQty >= 2
-            // Partial close + runner
-            tp1Qty = math.max(1, math.floor(nyEntryQty * i_tp1Pct / 100))
-            strategy.close(eid, qty=tp1Qty, comment="TP1 " + str.tostring(i_tp1Pct) + "%")
-            strategy.exit(xid, eid, limit=runTP, stop=runSL, comment_profit="TP2", comment_loss="BE 0.5")
-            if i_pmtEnabled and i_pmtToken != ""
-                closeAct = isLong ? "selllimit" : "buylimit"
-                alert('{"symbol":"' + i_pmtSymbol + '","data":"' + closeAct + '","quantity":' + str.tostring(tp1Qty) + ',"price":' + str.tostring(tp1px) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-        else
-            // 1 contract: inchide tot la TP1, fara runner
-            strategy.close(eid, comment="TP1 100%")
-            if i_pmtEnabled and i_pmtToken != ""
-                closeAct = isLong ? "selllimit" : "buylimit"
-                alert('{"symbol":"' + i_pmtSymbol + '","data":"' + closeAct + '","quantity":1,"price":' + str.tostring(tp1px) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-
-// Reset stare runner NY cand pozitia e inchisa de strategy.exit (TP2/BE 0.5)
-if nyTp1Done and not nyOpen
-    if i_pmtEnabled and i_pmtToken != ""
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-    nyTp1Done  := false
-    nyEntryPx  := na
-    nyRiskAmt  := na
-    nyRunTP    := na
-    nyRunSL    := na
-
-// SL hit NY: pozitie inchisa inainte de TP1 (nu EOD, nu runner)
-if nyTradeDone and not nyTp1Done and not nyOpen and not na(nyEntryPx) and not eod and bar_index > nz(nyEntryBar, -1)
+// Reset NY cand pozitia e inchisa (SL sau TP)
+if nyTradeDone and not nyOpen and not na(nyEntryPx) and not eod and bar_index > nz(nyEntryBar, -1)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     nyEntryPx := na
     nyRiskAmt := na
-
-// Scenariu B: exit runner la ora limita NY
-if nyTp1Done and nyOpen and nyMins >= nyRunEODMins
-    strategy.close(nyDir == 1 ? "NY Long" : "NY Short", comment="NY Runner EOD")
-    nyTp1Done := false
-    nyRunTP   := na
-    nyRunSL   := na
-    if i_pmtEnabled and i_pmtToken != ""
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
 
 // ═══════════════════════════════════════════════════════════
 //  ██  LONDON SESSION  ██
@@ -653,35 +578,30 @@ lonSlShort() =>
         sl := not na(lonRH) ? lonRH + i_slBuf : close + 10 * syminfo.mintick
     sl
 
-// Trade tracking + Runner state – LON (variabilele sunt declarate mai sus, langa NY)
+// Trade tracking – LON
 
 if newDay
     lonEntryPx  := na
     lonRiskAmt  := na
     lonDir      := 0
-    lonTp1Done  := false
-    lonTp1Bar   := na
     lonEntryBar := na
-    lonRunTP    := na
-    lonRunSL    := na
     lonEntryQty := 0
 
-// Entries – SL only
+// Entries – SL + TP la 1R
 if lonRetestL and not lonOpen and not lonTradeDone
     sl       = lonSlLong()
     _riskAmt = close - sl
     eqty     = entryQty(_riskAmt)
     if eqty > 0
+        tp          = close + _riskAmt * i_tpR
         lonEntryPx  := close
         lonRiskAmt  := _riskAmt
         lonDir      := 1
-        lonTp1Done  := false
         lonEntryQty := eqty
         strategy.entry("LON Long",  strategy.long,  qty=eqty,  comment="LON RT L")
-        strategy.exit("LON XL", "LON Long",  stop=sl)
+        strategy.exit("LON XL", "LON Long",  stop=sl, limit=tp)
         if i_pmtEnabled and i_pmtToken != ""
-            tp1 = close + _riskAmt * i_tp1R
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp1) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         lonState      := 0
         lonTradeDone  := true
         lonEntryBar   := bar_index
@@ -692,89 +612,32 @@ if lonRetestS and not lonOpen and not lonTradeDone
     _riskAmt = sl - close
     eqty     = entryQty(_riskAmt)
     if eqty > 0
+        tp          = close - _riskAmt * i_tpR
         lonEntryPx  := close
         lonRiskAmt  := _riskAmt
         lonDir      := -1
-        lonTp1Done  := false
         lonEntryQty := eqty
         strategy.entry("LON Short", strategy.short, qty=eqty, comment="LON RT S")
-        strategy.exit("LON XS", "LON Short", stop=sl)
+        strategy.exit("LON XS", "LON Short", stop=sl, limit=tp)
         if i_pmtEnabled and i_pmtToken != ""
-            tp1 = close - _riskAmt * i_tp1R
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp1) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(eqty) + ',"sl":' + str.tostring(sl) + ',"tp":' + str.tostring(tp) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         lonState      := 0
         lonTradeDone  := true
         lonEntryBar   := bar_index
         lonWaitHigh   := na
 
-// ── LON Runner Logic ─────────────────────────────────────────
-lonRunEODMins = i_lonRunEODH * 60 + i_lonRunEODM
-
-if lonTradeDone and not lonTp1Done and lonOpen and not na(lonEntryPx) and not na(lonRiskAmt)
-    isLong  = lonDir == 1
-    tp1px   = isLong ? lonEntryPx + lonRiskAmt * i_tp1R : lonEntryPx - lonRiskAmt * i_tp1R
-    tp1hit  = (isLong and high >= tp1px) or (not isLong and low <= tp1px)
-    if tp1hit
-        lonTp1Done := true
-        lonTp1Bar  := bar_index
-        eid         = isLong ? "LON Long" : "LON Short"
-        xid         = isLong ? "LON XL"   : "LON XS"
-        slBuf       = 2 * syminfo.mintick
-        runSL       = isLong ? lonEntryPx + lonRiskAmt * i_runnerSLR - slBuf : lonEntryPx - lonRiskAmt * i_runnerSLR + slBuf
-        runTP       = isLong ? lonEntryPx + lonRiskAmt * i_tp2R               : lonEntryPx - lonRiskAmt * i_tp2R
-        lonRunTP   := runTP
-        lonRunSL   := runSL
-        if lonEntryQty >= 2
-            // Partial close + runner
-            tp1Qty = math.max(1, math.floor(lonEntryQty * i_tp1Pct / 100))
-            strategy.close(eid, qty=tp1Qty, comment="TP1 " + str.tostring(i_tp1Pct) + "%")
-            // Inlocuim exit-ul original (SL la sl) cu parametrii runner (stop=BE, limit=TP2)
-            // Folosim ACELASI xid → TradingView updateaza ordinul existent in loc sa adauge unul nou
-            // strategy.cancel(xid) NU functioneaza pe strategy.exit orders – aceasta e metoda corecta
-            strategy.exit(xid, eid, limit=runTP, stop=runSL, comment_profit="TP2", comment_loss="BE 0.5")
-            if i_pmtEnabled and i_pmtToken != ""
-                closeAct = isLong ? "selllimit" : "buylimit"
-                alert('{"symbol":"' + i_pmtSymbol + '","data":"' + closeAct + '","quantity":' + str.tostring(tp1Qty) + ',"price":' + str.tostring(tp1px) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-        else
-            // 1 contract: inchide tot la TP1, fara runner
-            strategy.close(eid, comment="TP1 100%")
-            if i_pmtEnabled and i_pmtToken != ""
-                closeAct = isLong ? "selllimit" : "buylimit"
-                alert('{"symbol":"' + i_pmtSymbol + '","data":"' + closeAct + '","quantity":1,"price":' + str.tostring(tp1px) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-
-// Reset stare runner LON cand pozitia e inchisa de strategy.exit (TP2/BE 0.5)
-if lonTp1Done and not lonOpen
-    if i_pmtEnabled and i_pmtToken != ""
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-    lonTp1Done := false
-    lonEntryPx := na
-    lonRiskAmt := na
-    lonRunTP   := na
-    lonRunSL   := na
-
-// SL hit LON: pozitie inchisa inainte de TP1 (nu EOD, nu runner)
-if lonTradeDone and not lonTp1Done and not lonOpen and not na(lonEntryPx) and not eod and bar_index > nz(lonEntryBar, -1)
+// Reset LON cand pozitia e inchisa (SL sau TP)
+if lonTradeDone and not lonOpen and not na(lonEntryPx) and not eod and bar_index > nz(lonEntryBar, -1)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     lonEntryPx := na
     lonRiskAmt := na
 
-// Scenariu B LON: exit runner la ora limita
-if lonTp1Done and lonOpen and nyMins >= lonRunEODMins
-    strategy.close(lonDir == 1 ? "LON Long" : "LON Short", comment="LON Runner EOD")
-    lonTp1Done := false
-    lonRunTP   := na
-    lonRunSL   := na
-    if i_pmtEnabled and i_pmtToken != ""
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-        alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-
 // ═══════════════════════════════════════════════════════════
-//  EOD CLOSE (doar daca nu suntem in runner mode)
+//  EOD CLOSE
 // ═══════════════════════════════════════════════════════════
-if eod and (nyOpen or lonOpen) and not nyTp1Done and not lonTp1Done
+if eod and (nyOpen or lonOpen)
     strategy.close_all(comment="EOD")
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
@@ -789,8 +652,6 @@ bgcolor(inRangeNY  ? color.new(color.blue,   88) : na, title="NY Range Window")
 bgcolor(inRangeLon ? color.new(color.purple, 88) : na, title="LON Range Window")
 bgcolor(nyIsVolatile  and nyTradeActive  ? color.new(color.orange, 92) : na, title="NY Volatile")
 bgcolor(lonIsVolatile and lonTradeActive ? color.new(color.red,    92) : na, title="LON Volatile")
-bgcolor(nyTp1Done  and nyOpen  ? color.new(color.yellow, 88) : na, title="NY Runner Activ")
-bgcolor(lonTp1Done and lonOpen ? color.new(color.yellow, 88) : na, title="LON Runner Activ")
 
 // ── NY Range + SVP ──────────────────────────────────────────
 plot(not na(nyRH) ? nyRH : na, "NY Range H", color.new(color.blue, 0), 2, plot.style_linebr)
@@ -799,9 +660,6 @@ plot(nyVpOk ? nyVah : na, "NY VAH", color.new(color.lime,   0), 2, plot.style_li
 plot(nyVpOk ? nyPoc : na, "NY POC", color.new(color.yellow, 0), 2, plot.style_linebr)
 plot(nyVpOk ? nyVal : na, "NY VAL", color.new(color.red,    0), 2, plot.style_linebr)
 
-// ── NY Runner TP2 / SL ──────────────────────────────────────
-plot(nyRunTP, "NY TP2",      color.new(color.lime,  30), 1, plot.style_linebr)
-plot(nyRunSL, "NY Run SL",   color.new(color.orange,30), 1, plot.style_linebr)
 
 // ── LON Range + SVP ─────────────────────────────────────────
 plot(not na(lonRH) ? lonRH : na, "LON Range H", color.new(color.purple, 0), 2, plot.style_stepline)
@@ -810,9 +668,6 @@ plot(lonVpOk ? lonVah : na, "LON VAH", color.new(color.teal,   0), 2, plot.style
 plot(lonVpOk ? lonPoc : na, "LON POC", color.new(color.silver, 0), 2, plot.style_stepline_diamond)
 plot(lonVpOk ? lonVal : na, "LON VAL", color.new(color.maroon, 0), 2, plot.style_stepline)
 
-// ── LON Runner TP2 / SL ─────────────────────────────────────
-plot(lonRunTP, "LON TP2",    color.new(color.teal,  30), 1, plot.style_linebr)
-plot(lonRunSL, "LON Run SL", color.new(color.orange,30), 1, plot.style_linebr)
 
 // ── Shapes ──────────────────────────────────────────────────
 plotshape(nyBrkUp,   "NY BRK UP",   shape.triangleup,   location.belowbar, color.new(color.lime,  0), size=size.small, title="NY Breakout Up")
@@ -902,36 +757,6 @@ if barstate.islast
     table.cell(infoT, 1, 12, i_lonEnabled ? (lonIsVolatile ? "VOLATILE" : "NORMAL") : "—",
                text_color=i_lonEnabled ? (lonIsVolatile ? color.orange : color.green) : color.gray, text_size=size.small)
 
-// ═══════════════════════════════════════════════════════════
-//  DEBUG (temporar – sterge dupa diagnoza)
-// ═══════════════════════════════════════════════════════════
-lonDbgTp1Px = lonTradeDone and not lonTp1Done and not na(lonEntryPx) and not na(lonRiskAmt) ?
-     (lonDir == 1 ? lonEntryPx + lonRiskAmt * i_tp1R : lonEntryPx - lonRiskAmt * i_tp1R) : na
-
-plot(lonDbgTp1Px, "DBG LON tp1px", color.new(color.red, 0), 1, plot.style_linebr)
-
-// Label vizibil la orice scara de pret: apare pe bara unde lonTp1Done se seteaza TRUE
-if not lonTp1Done[1] and lonTp1Done
-    label.new(bar_index, high, "LON TP1 SET\nlonOpen=" + str.tostring(lonOpen) + "\nqty=" + str.tostring(strategy.position_size),
-              color=color.fuchsia, style=label.style_label_down,
-              textcolor=color.white, size=size.small)
-
-// Label vizibil la orice scara de pret: apare pe bara unde lonTp1Done se reseteaza FALSE
-if lonTp1Done[1] and not lonTp1Done
-    label.new(bar_index, high, "LON TP1 CLEAR\nlonOpen=" + str.tostring(lonOpen),
-              color=color.gray, style=label.style_label_down,
-              textcolor=color.white, size=size.small)
-
-// Label pentru NY TP1
-if not nyTp1Done[1] and nyTp1Done
-    label.new(bar_index, high, "NY TP1 SET\nnyOpen=" + str.tostring(nyOpen) + "\nqty=" + str.tostring(strategy.position_size),
-              color=color.aqua, style=label.style_label_down,
-              textcolor=color.black, size=size.small)
-
-if nyTp1Done[1] and not nyTp1Done
-    label.new(bar_index, high, "NY TP1 CLEAR\nnyOpen=" + str.tostring(nyOpen),
-              color=color.silver, style=label.style_label_down,
-              textcolor=color.black, size=size.small)
 
 // ═══════════════════════════════════════════════════════════
 //  ALERTS
