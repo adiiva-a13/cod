@@ -1,5 +1,5 @@
 //@version=5
-// AdiivaGold v10
+// AdiivaGold v11
 strategy(
   title                  = "AdiivaGold",
   overlay                = true,
@@ -11,9 +11,6 @@ strategy(
   process_orders_on_close = true,
   max_bars_back          = 500)
 
-// ============================================================
-// 1. INPUTS
-// ============================================================
 G_RISK = "Risk Management"
 G_FIB  = "Fibonacci"
 G_SES  = "Sesiune"
@@ -24,61 +21,37 @@ fib_e1     = input.float(0.75, "Entry 1 (0.75)",    group=G_FIB,  step=0.001)
 fib_e2     = input.float(0.886,"Entry 2 (0.886)",   group=G_FIB,  step=0.001)
 sl_buf_tck = input.int(20,     "Buffer SL (ticks)", group=G_FIB,  minval=1)
 min_sw_pct = input.float(1.0,  "Range minim (%)",   group=G_FIB,  minval=0.1, step=0.1)
+sess_h_s   = input.int(8,  "Start ora Londra",      group=G_SES,  minval=0, maxval=23)
+sess_m_s   = input.int(0,  "Start minut",           group=G_SES,  minval=0, maxval=59)
+sess_h_e   = input.int(21, "Sfarsit ora NY",         group=G_SES,  minval=0, maxval=23)
+sess_m_e   = input.int(0,  "Sfarsit minut",          group=G_SES,  minval=0, maxval=59)
+C_BULL     = input.color(#089981, "Bull",  group=G_VIZ)
+C_BEAR     = input.color(#f23645, "Bear",  group=G_VIZ)
+show_05    = input.bool(true, "Nivel 0.5", group=G_VIZ)
+show_aoi   = input.bool(true, "AOI box",  group=G_VIZ)
 
-sess_h_s = input.int(8,  "Start ora Londra", group=G_SES, minval=0, maxval=23)
-sess_m_s = input.int(0,  "Start minut",      group=G_SES, minval=0, maxval=59)
-sess_h_e = input.int(21, "Sfarsit ora NY",   group=G_SES, minval=0, maxval=23)
-sess_m_e = input.int(0,  "Sfarsit minut",    group=G_SES, minval=0, maxval=59)
-
-C_BULL      = input.color(#089981, "Culoare Bull",  group=G_VIZ)
-C_BEAR      = input.color(#f23645, "Culoare Bear",  group=G_VIZ)
-show_fib_05 = input.bool(true,     "Nivel 0.5",     group=G_VIZ)
-show_aoi    = input.bool(true,     "AOI box",       group=G_VIZ)
-choch_style = input.string("Solid","Stil CHoCH",    group=G_VIZ, options=["Solid","Dashed","Dotted"])
-choch_width = input.int(2,         "Grosime CHoCH", group=G_VIZ, minval=1, maxval=4)
-
-// ============================================================
-// 2. HELPERS
-// ============================================================
 f_lvl(dir, hi, lo, lvl) => dir == 1 ? hi - lvl*(hi-lo) : lo + lvl*(hi-lo)
-ln_s(s) =>
-    switch s
-        "Solid"  => line.style_solid
-        "Dashed" => line.style_dashed
-        =>          line.style_dotted
 
-// ============================================================
-// 3. DST EU
-// ============================================================
 _ts31m     = timestamp(year, 3, 31, 12, 0)
 _dst_s_day = dayofweek(_ts31m) == 1 ? 31 : 31 - (dayofweek(_ts31m) - 1)
 _ts31o     = timestamp(year, 10, 31, 12, 0)
 _dst_e_day = dayofweek(_ts31o) == 1 ? 31 : 31 - (dayofweek(_ts31o) - 1)
-_is_summer = ((month > 3) or (month == 3  and dayofmonth >= _dst_s_day)) and
-             ((month < 10) or (month == 10 and dayofmonth <  _dst_e_day))
+_is_summer = ((month > 3) or (month == 3 and dayofmonth >= _dst_s_day)) and
+             ((month < 10) or (month == 10 and dayofmonth < _dst_e_day))
 _dst_off   = _is_summer ? -60 : 0
-
-// ============================================================
-// 4. SESSION + DAILY RESET
-// ============================================================
-_cm     = hour * 60 + minute
-_sess_s = sess_h_s * 60 + sess_m_s + _dst_off
-_sess_e = sess_h_e * 60 + sess_m_e
-in_sess = _cm >= _sess_s and _cm < _sess_e
+_cm        = hour * 60 + minute
+in_sess    = _cm >= sess_h_s*60+sess_m_s+_dst_off and _cm < sess_h_e*60+sess_m_e
 
 var int day_trades = 0
 var int last_date  = 0
-cur_date   = year * 10000 + month * 100 + dayofmonth
+cur_date   = year*10000 + month*100 + dayofmonth
 is_new_day = cur_date != last_date
 if is_new_day
     day_trades := 0
     last_date  := cur_date
-
 buf_p = sl_buf_tck * syminfo.mintick
 
-// ============================================================
-// 5. SWING TYPE (ST → IT → LT)
-// ============================================================
+// ── SWING TYPE (LuxAlgo ICTMS) ──────────────────────────────
 type SW
     float p0 = na
     float p1 = na
@@ -91,26 +64,22 @@ var SW stL  = SW.new()
 var SW stH  = SW.new()
 var SW itL  = SW.new()
 var SW itH  = SW.new()
-var SW ltLo = SW.new()   // LT low pivot (din IT lows)
-var SW ltHi = SW.new()   // LT high pivot (din IT highs)
+var SW ltLo = SW.new()
+var SW ltHi = SW.new()
 
-sw_up(SW s, float p, int i) =>
-    s.p0 := s.p1,  s.p1 := s.p2,  s.p2 := p
-    s.i0 := s.i1,  s.i1 := s.i2,  s.i2 := i
+sw_up(SW s, float p, int idx) =>
+    s.p0:=s.p1, s.p1:=s.p2, s.p2:=p
+    s.i0:=s.i1, s.i1:=s.i2, s.i2:=idx
 
 sw_h(SW s) => not na(s.p0) and s.p0 < s.p1 and s.p1 >= s.p2
 sw_l(SW s) => not na(s.p0) and s.p0 > s.p1 and s.p1 <= s.p2
 
-// ============================================================
-// 6. MARKET STRUCTURE
-// ============================================================
-var int  msDir    = 0
+// ── MARKET STRUCTURE ────────────────────────────────────────
+var int  msDir     = 0
 var bool ltHicross = false
 var bool ltLocross = false
 
-// ============================================================
-// 7. SETUP ARRAYS
-// ============================================================
+// ── SETUP ARRAYS ─────────────────────────────────────────────
 var float[]  s_hi  = array.new_float(0)
 var float[]  s_lo  = array.new_float(0)
 var int[]    s_dir = array.new_int(0)
@@ -121,72 +90,127 @@ var bool[]   s_e2  = array.new_bool(0)
 var string[] s_id  = array.new_string(0)
 var bool[]   s_del = array.new_bool(0)
 
+// ── VISUAL ARRAYS (permanente, per directie) ─────────────────
+var line[]  vl_bull = array.new_line(0)
+var label[] vb_bull = array.new_label(0)
+var box[]   vx_bull = array.new_box(0)
+var line[]  vl_bear = array.new_line(0)
+var label[] vb_bear = array.new_label(0)
+var box[]   vx_bear = array.new_box(0)
+
+purge_bull() =>
+    while array.size(vl_bull) > 0
+        line.delete(array.pop(vl_bull))
+    while array.size(vb_bull) > 0
+        label.delete(array.pop(vb_bull))
+    while array.size(vx_bull) > 0
+        box.delete(array.pop(vx_bull))
+
+purge_bear() =>
+    while array.size(vl_bear) > 0
+        line.delete(array.pop(vl_bear))
+    while array.size(vb_bear) > 0
+        label.delete(array.pop(vb_bear))
+    while array.size(vx_bear) > 0
+        box.delete(array.pop(vx_bear))
+
 if is_new_day
     array.clear(s_hi),  array.clear(s_lo),  array.clear(s_dir)
-    array.clear(s_pb),  array.clear(s_ab)
-    array.clear(s_e1),  array.clear(s_e2)
-    array.clear(s_id),  array.clear(s_del)
+    array.clear(s_pb),  array.clear(s_ab),  array.clear(s_e1)
+    array.clear(s_e2),  array.clear(s_id),  array.clear(s_del)
     day_trades  := 0
     ltHicross   := false
     ltLocross   := false
+    purge_bull()
+    purge_bear()
 
-clear_dir(d) =>
-    i = array.size(s_hi) - 1
-    while i >= 0
-        if array.get(s_dir, i) == d
-            array.remove(s_hi,  i),  array.remove(s_lo,  i)
-            array.remove(s_dir, i),  array.remove(s_pb,  i)
-            array.remove(s_ab,  i),  array.remove(s_e1,  i)
-            array.remove(s_e2,  i),  array.remove(s_id,  i)
-            array.remove(s_del, i)
-        i := i - 1
-
-add_setup(hi, lo, dir, piv_bar, anc_bar) =>
-    array.push(s_hi,  hi),   array.push(s_lo,  lo)
-    array.push(s_dir, dir),  array.push(s_pb,  piv_bar)
-    array.push(s_ab,  anc_bar)
-    array.push(s_e1,  false), array.push(s_e2, false)
-    array.push(s_id,  ""),    array.push(s_del, false)
+add_setup(hi, lo, dir, pb, ab) =>
+    array.push(s_hi,hi), array.push(s_lo,lo), array.push(s_dir,dir)
+    array.push(s_pb,pb),  array.push(s_ab,ab)
+    array.push(s_e1,false), array.push(s_e2,false)
+    array.push(s_id,""),    array.push(s_del,false)
 
 rem_setup(i) =>
-    array.remove(s_hi,  i),  array.remove(s_lo,  i)
-    array.remove(s_dir, i),  array.remove(s_pb,  i)
-    array.remove(s_ab,  i),  array.remove(s_e1,  i)
-    array.remove(s_e2,  i),  array.remove(s_id,  i)
-    array.remove(s_del, i)
+    array.remove(s_hi,i),  array.remove(s_lo,i),  array.remove(s_dir,i)
+    array.remove(s_pb,i),  array.remove(s_ab,i),  array.remove(s_e1,i)
+    array.remove(s_e2,i),  array.remove(s_id,i),  array.remove(s_del,i)
 
-// deseneaza sageti permanente (vizibile in istoric)
-draw_markers(dir, hi, lo) =>
-    _f75  = f_lvl(dir, hi, lo, 0.75)
-    _f886 = f_lvl(dir, hi, lo, 0.886)
-    _sl   = dir == 1 ? _f886 - buf_p : _f886 + buf_p
-    _tp   = dir == 1 ? _f75 + math.abs(_f75 - _sl) * rr_ratio
-                     : _f75 - math.abs(_sl  - _f75) * rr_ratio
-    // Entry
-    label.new(bar_index, _f75,
-         str.tostring(_f75, format.mintick),
-         color     = color.orange,
-         textcolor = color.white,
-         style     = dir == 1 ? label.style_arrowup : label.style_arrowdown,
-         size      = size.small)
+// deseneaza permanent fibonacci pentru un setup
+draw_fib(dir, hi, lo, pb, ab) =>
+    f0   = f_lvl(dir, hi, lo, 0.0)
+    f05  = f_lvl(dir, hi, lo, 0.5)
+    f75  = f_lvl(dir, hi, lo, fib_e1)
+    f886 = f_lvl(dir, hi, lo, fib_e2)
+    f1   = f_lvl(dir, hi, lo, 1.0)
+    _sl  = dir == 1 ? f886 - buf_p : f886 + buf_p
+    _tp  = dir == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio
+                    : f75 - math.abs(_sl - f75)  * rr_ratio
+    c    = dir == 1 ? C_BULL : C_BEAR
+    ext  = pb + 500
+    vl   = dir == 1 ? vl_bull : vl_bear
+    vb   = dir == 1 ? vb_bull : vb_bear
+    vx   = dir == 1 ? vx_bull : vx_bear
+    // AOI box intre 0 si E1
+    if show_aoi
+        zt = dir == 1 ? f0  : f75
+        zb = dir == 1 ? f75 : f0
+        array.push(vx, box.new(pb, zt, ext, zb,
+             bgcolor=color.new(c, 89), border_color=color(na)))
+    // nivel 0 (CHoCH)
+    array.push(vl, line.new(pb, f0, ext, f0,
+         color=color.new(c,40), style=line.style_solid, width=1))
+    array.push(vb, label.new(ext, f0,
+         "0  " + str.tostring(f0, format.mintick),
+         color=color(na), textcolor=color.new(c,40),
+         style=label.style_label_left, size=size.tiny))
+    // 0.5
+    if show_05
+        array.push(vl, line.new(pb, f05, ext, f05,
+             color=color.new(c,65), style=line.style_dotted, width=1))
+        array.push(vb, label.new(ext, f05,
+             "0.5  " + str.tostring(f05, format.mintick),
+             color=color(na), textcolor=color.new(c,60),
+             style=label.style_label_left, size=size.tiny))
+    // E1 @ 0.75
+    array.push(vl, line.new(pb, f75, ext, f75,
+         color=color.orange, style=line.style_solid, width=2))
+    array.push(vb, label.new(ext, f75,
+         str.tostring(f75, format.mintick),
+         color=color.orange, textcolor=color.white,
+         style=dir==1 ? label.style_arrowup : label.style_arrowdown,
+         size=size.small))
+    // E2 @ 0.886
+    array.push(vl, line.new(pb, f886, ext, f886,
+         color=color.new(color.orange,55), style=line.style_dashed, width=1))
+    array.push(vb, label.new(ext, f886,
+         "E2 " + str.tostring(f886, format.mintick),
+         color=color(na), textcolor=color.new(color.orange,40),
+         style=label.style_label_left, size=size.tiny))
+    // nivel 1 (ancora)
+    array.push(vl, line.new(ab, f1, ext, f1,
+         color=color.new(c,40), style=line.style_solid, width=1))
+    array.push(vb, label.new(ext, f1,
+         "1  " + str.tostring(f1, format.mintick),
+         color=color(na), textcolor=color.new(c,40),
+         style=label.style_label_left, size=size.tiny))
     // SL
-    label.new(bar_index, _sl,
+    array.push(vl, line.new(pb, _sl, ext, _sl,
+         color=C_BEAR, style=line.style_solid, width=2))
+    array.push(vb, label.new(ext, _sl,
          str.tostring(_sl, format.mintick),
-         color     = C_BEAR,
-         textcolor = color.white,
-         style     = dir == 1 ? label.style_arrowdown : label.style_arrowup,
-         size      = size.small)
+         color=C_BEAR, textcolor=color.white,
+         style=dir==1 ? label.style_arrowdown : label.style_arrowup,
+         size=size.small))
     // TP
-    label.new(bar_index, _tp,
+    array.push(vl, line.new(pb, _tp, ext, _tp,
+         color=C_BULL, style=line.style_solid, width=2))
+    array.push(vb, label.new(ext, _tp,
          str.tostring(_tp, format.mintick),
-         color     = C_BULL,
-         textcolor = color.white,
-         style     = dir == 1 ? label.style_arrowup : label.style_arrowdown,
-         size      = size.small)
+         color=C_BULL, textcolor=color.white,
+         style=dir==1 ? label.style_arrowup : label.style_arrowdown,
+         size=size.small))
 
-// ============================================================
-// 8. DETECTIE ST → IT → LT
-// ============================================================
+// ── ST → IT → LT ─────────────────────────────────────────────
 if not na(low[2])
     if low[2] > low[1] and low[1] <= low[0]
         sw_up(stL, low[1], bar_index[1])
@@ -197,34 +221,28 @@ if not na(high[2])
 cITL = sw_l(stL)
 if cITL and not cITL[1]
     sw_up(itL, stL.p1, stL.i1)
-
 cITH = sw_h(stH)
 if cITH and not cITH[1]
     sw_up(itH, stH.p1, stH.i1)
 
-// LT din IT
 cLTL = sw_l(itL)
 if cLTL and not cLTL[1]
     ltLocross := false
     sw_up(ltLo, itL.p1, itL.i1)
-
 cLTH = sw_h(itH)
 if cLTH and not cLTH[1]
     ltHicross := false
     sw_up(ltHi, itH.p1, itH.i1)
 
-// ============================================================
-// 9. CHoCH LA NIVEL LT + FIBONACCI
-// Ancora = extremul OPUS gasit INAINTE de pivotul LT
-// ============================================================
+// ── CHoCH LT + FIBONACCI ─────────────────────────────────────
 
-// BULL CHoCH: close > LT high pivot
+// BULL CHoCH
 if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
     ltHicross := true
     if msDir != 1
         msDir := 1
-        lo_v = float(na)
-        lo_b = bar_index
+        lo_v  = float(na)
+        lo_b  = bar_index
         if not na(ltHi.i2)
             poff = bar_index - ltHi.i2
             lim  = math.min(poff + 400, 499)
@@ -236,12 +254,18 @@ if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
         if na(lo_v)
             lo_v := low
         rng_ok = (ltHi.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
+        // sterge setup + viz vechi bull
+        n = array.size(s_dir)
+        if n > 0
+            for i = n - 1 to 0
+                if array.get(s_dir, i) == 1
+                    rem_setup(i)
+        purge_bull()
         if rng_ok
-            clear_dir(1)
             add_setup(ltHi.p2, lo_v, 1, ltHi.i2, lo_b)
-            draw_markers(1, ltHi.p2, lo_v)
+            draw_fib(1, ltHi.p2, lo_v, ltHi.i2, lo_b)
         line.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
-             color=C_BULL, style=ln_s(choch_style), width=choch_width)
+             color=C_BULL, style=line.style_solid, width=2)
         box.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
              border_color=color(na), bgcolor=color(na),
              text="CHoCH", text_size=size.tiny,
@@ -250,13 +274,13 @@ if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
     else
         msDir := 1
 
-// BEAR CHoCH: close < LT low pivot
+// BEAR CHoCH
 if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
     ltLocross := true
     if msDir != -1
         msDir := -1
-        hi_v = float(na)
-        hi_b = bar_index
+        hi_v  = float(na)
+        hi_b  = bar_index
         if not na(ltLo.i2)
             poff = bar_index - ltLo.i2
             lim  = math.min(poff + 400, 499)
@@ -268,12 +292,17 @@ if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
         if na(hi_v)
             hi_v := high
         rng_ok = (hi_v - ltLo.p2) / ltLo.p2 >= min_sw_pct / 100.0
+        n = array.size(s_dir)
+        if n > 0
+            for i = n - 1 to 0
+                if array.get(s_dir, i) == -1
+                    rem_setup(i)
+        purge_bear()
         if rng_ok
-            clear_dir(-1)
             add_setup(hi_v, ltLo.p2, -1, ltLo.i2, hi_b)
-            draw_markers(-1, hi_v, ltLo.p2)
+            draw_fib(-1, hi_v, ltLo.p2, ltLo.i2, hi_b)
         line.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
-             color=C_BEAR, style=ln_s(choch_style), width=choch_width)
+             color=C_BEAR, style=line.style_solid, width=2)
         box.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
              border_color=color(na), bgcolor=color(na),
              text="CHoCH", text_size=size.tiny,
@@ -282,89 +311,84 @@ if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
     else
         msDir := -1
 
-// ============================================================
-// 10. INCHIDERE TRADE
-// ============================================================
+// ── INCHIDERE TRADE ───────────────────────────────────────────
 var int prev_cl = 0
 if strategy.closedtrades > prev_cl
     for i = prev_cl to strategy.closedtrades - 1
-        _eid  = strategy.closedtrades.entry_id(i)
+        _eid = strategy.closedtrades.entry_id(i)
         _prof = strategy.closedtrades.profit(i)
         _exp  = strategy.closedtrades.exit_price(i)
         _dc   = strategy.closedtrades.size(i) > 0 ? 1 : -1
-        label.new(bar_index, _dc == 1 ? high : low,
+        label.new(bar_index, _dc==1 ? high : low,
              (_prof >= 0 ? "TP " : "SL ") + str.tostring(_exp, format.mintick),
-             color     = _prof >= 0 ? color.new(C_BULL, 30) : color.new(C_BEAR, 30),
-             textcolor = color.white,
-             style     = _dc == 1 ? label.style_label_down : label.style_label_up,
-             size      = size.tiny)
+             color=_prof>=0 ? color.new(C_BULL,30) : color.new(C_BEAR,30),
+             textcolor=color.white,
+             style=_dc==1 ? label.style_label_down : label.style_label_up,
+             size=size.tiny)
         ns = array.size(s_id)
         if ns > 0
             for si = 0 to ns - 1
                 if array.get(s_id, si) == _eid
                     array.set(s_del, si, true)
+                    if _dc == 1
+                        purge_bull()
+                    else
+                        purge_bear()
                     break
     prev_cl := strategy.closedtrades
 
-// ============================================================
-// 11. ENTRY LOGIC
-// ============================================================
+// ── ENTRY ─────────────────────────────────────────────────────
 n_s = array.size(s_hi)
 if in_sess and day_trades < 2 and n_s > 0
     for idx = 0 to n_s - 1
         if day_trades >= 2
             break
-        _hi = array.get(s_hi,  idx)
-        _lo = array.get(s_lo,  idx)
-        _d  = array.get(s_dir, idx)
-        _e1 = array.get(s_e1,  idx)
-        _e2 = array.get(s_e2,  idx)
-
+        _hi = array.get(s_hi, idx)
+        _lo = array.get(s_lo, idx)
+        _d  = array.get(s_dir,idx)
+        _e1 = array.get(s_e1, idx)
+        _e2 = array.get(s_e2, idx)
         f75  = f_lvl(_d, _hi, _lo, fib_e1)
         f886 = f_lvl(_d, _hi, _lo, fib_e2)
         f100 = f_lvl(_d, _hi, _lo, 1.0)
-
         if not _e1 and day_trades < 2
-            if _d == 1 and low <= f75 and close > f886
+            if _d==1 and low<=f75 and close>f886
                 sl  = f886 - buf_p
-                tp  = f75 + math.abs(f75 - sl) * rr_ratio
-                eid = "E1L_" + str.tostring(idx)
+                tp  = f75 + math.abs(f75-sl)*rr_ratio
+                eid = "E1L_"+str.tostring(idx)
                 strategy.entry(eid, strategy.long,  limit=f75, comment="E1 BUY")
-                strategy.exit("X" + eid, eid, stop=sl, limit=tp)
+                strategy.exit("X"+eid, eid, stop=sl, limit=tp)
                 array.set(s_e1, idx, true)
                 array.set(s_id, idx, eid)
                 day_trades := day_trades + 1
-            else if _d == -1 and high >= f75 and close < f886
+            else if _d==-1 and high>=f75 and close<f886
                 sl  = f886 + buf_p
-                tp  = f75 - math.abs(sl - f75) * rr_ratio
-                eid = "E1S_" + str.tostring(idx)
+                tp  = f75 - math.abs(sl-f75)*rr_ratio
+                eid = "E1S_"+str.tostring(idx)
                 strategy.entry(eid, strategy.short, limit=f75, comment="E1 SELL")
-                strategy.exit("X" + eid, eid, stop=sl, limit=tp)
+                strategy.exit("X"+eid, eid, stop=sl, limit=tp)
                 array.set(s_e1, idx, true)
                 array.set(s_id, idx, eid)
                 day_trades := day_trades + 1
-
         if not _e2 and _e1 and day_trades < 2
-            if _d == 1 and low <= f886 and close > f100
+            if _d==1 and low<=f886 and close>f100
                 sl  = f100 - buf_p
-                tp  = f886 + math.abs(f886 - sl) * rr_ratio
-                eid = "E2L_" + str.tostring(idx)
+                tp  = f886 + math.abs(f886-sl)*rr_ratio
+                eid = "E2L_"+str.tostring(idx)
                 strategy.entry(eid, strategy.long,  limit=f886, comment="E2 BUY")
-                strategy.exit("X" + eid, eid, stop=sl, limit=tp)
+                strategy.exit("X"+eid, eid, stop=sl, limit=tp)
                 array.set(s_e2, idx, true)
                 day_trades := day_trades + 1
-            else if _d == -1 and high >= f886 and close < f100
+            else if _d==-1 and high>=f886 and close<f100
                 sl  = f100 + buf_p
-                tp  = f886 - math.abs(sl - f886) * rr_ratio
-                eid = "E2S_" + str.tostring(idx)
+                tp  = f886 - math.abs(sl-f886)*rr_ratio
+                eid = "E2S_"+str.tostring(idx)
                 strategy.entry(eid, strategy.short, limit=f886, comment="E2 SELL")
-                strategy.exit("X" + eid, eid, stop=sl, limit=tp)
+                strategy.exit("X"+eid, eid, stop=sl, limit=tp)
                 array.set(s_e2, idx, true)
                 day_trades := day_trades + 1
 
-// ============================================================
-// 12. CURATARE
-// ============================================================
+// ── CURATARE ──────────────────────────────────────────────────
 if array.size(s_hi) > 0
     i = array.size(s_hi) - 1
     while i >= 0
@@ -372,115 +396,12 @@ if array.size(s_hi) > 0
             rem_setup(i)
         i := i - 1
 
-// ============================================================
-// 13. VIZUALIZARE SETUP ACTIV (linii orizontale + sageti dreapta)
-// ============================================================
+// ── SESSION + TABLE ───────────────────────────────────────────
 bgcolor(in_sess ? color.new(color.blue, 95) : na, title="Sesiune")
 
-var line[]  vl = array.new_line(0)
-var label[] vb = array.new_label(0)
-var box[]   vx = array.new_box(0)
-
-if array.size(vl) > 0
-    for i = 0 to array.size(vl) - 1
-        line.delete(array.get(vl, i))
-array.clear(vl)
-if array.size(vb) > 0
-    for i = 0 to array.size(vb) - 1
-        label.delete(array.get(vb, i))
-array.clear(vb)
-if array.size(vx) > 0
-    for i = 0 to array.size(vx) - 1
-        box.delete(array.get(vx, i))
-array.clear(vx)
-
-nd = array.size(s_hi)
-if nd > 0
-    for idx = 0 to nd - 1
-        _hi = array.get(s_hi,  idx)
-        _lo = array.get(s_lo,  idx)
-        _d  = array.get(s_dir, idx)
-        _pb = array.get(s_pb,  idx)
-        _ab = array.get(s_ab,  idx)
-
-        f0   = f_lvl(_d, _hi, _lo, 0.0)
-        f05  = f_lvl(_d, _hi, _lo, 0.5)
-        f75  = f_lvl(_d, _hi, _lo, fib_e1)
-        f886 = f_lvl(_d, _hi, _lo, fib_e2)
-        f1   = f_lvl(_d, _hi, _lo, 1.0)
-        _sl  = _d == 1 ? f886 - buf_p : f886 + buf_p
-        _tp  = _d == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio
-                       : f75 - math.abs(_sl - f75)  * rr_ratio
-        ext  = bar_index + 50
-        c    = _d == 1 ? C_BULL : C_BEAR
-
-        // AOI box
-        if show_aoi
-            zt = _d == 1 ? f0  : f75
-            zb = _d == 1 ? f75 : f0
-            array.push(vx, box.new(_pb, zt, ext, zb,
-                 bgcolor=color.new(c, 89), border_color=color(na)))
-
-        // nivel 0
-        array.push(vl, line.new(_pb, f0, ext, f0,
-             color=color.new(c, 40), style=line.style_solid, width=1))
-        array.push(vb, label.new(ext, f0, "0  " + str.tostring(f0, format.mintick),
-             color=color(na), textcolor=color.new(c, 40),
-             style=label.style_label_left, size=size.tiny))
-
-        // nivel 0.5
-        if show_fib_05
-            array.push(vl, line.new(_pb, f05, ext, f05,
-                 color=color.new(c, 65), style=line.style_dotted, width=1))
-            array.push(vb, label.new(ext, f05, "0.5  " + str.tostring(f05, format.mintick),
-                 color=color(na), textcolor=color.new(c, 60),
-                 style=label.style_label_left, size=size.tiny))
-
-        // E1 @ 0.75
-        array.push(vl, line.new(_pb, f75, ext, f75,
-             color=color.orange, style=line.style_solid, width=2))
-        array.push(vb, label.new(ext, f75, str.tostring(f75, format.mintick),
-             color=color.orange, textcolor=color.white,
-             style=_d == 1 ? label.style_arrowup : label.style_arrowdown,
-             size=size.small))
-
-        // E2 @ 0.886
-        array.push(vl, line.new(_pb, f886, ext, f886,
-             color=color.new(color.orange, 55), style=line.style_dashed, width=1))
-        array.push(vb, label.new(ext, f886, "E2 " + str.tostring(f886, format.mintick),
-             color=color(na), textcolor=color.new(color.orange, 40),
-             style=label.style_label_left, size=size.tiny))
-
-        // nivel 1
-        array.push(vl, line.new(_ab, f1, ext, f1,
-             color=color.new(c, 40), style=line.style_solid, width=1))
-        array.push(vb, label.new(ext, f1, "1  " + str.tostring(f1, format.mintick),
-             color=color(na), textcolor=color.new(c, 40),
-             style=label.style_label_left, size=size.tiny))
-
-        // SL
-        array.push(vl, line.new(_pb, _sl, ext, _sl,
-             color=C_BEAR, style=line.style_solid, width=2))
-        array.push(vb, label.new(ext, _sl, str.tostring(_sl, format.mintick),
-             color=C_BEAR, textcolor=color.white,
-             style=_d == 1 ? label.style_arrowdown : label.style_arrowup,
-             size=size.small))
-
-        // TP
-        array.push(vl, line.new(_pb, _tp, ext, _tp,
-             color=C_BULL, style=line.style_solid, width=2))
-        array.push(vb, label.new(ext, _tp, str.tostring(_tp, format.mintick),
-             color=C_BULL, textcolor=color.white,
-             style=_d == 1 ? label.style_arrowup : label.style_arrowdown,
-             size=size.small))
-
-// ============================================================
-// 14. STATUS TABLE
-// ============================================================
 var table tbl = table.new(position.top_right, 1, 5,
-     bgcolor=color.new(color.black, 75),
-     border_color=color.new(color.gray, 60), border_width=1)
-
+     bgcolor=color.new(color.black,75),
+     border_color=color.new(color.gray,60), border_width=1)
 _n  = array.size(s_hi)
 _bu = 0
 _be = 0
@@ -490,15 +411,13 @@ if _n > 0
             _bu := _bu + 1
         else
             _be := _be + 1
-
-table.cell(tbl, 0, 0,
-     _n == 0 ? "MSS: ASTEPTAM" : "MSS ▲:" + str.tostring(_bu) + "  ▼:" + str.tostring(_be),
-     text_color = _n == 0 ? color.gray : _bu > _be ? C_BULL : C_BEAR, text_size = size.small)
+table.cell(tbl, 0, 0, _n==0 ? "ASTEPTAM" : "▲:"+str.tostring(_bu)+" ▼:"+str.tostring(_be),
+     text_color=_n==0?color.gray:_bu>_be?C_BULL:C_BEAR, text_size=size.small)
 table.cell(tbl, 0, 1, in_sess ? "Sesiune activa" : "Afara sesiunii",
      text_color=color.white, text_size=size.small)
-table.cell(tbl, 0, 2, str.tostring(_n) + " setup-uri active",
+table.cell(tbl, 0, 2, str.tostring(_n)+" setup-uri active",
      text_color=color.orange, text_size=size.small)
-table.cell(tbl, 0, 3, str.tostring(day_trades) + "/2 trades azi",
+table.cell(tbl, 0, 3, str.tostring(day_trades)+"/2 trades azi",
      text_color=color.white, text_size=size.small)
 table.cell(tbl, 0, 4, _is_summer ? "BST UTC+1" : "GMT UTC+0",
-     text_color=_is_summer ? color.yellow : color.new(color.white, 40), text_size=size.tiny)
+     text_color=_is_summer?color.yellow:color.new(color.white,40), text_size=size.tiny)
