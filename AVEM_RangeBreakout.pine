@@ -650,8 +650,6 @@ if eod and (nyOpen or lonOpen)
 // ═══════════════════════════════════════════════════════════
 bgcolor(inRangeNY  ? color.new(color.blue,   88) : na, title="NY Range Window")
 bgcolor(inRangeLon ? color.new(color.purple, 88) : na, title="LON Range Window")
-bgcolor(nyIsVolatile  and nyTradeActive  ? color.new(color.orange, 92) : na, title="NY Volatile")
-bgcolor(lonIsVolatile and lonTradeActive ? color.new(color.red,    92) : na, title="LON Volatile")
 nySlBar  = nyOpen[1]  and not nyOpen  and nyTradeDone  and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
 lonSlBar = lonOpen[1] and not lonOpen and lonTradeDone and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
 bgcolor(nyOpen  ? color.new(color.green, 88) : na, title="NY Trade Activ")
