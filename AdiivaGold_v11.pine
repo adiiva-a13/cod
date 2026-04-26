@@ -143,8 +143,7 @@ draw_fib(dir, hi, lo, pb, ab) =>
     f886 = f_lvl(dir, hi, lo, fib_e2)
     f1   = f_lvl(dir, hi, lo, 1.0)
     _sl  = dir == 1 ? f886 - buf_p : f886 + buf_p
-    _tp  = dir == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio
-                    : f75 - math.abs(_sl - f75)  * rr_ratio
+    _tp  = dir == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio : f75 - math.abs(_sl - f75) * rr_ratio
     c    = dir == 1 ? C_BULL : C_BEAR
     ext  = pb + 500
     vl   = dir == 1 ? vl_bull : vl_bear
