@@ -238,77 +238,70 @@ if cLTH and not cLTH[1]
 // BULL CHoCH
 if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
     ltHicross := true
-    if msDir != 1
-        msDir := 1
-        lo_v  = float(na)
-        lo_b  = bar_index
-        if not na(ltHi.i2)
-            poff = bar_index - ltHi.i2
-            lim  = math.min(poff + 400, 499)
-            if lim >= poff
-                for i = poff to lim
-                    if na(lo_v) or low[i] < lo_v
-                        lo_v := low[i]
-                        lo_b := bar_index - i
-        if na(lo_v)
-            lo_v := low
-        rng_ok = (ltHi.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
-        // sterge setup + viz vechi bull
-        n = array.size(s_dir)
-        if n > 0
-            for i = n - 1 to 0
-                if array.get(s_dir, i) == 1
-                    rem_setup(i)
-        purge_bull()
-        if rng_ok
-            add_setup(ltHi.p2, lo_v, 1, ltHi.i2, lo_b)
-            draw_fib(1, ltHi.p2, lo_v, ltHi.i2, lo_b)
-        line.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
-             color=C_BULL, style=line.style_solid, width=2)
-        box.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
-             border_color=color(na), bgcolor=color(na),
-             text="CHoCH", text_size=size.tiny,
-             text_halign=text.align_left, text_valign=text.align_bottom,
-             text_color=color.new(C_BULL, 17))
-    else
-        msDir := 1
+    msDir := 1
+    lo_v  = float(na)
+    lo_b  = bar_index
+    if not na(ltHi.i2)
+        poff = bar_index - ltHi.i2
+        lim  = math.min(poff + 400, 499)
+        if lim >= poff
+            for i = poff to lim
+                if na(lo_v) or low[i] < lo_v
+                    lo_v := low[i]
+                    lo_b := bar_index - i
+    if na(lo_v)
+        lo_v := low
+    rng_ok = (ltHi.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
+    n = array.size(s_dir)
+    if n > 0
+        for i = n - 1 to 0
+            if array.get(s_dir, i) == 1
+                rem_setup(i)
+    purge_bull()
+    if rng_ok
+        add_setup(ltHi.p2, lo_v, 1, ltHi.i2, lo_b)
+        draw_fib(1, ltHi.p2, lo_v, ltHi.i2, lo_b)
+    line.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
+         color=C_BULL, style=line.style_solid, width=2)
+    box.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
+         border_color=color(na), bgcolor=color(na),
+         text="CHoCH", text_size=size.tiny,
+         text_halign=text.align_left, text_valign=text.align_bottom,
+         text_color=color.new(C_BULL, 17))
 
 // BEAR CHoCH
 if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
     ltLocross := true
-    if msDir != -1
-        msDir := -1
-        hi_v  = float(na)
-        hi_b  = bar_index
-        if not na(ltLo.i2)
-            poff = bar_index - ltLo.i2
-            lim  = math.min(poff + 400, 499)
-            if lim >= poff
-                for i = poff to lim
-                    if na(hi_v) or high[i] > hi_v
-                        hi_v := high[i]
-                        hi_b := bar_index - i
-        if na(hi_v)
-            hi_v := high
-        rng_ok = (hi_v - ltLo.p2) / ltLo.p2 >= min_sw_pct / 100.0
-        n = array.size(s_dir)
-        if n > 0
-            for i = n - 1 to 0
-                if array.get(s_dir, i) == -1
-                    rem_setup(i)
-        purge_bear()
-        if rng_ok
-            add_setup(hi_v, ltLo.p2, -1, ltLo.i2, hi_b)
-            draw_fib(-1, hi_v, ltLo.p2, ltLo.i2, hi_b)
-        line.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
-             color=C_BEAR, style=line.style_solid, width=2)
-        box.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
-             border_color=color(na), bgcolor=color(na),
-             text="CHoCH", text_size=size.tiny,
-             text_halign=text.align_left, text_valign=text.align_top,
-             text_color=color.new(C_BEAR, 17))
-    else
-        msDir := -1
+    msDir := -1
+    hi_v  = float(na)
+    hi_b  = bar_index
+    if not na(ltLo.i2)
+        poff = bar_index - ltLo.i2
+        lim  = math.min(poff + 400, 499)
+        if lim >= poff
+            for i = poff to lim
+                if na(hi_v) or high[i] > hi_v
+                    hi_v := high[i]
+                    hi_b := bar_index - i
+    if na(hi_v)
+        hi_v := high
+    rng_ok = (hi_v - ltLo.p2) / ltLo.p2 >= min_sw_pct / 100.0
+    n = array.size(s_dir)
+    if n > 0
+        for i = n - 1 to 0
+            if array.get(s_dir, i) == -1
+                rem_setup(i)
+    purge_bear()
+    if rng_ok
+        add_setup(hi_v, ltLo.p2, -1, ltLo.i2, hi_b)
+        draw_fib(-1, hi_v, ltLo.p2, ltLo.i2, hi_b)
+    line.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
+         color=C_BEAR, style=line.style_solid, width=2)
+    box.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
+         border_color=color(na), bgcolor=color(na),
+         text="CHoCH", text_size=size.tiny,
+         text_halign=text.align_left, text_valign=text.align_top,
+         text_color=color.new(C_BEAR, 17))
 
 // ── INCHIDERE TRADE ───────────────────────────────────────────
 var int prev_cl = 0
