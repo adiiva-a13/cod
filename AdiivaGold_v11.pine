@@ -238,19 +238,9 @@ if cLTH and not cLTH[1]
 // BULL CHoCH
 if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
     ltHicross := true
-    msDir := 1
-    lo_v  = float(na)
-    lo_b  = bar_index
-    if not na(ltHi.i2)
-        poff = bar_index - ltHi.i2
-        lim  = math.min(poff + 400, 499)
-        if lim >= poff
-            for i = poff to lim
-                if na(lo_v) or low[i] < lo_v
-                    lo_v := low[i]
-                    lo_b := bar_index - i
-    if na(lo_v)
-        lo_v := low
+    msDir     := 1
+    lo_v = na(ltLo.p2) ? low  : ltLo.p2
+    lo_b = na(ltLo.i2) ? bar_index : ltLo.i2
     rng_ok = (ltHi.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
     n = array.size(s_dir)
     if n > 0
@@ -272,19 +262,9 @@ if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
 // BEAR CHoCH
 if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
     ltLocross := true
-    msDir := -1
-    hi_v  = float(na)
-    hi_b  = bar_index
-    if not na(ltLo.i2)
-        poff = bar_index - ltLo.i2
-        lim  = math.min(poff + 400, 499)
-        if lim >= poff
-            for i = poff to lim
-                if na(hi_v) or high[i] > hi_v
-                    hi_v := high[i]
-                    hi_b := bar_index - i
-    if na(hi_v)
-        hi_v := high
+    msDir     := -1
+    hi_v = na(ltHi.p2) ? high : ltHi.p2
+    hi_b = na(ltHi.i2) ? bar_index : ltHi.i2
     rng_ok = (hi_v - ltLo.p2) / ltLo.p2 >= min_sw_pct / 100.0
     n = array.size(s_dir)
     if n > 0
