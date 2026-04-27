@@ -231,10 +231,15 @@ cLTL = sw_l(itL)
 if cLTL and not cLTL[1]
     ltLocross := false
     sw_up(ltLo, itL.p1, itL.i1)
-    // primul LT low dupa un bear CHoCH → deseneaza Fibonacci
+    label.new(bar_index, low, "cLTL\nPB:"+str.tostring(pending_bear),
+         color=color.orange, textcolor=color.white,
+         style=label.style_label_up, size=size.tiny)
     if pending_bear and not na(pending_bear_hi)
         new_lo = itL.p1
         rng_ok = (pending_bear_hi - new_lo) / new_lo >= min_sw_pct / 100.0
+        label.new(bar_index, low * 0.999, "rng:"+str.tostring(rng_ok)+"\nhi="+str.tostring(pending_bear_hi,"#.#")+"\nlo="+str.tostring(new_lo,"#.#"),
+             color=color.purple, textcolor=color.white,
+             style=label.style_label_up, size=size.tiny)
         n = array.size(s_dir)
         if n > 0
             for i = n - 1 to 0
@@ -250,10 +255,15 @@ cLTH = sw_h(itH)
 if cLTH and not cLTH[1]
     ltHicross := false
     sw_up(ltHi, itH.p1, itH.i1)
-    // primul LT high dupa un bull CHoCH → deseneaza Fibonacci
+    label.new(bar_index, high, "cLTH\nPB:"+str.tostring(pending_bull),
+         color=color.orange, textcolor=color.white,
+         style=label.style_label_down, size=size.tiny)
     if pending_bull and not na(pending_bull_lo)
         new_hi = itH.p1
         rng_ok = (new_hi - pending_bull_lo) / pending_bull_lo >= min_sw_pct / 100.0
+        label.new(bar_index, high * 1.001, "rng:"+str.tostring(rng_ok)+"\nhi="+str.tostring(new_hi,"#.#")+"\nlo="+str.tostring(pending_bull_lo,"#.#"),
+             color=color.purple, textcolor=color.white,
+             style=label.style_label_down, size=size.tiny)
         n = array.size(s_dir)
         if n > 0
             for i = n - 1 to 0
@@ -285,6 +295,9 @@ if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
         pending_bull_lo_b := _lo_b
         pending_bull      := true
         pending_bear      := false
+        label.new(bar_index, low, "BULL_CHoCH\nPB_SET\nlo="+str.tostring(pending_bull_lo,"#.#"),
+             color=color.teal, textcolor=color.white,
+             style=label.style_label_up, size=size.tiny)
         line.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
              color=C_BULL, style=line.style_solid, width=2)
         box.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
@@ -313,6 +326,9 @@ if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
         pending_bear_hi_b := _hi_b
         pending_bear      := true
         pending_bull      := false
+        label.new(bar_index, high, "BEAR_CHoCH\nPB_SET\nhi="+str.tostring(pending_bear_hi,"#.#"),
+             color=color.red, textcolor=color.white,
+             style=label.style_label_down, size=size.tiny)
         line.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
              color=C_BEAR, style=line.style_solid, width=2)
         box.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
