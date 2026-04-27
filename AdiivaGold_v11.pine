@@ -155,57 +155,57 @@ draw_fib(dir, hi, lo, pb, ab) =>
     _sl  = dir == 1 ? f886 - buf_p : f886 + buf_p
     _tp  = dir == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio : f75 - math.abs(_sl - f75) * rr_ratio
     c    = dir == 1 ? C_BULL : C_BEAR
-    ext  = bar_index + 500
+    far  = bar_index + 100000
     vl   = dir == 1 ? vl_bull : vl_bear
     vb   = dir == 1 ? vb_bull : vb_bear
     vx   = dir == 1 ? vx_bull : vx_bear
     if show_aoi
         zt = dir == 1 ? f0  : f75
         zb = dir == 1 ? f75 : f0
-        array.push(vx, box.new(pb, zt, ext, zb,
+        array.push(vx, box.new(pb, zt, far, zb,
              bgcolor=color.new(c, 89), border_color=color(na)))
-    array.push(vl, line.new(pb, f0, ext, f0,
-         color=color.new(c,40), style=line.style_solid, width=1))
-    array.push(vb, label.new(ext, f0,
+    array.push(vl, line.new(pb, f0, pb + 1, f0,
+         color=color.new(c,40), style=line.style_solid, width=1, extend=extend.right))
+    array.push(vb, label.new(far, f0,
          "0  " + str.tostring(f0, format.mintick),
          color=color(na), textcolor=color.new(c,40),
          style=label.style_label_left, size=size.tiny))
     if show_05
-        array.push(vl, line.new(pb, f05, ext, f05,
-             color=color.new(c,65), style=line.style_dotted, width=1))
-        array.push(vb, label.new(ext, f05,
+        array.push(vl, line.new(pb, f05, pb + 1, f05,
+             color=color.new(c,65), style=line.style_dotted, width=1, extend=extend.right))
+        array.push(vb, label.new(far, f05,
              "0.5  " + str.tostring(f05, format.mintick),
              color=color(na), textcolor=color.new(c,60),
              style=label.style_label_left, size=size.tiny))
-    array.push(vl, line.new(pb, f75, ext, f75,
-         color=color.orange, style=line.style_solid, width=2))
-    array.push(vb, label.new(ext, f75,
+    array.push(vl, line.new(pb, f75, pb + 1, f75,
+         color=color.orange, style=line.style_solid, width=2, extend=extend.right))
+    array.push(vb, label.new(far, f75,
          str.tostring(f75, format.mintick),
          color=color.orange, textcolor=color.white,
          style=dir==1 ? label.style_arrowup : label.style_arrowdown,
          size=size.small))
-    array.push(vl, line.new(pb, f886, ext, f886,
-         color=color.new(color.orange,55), style=line.style_dashed, width=1))
-    array.push(vb, label.new(ext, f886,
+    array.push(vl, line.new(pb, f886, pb + 1, f886,
+         color=color.new(color.orange,55), style=line.style_dashed, width=1, extend=extend.right))
+    array.push(vb, label.new(far, f886,
          "E2 " + str.tostring(f886, format.mintick),
          color=color(na), textcolor=color.new(color.orange,40),
          style=label.style_label_left, size=size.tiny))
-    array.push(vl, line.new(ab, f1, ext, f1,
-         color=color.new(c,40), style=line.style_solid, width=1))
-    array.push(vb, label.new(ext, f1,
+    array.push(vl, line.new(ab, f1, ab + 1, f1,
+         color=color.new(c,40), style=line.style_solid, width=1, extend=extend.right))
+    array.push(vb, label.new(far, f1,
          "1  " + str.tostring(f1, format.mintick),
          color=color(na), textcolor=color.new(c,40),
          style=label.style_label_left, size=size.tiny))
-    array.push(vl, line.new(pb, _sl, ext, _sl,
-         color=C_BEAR, style=line.style_solid, width=2))
-    array.push(vb, label.new(ext, _sl,
+    array.push(vl, line.new(pb, _sl, pb + 1, _sl,
+         color=C_BEAR, style=line.style_solid, width=2, extend=extend.right))
+    array.push(vb, label.new(far, _sl,
          str.tostring(_sl, format.mintick),
          color=C_BEAR, textcolor=color.white,
          style=dir==1 ? label.style_arrowdown : label.style_arrowup,
          size=size.small))
-    array.push(vl, line.new(pb, _tp, ext, _tp,
-         color=C_BULL, style=line.style_solid, width=2))
-    array.push(vb, label.new(ext, _tp,
+    array.push(vl, line.new(pb, _tp, pb + 1, _tp,
+         color=C_BULL, style=line.style_solid, width=2, extend=extend.right))
+    array.push(vb, label.new(far, _tp,
          str.tostring(_tp, format.mintick),
          color=C_BULL, textcolor=color.white,
          style=dir==1 ? label.style_arrowup : label.style_arrowdown,
