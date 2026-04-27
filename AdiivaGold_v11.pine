@@ -340,10 +340,6 @@ if strategy.closedtrades > prev_cl
             for si = 0 to ns - 1
                 if array.get(s_id, si) == _eid
                     array.set(s_del, si, true)
-                    if _dc == 1
-                        purge_bull()
-                    else
-                        purge_bear()
                     break
     prev_cl := strategy.closedtrades
 
