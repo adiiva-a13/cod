@@ -129,6 +129,7 @@ if is_new_day
     day_trades     := 0
     ltHicross      := false
     ltLocross      := false
+    msDir          := 0
     pending_bull   := false
     pending_bear   := false
     purge_bull()
