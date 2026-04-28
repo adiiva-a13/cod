@@ -180,7 +180,7 @@ draw_fib(dir, hi, lo, pb, ab) =>
     _sl  = dir == 1 ? f886 - buf_p : f886 + buf_p
     _tp  = dir == 1 ? f75 + math.abs(f75 - _sl) * rr_ratio : f75 - math.abs(_sl - f75) * rr_ratio
     c    = dir == 1 ? C_BULL : C_BEAR
-    far  = bar_index + 100000
+    far  = bar_index + 499
     vl   = dir == 1 ? vl_bull : vl_bear
     vb   = dir == 1 ? vb_bull : vb_bear
     vx   = dir == 1 ? vx_bull : vx_bear
