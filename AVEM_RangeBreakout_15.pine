@@ -82,7 +82,7 @@ pmtTickVal = effPreset == "NQ" ? 0.50 : effPreset == "CL" ? 1.00 : effPreset == 
 // 6E: max 6 contracte
 // Returneaza 0 daca SL prea mare pentru i_riskUSD (fara minim fortat)
 pmtQty(slDist) =>
-    ticks  = slDist / syminfo.mintick
+    ticks  = math.round(slDist / syminfo.mintick)
     rawQty = math.floor(i_riskUSD / (ticks * pmtTickVal))
     maxQty = effPreset == "6E" ? 6 : 999
     math.min(maxQty, rawQty)

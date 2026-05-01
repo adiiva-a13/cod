@@ -62,7 +62,7 @@ effNyEEM   = effPreset == "NQ" ? 0  : effPreset == "CL" ? 0  : effPreset == "6E"
 pmtTickVal = effPreset == "NQ" ? 0.50 : effPreset == "CL" ? 1.00 : effPreset == "6E" ? 6.25 : 0.50
 
 pmtQty(slDist) =>
-    ticks  = slDist / syminfo.mintick
+    ticks  = math.round(slDist / syminfo.mintick)
     rawQty = math.floor(i_riskUSD / (ticks * pmtTickVal))
     maxQty = effPreset == "6E" ? 6 : 999
     math.min(maxQty, rawQty)
