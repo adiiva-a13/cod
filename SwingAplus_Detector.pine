@@ -1,53 +1,64 @@
 //@version=5
-indicator("🎯 Swing A+ Setup Detector", overlay=true,
-          max_bars_back=1000, max_lines_count=100, max_labels_count=100)
+indicator("🎯 Swing A+ Setup Detector [PRO]", overlay=true,
+          max_bars_back=1000, max_lines_count=200, max_labels_count=200)
 
 // ════════════════════════════════════════════════════════════════════
 // INPUTS
 // ════════════════════════════════════════════════════════════════════
-var string G1 = "═══ TREND FILTER (EMA H1) ═══"
-tf_trend  = input.timeframe("60",  "Trend Timeframe",     group=G1)
-ema_len   = input.int(200,         "EMA Length",           minval=20, group=G1)
+var string G1 = "═══ TREND FILTER ═══"
+tf_trend  = input.timeframe("60",  "Trend Timeframe",        group=G1)
+ema_len   = input.int(200,         "EMA Length",              minval=20, group=G1)
 
 var string G2 = "═══ IMPULSE ═══"
-imp_pct   = input.float(0.12, "Min Impulse %",       step=0.01, minval=0.01, group=G2)
-piv_l     = input.int(10,    "Pivot Left Bars",       minval=2, maxval=50,   group=G2)
-piv_r     = input.int(10,    "Pivot Right Bars",      minval=2, maxval=50,   group=G2)
+imp_pct   = input.float(0.12, "Min Impulse %",          step=0.01, minval=0.01, group=G2)
+piv_l     = input.int(10,    "Pivot Left Bars",          minval=2, maxval=50,   group=G2)
+piv_r     = input.int(10,    "Pivot Right Bars",         minval=2, maxval=50,   group=G2)
 
 var string G3 = "═══ FIBONACCI & ZONE ═══"
-fib_tol   = input.float(0.15, "Fib Zone Tolerance %", step=0.01, minval=0.01, group=G3)
-show_fib  = input.bool(true,  "Show Fib Lines",       group=G3)
-show_piv  = input.bool(true,  "Show Pivots",          group=G3)
-show_zone = input.bool(true,  "Show Premium/Discount Zone", group=G3)
+fib_tol   = input.float(0.15, "Fib Zone Tolerance %",   step=0.01, minval=0.01, group=G3)
+show_fib  = input.bool(true,  "Show Fib Lines",          group=G3)
+show_piv  = input.bool(true,  "Show Pivots",             group=G3)
+show_zone = input.bool(true,  "Show Premium/Discount",   group=G3)
 
 var string G4 = "═══ RVOL ═══"
-rvol_ma   = input.int(20,    "RVOL Average Bars",     minval=5,  group=G4)
-rvol_min  = input.float(1.5, "Min RVOL",              step=0.1,  minval=1.0, group=G4)
+rvol_ma   = input.int(20,    "RVOL Average Bars",        minval=5,  group=G4)
+rvol_min  = input.float(1.5, "Min RVOL",                 step=0.1,  minval=1.0, group=G4)
 
 var string G5 = "═══ CVD ═══"
-cvd_ema   = input.int(14, "CVD EMA Smooth",           minval=1,  group=G5)
+cvd_ema   = input.int(14, "CVD EMA Smooth",              minval=1,  group=G5)
 
 var string G6 = "═══ SESSION ═══"
 use_sess  = input.bool(true,        "Enable Session Filter", group=G6)
 sess_utc  = input.session("0700-2200", "Session (UTC)",      group=G6)
 
 var string G7 = "═══ STOP LOSS (ATR) ═══"
-atr_len   = input.int(14,   "ATR Length",             minval=1,  group=G7)
-atr_mult  = input.float(1.5, "SL ATR Multiplier",     step=0.1,  group=G7)
-show_sl   = input.bool(true,  "Show SL Line on Signal",          group=G7)
+atr_len   = input.int(14,    "ATR Length",               minval=1,  group=G7)
+atr_mult  = input.float(1.5, "SL ATR Multiplier",        step=0.1,  group=G7)
+show_sl   = input.bool(true,  "Show SL Line on Signal",             group=G7)
 
 var string G8 = "═══ NIVELE PSIHOLOGICE ═══"
-use_psych = input.bool(true,  "Activare Nivele Psihologice",     group=G8)
-psych_tol = input.float(0.05, "Toleranta Nivel Psihologic %",   step=0.01, minval=0.01, group=G8)
-show_psych= input.bool(true,  "Arata Linii Psihologice",         group=G8)
+use_psych  = input.bool(true,  "Activare Nivele Psihologice",  group=G8)
+psych_tol  = input.float(0.05, "Toleranta %",             step=0.01, minval=0.01, group=G8)
+show_psych = input.bool(true,  "Arata Linii Psihologice",        group=G8)
+
+var string G9 = "═══ MARKET STRUCTURE (BOS/CHOCH) ═══"
+show_bos   = input.bool(true, "Show BOS Labels",          group=G9)
+show_choch = input.bool(true, "Show CHOCH Labels",        group=G9)
+
+var string G10 = "═══ MULTI-TIMEFRAME ═══"
+show_mtf  = input.bool(true,        "Show MTF Panel",     group=G10)
+mtf_tf1   = input.timeframe("15",   "TF 1",               group=G10)
+mtf_tf2   = input.timeframe("60",   "TF 2",               group=G10)
+mtf_tf3   = input.timeframe("240",  "TF 3",               group=G10)
+mtf_tf4   = input.timeframe("D",    "TF 4",               group=G10)
 
 // ════════════════════════════════════════════════════════════════════
 // 1. TREND — EMA 200 H1
 // ════════════════════════════════════════════════════════════════════
-ema200   = request.security(syminfo.tickerid, tf_trend,
-              ta.ema(close, ema_len), lookahead=barmerge.lookahead_off)
-bull     = close > ema200
-bear     = close < ema200
+ema200 = request.security(syminfo.tickerid, tf_trend,
+           ta.ema(close, ema_len), lookahead=barmerge.lookahead_off)
+bull = close > ema200
+bear = close < ema200
 
 // ════════════════════════════════════════════════════════════════════
 // 2. PIVOTS & IMPULSE STRENGTH
@@ -74,58 +85,45 @@ strong_imp  = imp_pct_now >= imp_pct
 
 // ════════════════════════════════════════════════════════════════════
 // 3. FIBONACCI 0.786 + PREMIUM / DISCOUNT ZONE
-//
-//  Premium  = deasupra echilibrului (>50% swing) — bun pentru SHORT
-//  Discount = sub echilibru (<50% swing)          — bun pentru LONG
-//  Fib 0.786 = entry optim in zona Deep Discount / Deep Premium
 // ════════════════════════════════════════════════════════════════════
-f786_b    = (not na(_ph) and not na(_pl)) ? _ph - 0.786 * swing_range : na
-f786_s    = (not na(_ph) and not na(_pl)) ? _pl + 0.786 * swing_range : na
-equil     = (not na(_ph) and not na(_pl)) ? _pl + 0.5   * swing_range : na   // 50% = echilibru
+f786_b = (not na(_ph) and not na(_pl)) ? _ph - 0.786 * swing_range : na
+f786_s = (not na(_ph) and not na(_pl)) ? _pl + 0.786 * swing_range : na
+equil  = (not na(_ph) and not na(_pl)) ? _pl + 0.5   * swing_range : na
 
-// Zona discount (sub 50%) si premium (peste 50%)
 in_discount = not na(equil) and close < equil
 in_premium  = not na(equil) and close > equil
 
-// Toleranta pentru Fib 0.786
-tol_b = not na(f786_b) ? f786_b * fib_tol / 100.0 : 0.0
-tol_s = not na(f786_s) ? f786_s * fib_tol / 100.0 : 0.0
+tol_b  = not na(f786_b) ? f786_b * fib_tol / 100.0 : 0.0
+tol_s  = not na(f786_s) ? f786_s * fib_tol / 100.0 : 0.0
 
 at_f_b = bull and not na(f786_b) and in_discount and
          close >= (f786_b - tol_b) and close <= (f786_b + tol_b)
-at_f_s = bear and not na(f786_s) and in_premium  and
+at_f_s = bear and not na(f786_s) and in_premium and
          close >= (f786_s - tol_s) and close <= (f786_s + tol_s)
 
 // ════════════════════════════════════════════════════════════════════
-// 4. RVOL — Relative Volume
+// 4. RVOL
 // ════════════════════════════════════════════════════════════════════
 vol_avg  = ta.sma(volume, rvol_ma)
 rvol_now = vol_avg > 0 ? volume / vol_avg : 1.0
 hi_rvol  = rvol_now >= rvol_min
 
 // ════════════════════════════════════════════════════════════════════
-// 5. CVD — Cumulative Volume Delta (aproximat din OHLCV)
-//    delta_bar > 0 = cumparatori domina | delta_bar < 0 = vanzatori domina
+// 5. CVD — Cumulative Volume Delta
 // ════════════════════════════════════════════════════════════════════
 delta_bar = (high != low) ? volume * (2.0 * (close - low) / (high - low) - 1.0) : 0.0
 var float cvd_cum = 0.0
 cvd_cum  := cvd_cum + delta_bar
 cvd_sig   = ta.ema(cvd_cum, cvd_ema)
-
-cvd_up    = cvd_cum > cvd_sig    // presiune cumparare > medie → bullish
-cvd_dn    = cvd_cum < cvd_sig    // presiune vanzare > medie   → bearish
-
-// Absorbtie: lumânare în jos dar delta pozitiv = cumparatorii absorb oferta (bullish)
-//            lumânare în sus dar delta negativ  = vanzatorii absorb cererea (bearish)
+cvd_up    = cvd_cum > cvd_sig
+cvd_dn    = cvd_cum < cvd_sig
 abs_bull  = delta_bar > 0.0 and close < open
 abs_bear  = delta_bar < 0.0 and close > open
-
 cvd_ok_b  = cvd_up or abs_bull
 cvd_ok_s  = cvd_dn or abs_bear
 
 // ════════════════════════════════════════════════════════════════════
 // 6. POC — Fixed Range Volume Profile (proxy)
-//    Gasim barul cu cel mai mare volum din ultimul impuls → POC
 // ════════════════════════════════════════════════════════════════════
 lb_raw  = bar_index - math.max(_ph_bar, _pl_bar)
 lb      = math.max(math.min(lb_raw, 300), 5)
@@ -140,37 +138,25 @@ for i = 0 to lb - 1
 poc_val := poc_tmp
 
 // ════════════════════════════════════════════════════════════════════
-// 7. NIVELE PSIHOLOGICE (Numere Rotunde)
-//    Institutiile isi pun ordinele la niveluri fixe (1.1000, 1.1050...)
-//    Intervalul se calculeaza automat din magnitudinea pretului
+// 7. NIVELE PSIHOLOGICE
 // ════════════════════════════════════════════════════════════════════
-f_round_interval() =>
+f_psych_interval() =>
     p = close
-    p >= 10000 ? 1000.0 :
-     p >= 1000 ?  100.0 :
-     p >= 100  ?   10.0 :
-     p >= 10   ?    1.0 :
-     p >= 1    ?    0.1 :
-     p >= 0.1  ?    0.01 : 0.001
+    p >= 10000 ? 1000.0 : p >= 1000 ? 100.0 : p >= 100 ? 10.0 :
+     p >= 10   ?    1.0 : p >= 1    ?   0.1  : p >= 0.1 ?  0.01 : 0.001
 
-psych_interval = f_round_interval()
-
-// Cel mai apropiat nivel rotund de sus si de jos
-psych_below = math.floor(close / psych_interval) * psych_interval
-psych_above = math.ceil(close  / psych_interval) * psych_interval
-
-// Verificam daca pretul este langa un nivel psihologic
-tol_psych_abs = close * psych_tol / 100.0
-near_psych    = use_psych and
-                (math.abs(close - psych_below) <= tol_psych_abs or
-                 math.abs(close - psych_above) <= tol_psych_abs)
-
-// Nivelul psyhologic cel mai aproape
-nearest_psych = math.abs(close - psych_below) <= math.abs(close - psych_above) ?
-                 psych_below : psych_above
+psych_interval = f_psych_interval()
+psych_below    = math.floor(close / psych_interval) * psych_interval
+psych_above    = math.ceil(close  / psych_interval) * psych_interval
+tol_psych_abs  = close * psych_tol / 100.0
+near_psych     = use_psych and
+                 (math.abs(close - psych_below) <= tol_psych_abs or
+                  math.abs(close - psych_above) <= tol_psych_abs)
+nearest_psych  = math.abs(close - psych_below) <= math.abs(close - psych_above) ?
+                  psych_below : psych_above
 
 // ════════════════════════════════════════════════════════════════════
-// 8. SESSION FILTER
+// 8. SESSION
 // ════════════════════════════════════════════════════════════════════
 in_sess = not use_sess or not na(time(timeframe.period, sess_utc, "UTC"))
 
@@ -182,94 +168,193 @@ sl_long  = low  - atr_v * atr_mult
 sl_short = high + atr_v * atr_mult
 
 // ════════════════════════════════════════════════════════════════════
-// 10. CONFLUENCE SCORE & SETUP A+
-//     Fiecare conditie = 1 punct (max 6)
-//     Setup A+ = toate conditiile bifate simultan
+// 10. MARKET STRUCTURE — BOS & CHOCH
+//
+//  BOS  (Break of Structure)   = pret rupe in directia trendului
+//                                → confirma continuarea
+//  CHOCH (Change of Character) = pret rupe IMPOTRIVA trendului
+//                                → primul semnal de reversal posibil
 // ════════════════════════════════════════════════════════════════════
-sc_b = (bull       ? 1 : 0) + (strong_imp ? 1 : 0) + (at_f_b     ? 1 : 0) +
-       (hi_rvol    ? 1 : 0) + (cvd_ok_b   ? 1 : 0) + (near_psych ? 1 : 0)
-sc_s = (bear       ? 1 : 0) + (strong_imp ? 1 : 0) + (at_f_s     ? 1 : 0) +
-       (hi_rvol    ? 1 : 0) + (cvd_ok_s   ? 1 : 0) + (near_psych ? 1 : 0)
+bos_bull      = bull and not na(_ph) and ta.crossover(close,  _ph)
+bos_bear      = bear and not na(_pl) and ta.crossunder(close, _pl)
+choch_to_bear = bull and not na(_pl) and ta.crossunder(close, _pl)
+choch_to_bull = bear and not na(_ph) and ta.crossover(close,  _ph)
 
-setup_l = bull and strong_imp and at_f_b and hi_rvol and cvd_ok_b and in_sess
-setup_s = bear and strong_imp and at_f_s and hi_rvol and cvd_ok_s and in_sess
+var bool choch_bear_active = false
+var bool choch_bull_active = false
+if choch_to_bear
+    choch_bear_active := true
+    choch_bull_active := false
+if choch_to_bull
+    choch_bull_active := true
+    choch_bear_active := false
+if bos_bull
+    choch_bear_active := false
+if bos_bear
+    choch_bull_active := false
+
+// ════════════════════════════════════════════════════════════════════
+// 11. MULTI-TIMEFRAME SCORE FUNCTION
+//     Calculeaza scorul A+ pe orice timeframe via request.security
+// ════════════════════════════════════════════════════════════════════
+f_mtf_score() =>
+    _ema  = ta.ema(close, ema_len)
+    _bull = close > _ema
+    _bear = close < _ema
+
+    _ph_f = ta.pivothigh(high, piv_l, piv_r)
+    _pl_f = ta.pivotlow(low,   piv_l, piv_r)
+    var float _lph = na
+    var float _lpl = na
+    if not na(_ph_f)
+        _lph := _ph_f
+    if not na(_pl_f)
+        _lpl := _pl_f
+
+    _rng  = (not na(_lph) and not na(_lpl)) ? math.abs(_lph - _lpl) : 0.0
+    _bp   = (not na(_lpl) and _lpl > 0.0)   ? _lpl : close
+    _imp  = _rng / _bp * 100.0
+    _simp = _imp >= imp_pct
+
+    _f786b = (not na(_lph) and not na(_lpl)) ? _lph - 0.786 * _rng : na
+    _f786s = (not na(_lph) and not na(_lpl)) ? _lpl + 0.786 * _rng : na
+    _eq    = (not na(_lph) and not na(_lpl)) ? _lpl + 0.5   * _rng : na
+    _disc  = not na(_eq) and close < _eq
+    _prem  = not na(_eq) and close > _eq
+    _tb    = not na(_f786b) ? _f786b * fib_tol / 100.0 : 0.0
+    _ts    = not na(_f786s) ? _f786s * fib_tol / 100.0 : 0.0
+    _afb   = _bull and not na(_f786b) and _disc and
+             close >= (_f786b - _tb) and close <= (_f786b + _tb)
+    _afs   = _bear and not na(_f786s) and _prem and
+             close >= (_f786s - _ts) and close <= (_f786s + _ts)
+
+    _avgv = ta.sma(volume, rvol_ma)
+    _rv   = _avgv > 0 ? volume / _avgv : 1.0
+    _hirv = _rv >= rvol_min
+
+    _d    = (high != low) ? volume * (2.0 * (close - low) / (high - low) - 1.0) : 0.0
+    var float _cvd = 0.0
+    _cvd := _cvd + _d
+    _cs   = ta.ema(_cvd, cvd_ema)
+    _cup  = _cvd > _cs
+    _cdn  = _cvd < _cs
+    _ab   = _d > 0.0 and close < open
+    _as   = _d < 0.0 and close > open
+
+    _sl  = _bull and _simp and _afb and _hirv and (_cup or _ab)
+    _ss  = _bear and _simp and _afs and _hirv and (_cdn or _as)
+    _scb = (_bull ? 1 : 0) + (_simp ? 1 : 0) + (_afb ? 1 : 0) +
+           (_hirv ? 1 : 0) + ((_cup or _ab) ? 1 : 0)
+    _scs = (_bear ? 1 : 0) + (_simp ? 1 : 0) + (_afs ? 1 : 0) +
+           (_hirv ? 1 : 0) + ((_cdn or _as) ? 1 : 0)
+    [_bull, _scb, _scs, _sl, _ss]
+
+[tf1_bull, tf1_scb, tf1_scs, tf1_sl, tf1_ss] =
+     request.security(syminfo.tickerid, mtf_tf1, f_mtf_score(), lookahead=barmerge.lookahead_off)
+[tf2_bull, tf2_scb, tf2_scs, tf2_sl, tf2_ss] =
+     request.security(syminfo.tickerid, mtf_tf2, f_mtf_score(), lookahead=barmerge.lookahead_off)
+[tf3_bull, tf3_scb, tf3_scs, tf3_sl, tf3_ss] =
+     request.security(syminfo.tickerid, mtf_tf3, f_mtf_score(), lookahead=barmerge.lookahead_off)
+[tf4_bull, tf4_scb, tf4_scs, tf4_sl, tf4_ss] =
+     request.security(syminfo.tickerid, mtf_tf4, f_mtf_score(), lookahead=barmerge.lookahead_off)
+
+mtf_all_bull = tf1_bull  and tf2_bull  and tf3_bull  and tf4_bull
+mtf_all_bear = not tf1_bull and not tf2_bull and not tf3_bull and not tf4_bull
+
+// ════════════════════════════════════════════════════════════════════
+// 12. CONFLUENCE SCORE & SETUP A+  (max 7 puncte)
+// ════════════════════════════════════════════════════════════════════
+sc_b = (bull        ? 1 : 0) + (strong_imp ? 1 : 0) + (at_f_b     ? 1 : 0) +
+       (hi_rvol     ? 1 : 0) + (cvd_ok_b   ? 1 : 0) + (near_psych ? 1 : 0) +
+       (mtf_all_bull ? 1 : 0)
+sc_s = (bear        ? 1 : 0) + (strong_imp ? 1 : 0) + (at_f_s     ? 1 : 0) +
+       (hi_rvol     ? 1 : 0) + (cvd_ok_s   ? 1 : 0) + (near_psych ? 1 : 0) +
+       (mtf_all_bear ? 1 : 0)
+
+// CHOCH activ blocheaza semnalul pana la urmatorul BOS
+setup_l = bull and strong_imp and at_f_b and hi_rvol and cvd_ok_b and
+          in_sess and not choch_bear_active
+setup_s = bear and strong_imp and at_f_s and hi_rvol and cvd_ok_s and
+          in_sess and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
 // PLOTS
 // ════════════════════════════════════════════════════════════════════
-
-// EMA 200 H1
 plot(ema200, "EMA 200 H1",
-     color     = bull ? color.new(color.lime, 20) : color.new(color.red, 20),
-     linewidth  = 2)
+     color = bull ? color.new(color.lime, 20) : color.new(color.red, 20), linewidth=2)
 
-// Equilibriu (50%)
 plot(show_zone ? equil : na, "Echilibru 50%",
      color=color.new(color.white, 60), linewidth=1, style=plot.style_linebr)
 
-// Premium / Discount zone background
-bgcolor(show_zone and not na(equil) and in_discount ? color.new(color.green,  96) : na, title="Discount Zone")
-bgcolor(show_zone and not na(equil) and in_premium  ? color.new(color.red,    96) : na, title="Premium Zone")
+bgcolor(show_zone and in_discount ? color.new(color.green, 96) : na, title="Discount Zone")
+bgcolor(show_zone and in_premium  ? color.new(color.red,   96) : na, title="Premium Zone")
 
-// Fibonacci 0.786
 plot(show_fib and bull ? f786_b : na, "Fib 0.786 Bull",
      color=color.new(color.teal,   20), linewidth=2, style=plot.style_linebr)
 plot(show_fib and bear ? f786_s : na, "Fib 0.786 Bear",
      color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
 
-// POC
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
 
-// Nivelele psihologice — linii la nearest psych
 plot(show_psych and use_psych ? psych_above : na, "Psych Above",
      color=color.new(color.fuchsia, 50), linewidth=1, style=plot.style_linebr)
 plot(show_psych and use_psych ? psych_below : na, "Psych Below",
      color=color.new(color.fuchsia, 50), linewidth=1, style=plot.style_linebr)
 
-// Setup A+ Signals
 plotshape(setup_l, "A+ BUY",
-          shape.labelup, location.belowbar,
-          color.new(color.green, 0), text="A+\nBUY", textcolor=color.white, size=size.normal)
+          shape.labelup,   location.belowbar,
+          color.new(color.green, 0), text="A+\nBUY",  textcolor=color.white, size=size.normal)
 plotshape(setup_s, "A+ SELL",
           shape.labeldown, location.abovebar,
-          color.new(color.red, 0), text="A+\nSELL", textcolor=color.white, size=size.normal)
+          color.new(color.red, 0),   text="A+\nSELL", textcolor=color.white, size=size.normal)
 
-// SL guide la fiecare semnal
 if show_sl and setup_l
     line.new(bar_index, sl_long,  bar_index + 8, sl_long,
-             color=color.new(color.red, 30), width=2, style=line.style_dotted)
+             color=color.new(color.red,   30), width=2, style=line.style_dotted)
 if show_sl and setup_s
     line.new(bar_index, sl_short, bar_index + 8, sl_short,
              color=color.new(color.green, 30), width=2, style=line.style_dotted)
 
-// Pivots
 plotchar(show_piv and not na(ph) ? ph : na, "PH", "▼",
          location.abovebar, color.new(color.red,  40), size=size.tiny, offset=-piv_r)
 plotchar(show_piv and not na(pl) ? pl : na, "PL", "▲",
          location.belowbar, color.new(color.lime, 40), size=size.tiny, offset=-piv_r)
 
-// Absorbtie markers
 plotchar(abs_bull and bull, "⚡ Absorb Bull", "⚡",
          location.belowbar, color.new(color.aqua,    10), size=size.tiny)
 plotchar(abs_bear and bear, "⚡ Absorb Bear", "⚡",
          location.abovebar, color.new(color.fuchsia, 10), size=size.tiny)
 
-// Nivel psihologic atins — marker special
 plotchar(near_psych, "Psych Level", "🔵",
          location.abovebar, color.new(color.purple, 20), size=size.tiny)
 
-// RVOL background
 bgcolor(hi_rvol ? color.new(color.yellow, 92) : na, title="High RVOL")
 
+// BOS / CHOCH labels
+if show_bos and bos_bull
+    label.new(bar_index, high, "BOS ▲",
+              color=color.new(color.green, 20), textcolor=color.white,
+              style=label.style_label_down, size=size.small)
+if show_bos and bos_bear
+    label.new(bar_index, low, "BOS ▼",
+              color=color.new(color.red, 20), textcolor=color.white,
+              style=label.style_label_up, size=size.small)
+if show_choch and choch_to_bear
+    label.new(bar_index, low, "CHOCH ⚠",
+              color=color.new(color.orange, 20), textcolor=color.white,
+              style=label.style_label_up, size=size.small)
+if show_choch and choch_to_bull
+    label.new(bar_index, high, "CHOCH ⚠",
+              color=color.new(color.orange, 20), textcolor=color.white,
+              style=label.style_label_down, size=size.small)
+
 // ════════════════════════════════════════════════════════════════════
-// DASHBOARD
+// DASHBOARD — Principal (top_right)
 // ════════════════════════════════════════════════════════════════════
-var table T = table.new(position.top_right, 2, 12,
-     bgcolor      = color.new(color.black, 55),
-     border_color = color.new(color.gray,  60),
-     border_width = 1,
-     frame_color  = color.new(color.blue,  40),
-     frame_width  = 2)
+var table T = table.new(position.top_right, 2, 13,
+     bgcolor=color.new(color.black, 55),
+     border_color=color.new(color.gray, 60), border_width=1,
+     frame_color=color.new(color.blue, 40), frame_width=2)
 
 if barstate.islast
     C_ok  = color.new(color.green,  50)
@@ -281,73 +366,138 @@ if barstate.islast
     CW    = color.white
     SZ    = size.small
 
-    // Row 0 — header
-    table.cell(T, 0, 0, "🎯 SWING A+ DETECTOR",
+    table.cell(T, 0,  0, "🎯 SWING A+ PRO",
                text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
-    table.cell(T, 1, 0, syminfo.ticker + " [" + timeframe.period + "]",
+    table.cell(T, 1,  0, syminfo.ticker + " [" + timeframe.period + "]",
                text_color=CW, bgcolor=C_hd, text_size=SZ)
 
-    // Row 1 — Trend
-    table.cell(T, 0, 1, "📊 Trend H1", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 1, bull ? "BULL ▲" : "BEAR ▼",
+    table.cell(T, 0,  1, "📊 Trend H1",    text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 1,  1, bull ? "BULL ▲" : "BEAR ▼",
                text_color=CW, bgcolor=bull ? C_ok : C_no, text_size=SZ)
 
-    // Row 2 — Impulse
-    table.cell(T, 0, 2, "⚡ Impulse %", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 2, str.tostring(math.round(imp_pct_now, 3)) + "%",
+    table.cell(T, 0,  2, "⚡ Impulse %",   text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 1,  2, str.tostring(math.round(imp_pct_now, 3)) + "%",
                text_color=CW, bgcolor=strong_imp ? C_ok : C_no, text_size=SZ)
 
-    // Row 3 — Premium/Discount Zone
-    table.cell(T, 0, 3, "🗺 Zona", text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 0,  3, "🗺 Zona",        text_color=CW, bgcolor=C_lb, text_size=SZ)
     zone_txt = in_discount ? "DISCOUNT 🟢" : in_premium ? "PREMIUM 🔴" : "ECHILIBRU ─"
     zone_col = in_discount ? C_ok : in_premium ? C_no : C_mid
-    table.cell(T, 1, 3, zone_txt, text_color=CW, bgcolor=zone_col, text_size=SZ)
+    table.cell(T, 1,  3, zone_txt, text_color=CW, bgcolor=zone_col, text_size=SZ)
 
-    // Row 4 — Fib 0.786
-    table.cell(T, 0, 4, "📐 Fib 0.786", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 4, (at_f_b or at_f_s) ? "IN ZONA ✓" : "IN AFARA ✗",
+    table.cell(T, 0,  4, "📐 Fib 0.786",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 1,  4, (at_f_b or at_f_s) ? "IN ZONA ✓" : "IN AFARA ✗",
                text_color=CW, bgcolor=(at_f_b or at_f_s) ? C_ok : C_no, text_size=SZ)
 
-    // Row 5 — RVOL
-    table.cell(T, 0, 5, "📈 RVOL", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 5, str.tostring(math.round(rvol_now, 2)) + "x",
+    table.cell(T, 0,  5, "📈 RVOL",       text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 1,  5, str.tostring(math.round(rvol_now, 2)) + "x",
                text_color=CW, bgcolor=hi_rvol ? C_ok : C_no, text_size=SZ)
 
-    // Row 6 — CVD
-    table.cell(T, 0, 6, "🌊 CVD", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 6, cvd_up ? "BULLISH ▲" : "BEARISH ▼",
+    table.cell(T, 0,  6, "🌊 CVD",        text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 1,  6, cvd_up ? "BULLISH ▲" : "BEARISH ▼",
                text_color=CW, bgcolor=cvd_up ? C_ok : C_no, text_size=SZ)
 
-    // Row 7 — Absorbtie
-    table.cell(T, 0, 7, "🔄 Absorbtie", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    abs_display = abs_bull ? "BULL ABSORB ⚡" : abs_bear ? "BEAR ABSORB ⚡" : "─ NIMIC ─"
-    abs_color   = abs_bull ? C_ok : abs_bear ? C_no : C_mid
-    table.cell(T, 1, 7, abs_display, text_color=CW, bgcolor=abs_color, text_size=SZ)
+    table.cell(T, 0,  7, "🔄 Absorbtie",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    abs_disp = abs_bull ? "BULL ⚡" : abs_bear ? "BEAR ⚡" : "─"
+    abs_col  = abs_bull ? C_ok : abs_bear ? C_no : C_mid
+    table.cell(T, 1,  7, abs_disp, text_color=CW, bgcolor=abs_col, text_size=SZ)
 
-    // Row 8 — Nivel Psihologic
-    table.cell(T, 0, 8, "🔵 Nivel Psih.", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    psych_str = near_psych ?
-         str.tostring(math.round(nearest_psych, 5)) + " ✓" : "─ NU ─"
-    table.cell(T, 1, 8, psych_str,
-               text_color=CW, bgcolor=near_psych ? color.new(color.purple, 50) : C_no, text_size=SZ)
+    table.cell(T, 0,  8, "🔵 Nivel Psih.", text_color=CW, bgcolor=C_lb, text_size=SZ)
+    psych_str = near_psych ? str.tostring(math.round(nearest_psych, 5)) + " ✓" : "─ NU ─"
+    table.cell(T, 1,  8, psych_str, text_color=CW,
+               bgcolor=near_psych ? color.new(color.purple, 50) : C_no, text_size=SZ)
 
-    // Row 9 — POC
-    table.cell(T, 0, 9, "💎 POC (FRVP)", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 9, str.tostring(math.round(poc_val, 5)),
+    table.cell(T, 0,  9, "💎 POC (FRVP)", text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 1,  9, str.tostring(math.round(poc_val, 5)),
                text_color=CW, bgcolor=C_bl, text_size=SZ)
 
-    // Row 10 — Confluenta
+    table.cell(T, 0, 10, "🏗 Structura",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    bos_txt = bos_bull       ? "BOS ▲ BULL"    : bos_bear       ? "BOS ▼ BEAR"    :
+              choch_to_bull  ? "CHOCH BULL ⚠"  : choch_to_bear  ? "CHOCH BEAR ⚠"  :
+              choch_bear_active ? "⚠ CHOCH ACT" : "─ INTACT ─"
+    bos_col = (bos_bull or choch_to_bull) ? C_ok :
+              (bos_bear or choch_to_bear or choch_bear_active) ? C_no : C_mid
+    table.cell(T, 1, 10, bos_txt, text_color=CW, bgcolor=bos_col, text_size=SZ)
+
+    table.cell(T, 0, 11, "🔀 MTF Align",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    mtf_txt = mtf_all_bull ? "TOATE BULL ✓" : mtf_all_bear ? "TOATE BEAR ✓" : "MIXTE ─"
+    mtf_col = mtf_all_bull ? C_ok : mtf_all_bear ? C_no : C_mid
+    table.cell(T, 1, 11, mtf_txt, text_color=CW, bgcolor=mtf_col, text_size=SZ)
+
     score_now = bull ? sc_b : sc_s
     sc_color  = score_now >= 6 ? C_ok : score_now >= 4 ? C_mid : C_no
-    table.cell(T, 0, 10, "⭐ Confluenta", text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1, 10, str.tostring(score_now) + " / 6",
-               text_color=CW, bgcolor=sc_color, text_size=SZ)
-
-    // Row 11 — Setup A+
-    table.cell(T, 0, 11, "🚀 SETUP A+", text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 0, 12, "⭐ Confluenta",  text_color=CW, bgcolor=C_lb, text_size=SZ)
     s_txt = setup_l ? "LONG  🟢" : setup_s ? "SHORT 🔴" : "ASTEPT ⏳"
     s_col = setup_l ? C_ok : setup_s ? C_no : C_mid
-    table.cell(T, 1, 11, s_txt, text_color=CW, bgcolor=s_col, text_size=SZ)
+    // Combine score + setup in last 2 cells
+    table.cell(T, 1, 12, s_txt + "  [" + str.tostring(score_now) + "/7]",
+               text_color=CW, bgcolor=s_col, text_size=SZ)
+
+// ════════════════════════════════════════════════════════════════════
+// DASHBOARD — Multi-Timeframe Panel (bottom_right)
+// ════════════════════════════════════════════════════════════════════
+var table MTF = table.new(position.bottom_right, 5, 5,
+     bgcolor=color.new(color.black, 55),
+     border_color=color.new(color.gray, 60), border_width=1,
+     frame_color=color.new(color.blue, 40), frame_width=2)
+
+if barstate.islast and show_mtf
+    C_ok  = color.new(color.green,  50)
+    C_no  = color.new(color.red,    60)
+    C_mid = color.new(color.orange, 55)
+    C_hd  = color.new(color.navy,   40)
+    C_lb  = color.new(color.gray,   65)
+    CW    = color.white
+    SZ    = size.small
+
+    table.cell(MTF, 0, 0, "🔄 MTF",   text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
+    table.cell(MTF, 1, 0, "Dir",       text_color=CW,            bgcolor=C_hd, text_size=SZ)
+    table.cell(MTF, 2, 0, "Score",     text_color=CW,            bgcolor=C_hd, text_size=SZ)
+    table.cell(MTF, 3, 0, "A+ LONG",  text_color=CW,            bgcolor=C_hd, text_size=SZ)
+    table.cell(MTF, 4, 0, "A+ SHORT", text_color=CW,            bgcolor=C_hd, text_size=SZ)
+
+    sc1 = tf1_bull ? tf1_scb : tf1_scs
+    table.cell(MTF, 0, 1, mtf_tf1, text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(MTF, 1, 1, tf1_bull ? "▲" : "▼", text_color=CW,
+               bgcolor=tf1_bull ? C_ok : C_no, text_size=SZ)
+    table.cell(MTF, 2, 1, str.tostring(sc1) + "/5", text_color=CW,
+               bgcolor=sc1 >= 4 ? C_ok : sc1 >= 2 ? C_mid : C_no, text_size=SZ)
+    table.cell(MTF, 3, 1, tf1_sl ? "✓" : "─", text_color=CW,
+               bgcolor=tf1_sl ? C_ok : C_lb, text_size=SZ)
+    table.cell(MTF, 4, 1, tf1_ss ? "✓" : "─", text_color=CW,
+               bgcolor=tf1_ss ? C_no : C_lb, text_size=SZ)
+
+    sc2 = tf2_bull ? tf2_scb : tf2_scs
+    table.cell(MTF, 0, 2, mtf_tf2, text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(MTF, 1, 2, tf2_bull ? "▲" : "▼", text_color=CW,
+               bgcolor=tf2_bull ? C_ok : C_no, text_size=SZ)
+    table.cell(MTF, 2, 2, str.tostring(sc2) + "/5", text_color=CW,
+               bgcolor=sc2 >= 4 ? C_ok : sc2 >= 2 ? C_mid : C_no, text_size=SZ)
+    table.cell(MTF, 3, 2, tf2_sl ? "✓" : "─", text_color=CW,
+               bgcolor=tf2_sl ? C_ok : C_lb, text_size=SZ)
+    table.cell(MTF, 4, 2, tf2_ss ? "✓" : "─", text_color=CW,
+               bgcolor=tf2_ss ? C_no : C_lb, text_size=SZ)
+
+    sc3 = tf3_bull ? tf3_scb : tf3_scs
+    table.cell(MTF, 0, 3, mtf_tf3, text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(MTF, 1, 3, tf3_bull ? "▲" : "▼", text_color=CW,
+               bgcolor=tf3_bull ? C_ok : C_no, text_size=SZ)
+    table.cell(MTF, 2, 3, str.tostring(sc3) + "/5", text_color=CW,
+               bgcolor=sc3 >= 4 ? C_ok : sc3 >= 2 ? C_mid : C_no, text_size=SZ)
+    table.cell(MTF, 3, 3, tf3_sl ? "✓" : "─", text_color=CW,
+               bgcolor=tf3_sl ? C_ok : C_lb, text_size=SZ)
+    table.cell(MTF, 4, 3, tf3_ss ? "✓" : "─", text_color=CW,
+               bgcolor=tf3_ss ? C_no : C_lb, text_size=SZ)
+
+    sc4 = tf4_bull ? tf4_scb : tf4_scs
+    table.cell(MTF, 0, 4, mtf_tf4, text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(MTF, 1, 4, tf4_bull ? "▲" : "▼", text_color=CW,
+               bgcolor=tf4_bull ? C_ok : C_no, text_size=SZ)
+    table.cell(MTF, 2, 4, str.tostring(sc4) + "/5", text_color=CW,
+               bgcolor=sc4 >= 4 ? C_ok : sc4 >= 2 ? C_mid : C_no, text_size=SZ)
+    table.cell(MTF, 3, 4, tf4_sl ? "✓" : "─", text_color=CW,
+               bgcolor=tf4_sl ? C_ok : C_lb, text_size=SZ)
+    table.cell(MTF, 4, 4, tf4_ss ? "✓" : "─", text_color=CW,
+               bgcolor=tf4_ss ? C_no : C_lb, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
 // ALERTS
@@ -355,21 +505,37 @@ if barstate.islast
 alertcondition(setup_l,
      title   = "🟢 Setup A+ LONG Detectat",
      message = "🟢 SETUP A+ LONG Detectat!\n{{ticker}} [{{interval}}]\n" +
-               "📐 Fib 0.786 atins (Deep Discount)\n" +
-               "📈 RVOL ridicat — bani grei prezenti\n" +
-               "🌊 CVD Bullish / Absorbtie confirmata\n" +
-               "🔵 Nivel psihologic in zona\n" +
+               "📐 Fib 0.786 — Deep Discount\n" +
+               "📈 RVOL ridicat — bani grei\n" +
+               "🌊 CVD Bullish / Absorbtie\n" +
+               "🏗 Structura bullish confirmata\n" +
                "💎 Verifica POC si seteaza SL!")
 
 alertcondition(setup_s,
      title   = "🔴 Setup A+ SHORT Detectat",
      message = "🔴 SETUP A+ SHORT Detectat!\n{{ticker}} [{{interval}}]\n" +
-               "📐 Fib 0.786 atins (Deep Premium)\n" +
-               "📈 RVOL ridicat — bani grei prezenti\n" +
-               "🌊 CVD Bearish / Absorbtie confirmata\n" +
-               "🔵 Nivel psihologic in zona\n" +
+               "📐 Fib 0.786 — Deep Premium\n" +
+               "📈 RVOL ridicat — bani grei\n" +
+               "🌊 CVD Bearish / Absorbtie\n" +
+               "🏗 Structura bearish confirmata\n" +
                "💎 Verifica POC si seteaza SL!")
+
+alertcondition(bos_bull,
+     title   = "📈 BOS Bullish",
+     message = "📈 Break of Structure BULL — {{ticker}} [{{interval}}]\nTrendul ascendent confirmat!")
+
+alertcondition(bos_bear,
+     title   = "📉 BOS Bearish",
+     message = "📉 Break of Structure BEAR — {{ticker}} [{{interval}}]\nTrendul descendent confirmat!")
+
+alertcondition(choch_to_bear,
+     title   = "⚠ CHOCH — Reversal Bear posibil",
+     message = "⚠ CHOCH BEAR — {{ticker}} [{{interval}}]\nSwing low rupt in uptrend — posibil reversal!")
+
+alertcondition(choch_to_bull,
+     title   = "⚠ CHOCH — Reversal Bull posibil",
+     message = "⚠ CHOCH BULL — {{ticker}} [{{interval}}]\nSwing high rupt in downtrend — posibil reversal!")
 
 alertcondition(near_psych and hi_rvol,
      title   = "🔵 Nivel Psihologic + RVOL",
-     message = "🔵 Pret la nivel psihologic cu RVOL ridicat!\n{{ticker}} [{{interval}}]\nAtentie la reactie institutionala!")
+     message = "🔵 Nivel psihologic + RVOL ridicat!\n{{ticker}} [{{interval}}]\nAtentie la reactie institutionala!")

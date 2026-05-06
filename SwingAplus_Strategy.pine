@@ -1,0 +1,329 @@
+//@version=5
+// ════════════════════════════════════════════════════════════════════
+// SWING A+ STRATEGY — Backtesting Version
+// Aceeasi logica ca indicatorul, cu entry/exit automat si stats table
+// ════════════════════════════════════════════════════════════════════
+strategy("🎯 Swing A+ Strategy [Backtest]",
+         overlay            = true,
+         default_qty_type   = strategy.percent_of_equity,
+         default_qty_value  = 2,
+         commission_type    = strategy.commission.percent,
+         commission_value   = 0.05,
+         slippage           = 2,
+         calc_on_every_tick = false,
+         max_bars_back      = 1000)
+
+// ════════════════════════════════════════════════════════════════════
+// INPUTS
+// ════════════════════════════════════════════════════════════════════
+var string G1 = "═══ TREND FILTER ═══"
+tf_trend  = input.timeframe("60",  "Trend Timeframe",       group=G1)
+ema_len   = input.int(200,         "EMA Length",             minval=20, group=G1)
+
+var string G2 = "═══ IMPULSE ═══"
+imp_pct   = input.float(0.12, "Min Impulse %",         step=0.01, minval=0.01, group=G2)
+piv_l     = input.int(10,    "Pivot Left Bars",         minval=2, maxval=50,   group=G2)
+piv_r     = input.int(10,    "Pivot Right Bars",        minval=2, maxval=50,   group=G2)
+
+var string G3 = "═══ FIBONACCI & ZONE ═══"
+fib_tol   = input.float(0.15, "Fib Zone Tolerance %",  step=0.01, minval=0.01, group=G3)
+
+var string G4 = "═══ RVOL ═══"
+rvol_ma   = input.int(20,    "RVOL Average Bars",       minval=5,  group=G4)
+rvol_min  = input.float(1.5, "Min RVOL",                step=0.1,  minval=1.0, group=G4)
+
+var string G5 = "═══ CVD ═══"
+cvd_ema   = input.int(14, "CVD EMA Smooth",             minval=1,  group=G5)
+
+var string G6 = "═══ SESSION ═══"
+use_sess  = input.bool(true,        "Enable Session Filter", group=G6)
+sess_utc  = input.session("0700-2200", "Session (UTC)",      group=G6)
+
+var string G7 = "═══ STOP LOSS & TAKE PROFIT ═══"
+atr_len   = input.int(14,    "ATR Length",              minval=1,  group=G7)
+atr_mult  = input.float(1.5, "SL ATR Multiplier",       step=0.1,  group=G7)
+rr_ratio  = input.float(2.0, "Risk:Reward Ratio (TP)",  step=0.5, minval=1.0, group=G7)
+use_trail = input.bool(false, "Use Trailing Stop",                  group=G7)
+trail_atr = input.float(1.0, "Trail Stop ATR Multiplier", step=0.1, group=G7)
+
+var string G8 = "═══ NIVELE PSIHOLOGICE ═══"
+use_psych = input.bool(true,  "Activare Nivele Psihologice", group=G8)
+psych_tol = input.float(0.05, "Toleranta %",            step=0.01, minval=0.01, group=G8)
+
+var string G9 = "═══ FILTRU SUPLIMENTAR ═══"
+req_mtf_align = input.bool(false, "Necesita aliniere MTF (toate 4 TF-uri)",  group=G9)
+mtf_tf1       = input.timeframe("15",  "TF 1", group=G9)
+mtf_tf2       = input.timeframe("60",  "TF 2", group=G9)
+mtf_tf3       = input.timeframe("240", "TF 3", group=G9)
+mtf_tf4       = input.timeframe("D",   "TF 4", group=G9)
+
+// ════════════════════════════════════════════════════════════════════
+// 1. TREND
+// ════════════════════════════════════════════════════════════════════
+ema200 = request.security(syminfo.tickerid, tf_trend,
+           ta.ema(close, ema_len), lookahead=barmerge.lookahead_off)
+bull = close > ema200
+bear = close < ema200
+
+// ════════════════════════════════════════════════════════════════════
+// 2. PIVOTS & IMPULSE
+// ════════════════════════════════════════════════════════════════════
+ph = ta.pivothigh(high, piv_l, piv_r)
+pl = ta.pivotlow(low,   piv_l, piv_r)
+
+var float _ph = na
+var float _pl = na
+if not na(ph)
+    _ph := ph
+if not na(pl)
+    _pl := pl
+
+swing_range = (not na(_ph) and not na(_pl)) ? math.abs(_ph - _pl) : 0.0
+base_p      = (not na(_pl) and _pl > 0.0)   ? _pl : close
+imp_pct_now = swing_range / base_p * 100.0
+strong_imp  = imp_pct_now >= imp_pct
+
+// ════════════════════════════════════════════════════════════════════
+// 3. FIBONACCI + PREMIUM/DISCOUNT
+// ════════════════════════════════════════════════════════════════════
+f786_b = (not na(_ph) and not na(_pl)) ? _ph - 0.786 * swing_range : na
+f786_s = (not na(_ph) and not na(_pl)) ? _pl + 0.786 * swing_range : na
+equil  = (not na(_ph) and not na(_pl)) ? _pl + 0.5   * swing_range : na
+
+in_discount = not na(equil) and close < equil
+in_premium  = not na(equil) and close > equil
+
+tol_b = not na(f786_b) ? f786_b * fib_tol / 100.0 : 0.0
+tol_s = not na(f786_s) ? f786_s * fib_tol / 100.0 : 0.0
+
+at_f_b = bull and not na(f786_b) and in_discount and
+         close >= (f786_b - tol_b) and close <= (f786_b + tol_b)
+at_f_s = bear and not na(f786_s) and in_premium  and
+         close >= (f786_s - tol_s) and close <= (f786_s + tol_s)
+
+// ════════════════════════════════════════════════════════════════════
+// 4. RVOL
+// ════════════════════════════════════════════════════════════════════
+vol_avg  = ta.sma(volume, rvol_ma)
+rvol_now = vol_avg > 0 ? volume / vol_avg : 1.0
+hi_rvol  = rvol_now >= rvol_min
+
+// ════════════════════════════════════════════════════════════════════
+// 5. CVD
+// ════════════════════════════════════════════════════════════════════
+delta_bar = (high != low) ? volume * (2.0 * (close - low) / (high - low) - 1.0) : 0.0
+var float cvd_cum = 0.0
+cvd_cum  := cvd_cum + delta_bar
+cvd_sig   = ta.ema(cvd_cum, cvd_ema)
+cvd_up    = cvd_cum > cvd_sig
+cvd_dn    = cvd_cum < cvd_sig
+abs_bull  = delta_bar > 0.0 and close < open
+abs_bear  = delta_bar < 0.0 and close > open
+cvd_ok_b  = cvd_up or abs_bull
+cvd_ok_s  = cvd_dn or abs_bear
+
+// ════════════════════════════════════════════════════════════════════
+// 6. PSYCHOLOGICAL LEVELS
+// ════════════════════════════════════════════════════════════════════
+f_psych_interval() =>
+    p = close
+    p >= 10000 ? 1000.0 : p >= 1000 ? 100.0 : p >= 100 ? 10.0 :
+     p >= 10   ?    1.0 : p >= 1    ?   0.1  : p >= 0.1 ?  0.01 : 0.001
+
+psych_interval = f_psych_interval()
+psych_below    = math.floor(close / psych_interval) * psych_interval
+psych_above    = math.ceil(close  / psych_interval) * psych_interval
+tol_psych_abs  = close * psych_tol / 100.0
+near_psych     = use_psych and
+                 (math.abs(close - psych_below) <= tol_psych_abs or
+                  math.abs(close - psych_above) <= tol_psych_abs)
+
+// ════════════════════════════════════════════════════════════════════
+// 7. SESSION
+// ════════════════════════════════════════════════════════════════════
+in_sess = not use_sess or not na(time(timeframe.period, sess_utc, "UTC"))
+
+// ════════════════════════════════════════════════════════════════════
+// 8. ATR
+// ════════════════════════════════════════════════════════════════════
+atr_v = ta.atr(atr_len)
+
+// ════════════════════════════════════════════════════════════════════
+// 9. CHOCH FILTER
+// ════════════════════════════════════════════════════════════════════
+bos_bull      = bull and not na(_ph) and ta.crossover(close,  _ph)
+bos_bear      = bear and not na(_pl) and ta.crossunder(close, _pl)
+choch_to_bear = bull and not na(_pl) and ta.crossunder(close, _pl)
+choch_to_bull = bear and not na(_ph) and ta.crossover(close,  _ph)
+
+var bool choch_bear_active = false
+var bool choch_bull_active = false
+if choch_to_bear
+    choch_bear_active := true
+    choch_bull_active := false
+if choch_to_bull
+    choch_bull_active := true
+    choch_bear_active := false
+if bos_bull
+    choch_bear_active := false
+if bos_bear
+    choch_bull_active := false
+
+// ════════════════════════════════════════════════════════════════════
+// 10. MTF ALIGNMENT (optional filter)
+// ════════════════════════════════════════════════════════════════════
+f_dir() => close > ta.ema(close, ema_len)
+tf1_bull = request.security(syminfo.tickerid, mtf_tf1, f_dir(), lookahead=barmerge.lookahead_off)
+tf2_bull = request.security(syminfo.tickerid, mtf_tf2, f_dir(), lookahead=barmerge.lookahead_off)
+tf3_bull = request.security(syminfo.tickerid, mtf_tf3, f_dir(), lookahead=barmerge.lookahead_off)
+tf4_bull = request.security(syminfo.tickerid, mtf_tf4, f_dir(), lookahead=barmerge.lookahead_off)
+
+mtf_all_bull = tf1_bull  and tf2_bull  and tf3_bull  and tf4_bull
+mtf_all_bear = not tf1_bull and not tf2_bull and not tf3_bull and not tf4_bull
+
+mtf_ok_long  = not req_mtf_align or mtf_all_bull
+mtf_ok_short = not req_mtf_align or mtf_all_bear
+
+// ════════════════════════════════════════════════════════════════════
+// 11. SETUP A+ ENTRY CONDITIONS
+// ════════════════════════════════════════════════════════════════════
+setup_l = bull and strong_imp and at_f_b and hi_rvol and cvd_ok_b and
+          in_sess and not choch_bear_active and mtf_ok_long
+
+setup_s = bear and strong_imp and at_f_s and hi_rvol and cvd_ok_s and
+          in_sess and not choch_bull_active and mtf_ok_short
+
+// ════════════════════════════════════════════════════════════════════
+// 12. ENTRY / EXIT MANAGEMENT
+// ════════════════════════════════════════════════════════════════════
+sl_dist = atr_v * atr_mult
+tp_dist = sl_dist * rr_ratio
+
+// Stop Loss si Take Profit calculate de la close (entry bar)
+long_sl = close - sl_dist
+long_tp = close + tp_dist
+short_sl = close + sl_dist
+short_tp = close - tp_dist
+
+// Entry
+if setup_l and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Exit Long", "Long",
+         stop  = long_sl,
+         limit = long_tp,
+         trail_points = use_trail ? atr_v * trail_atr / syminfo.mintick : na)
+
+if setup_s and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Exit Short", "Short",
+         stop  = short_sl,
+         limit = short_tp,
+         trail_points = use_trail ? atr_v * trail_atr / syminfo.mintick : na)
+
+// ════════════════════════════════════════════════════════════════════
+// PLOTS
+// ════════════════════════════════════════════════════════════════════
+plot(ema200, "EMA 200 H1",
+     color=bull ? color.new(color.lime, 20) : color.new(color.red, 20), linewidth=2)
+
+plot((not na(_ph) and not na(_pl)) ? equil : na, "Echilibru 50%",
+     color=color.new(color.white, 60), linewidth=1, style=plot.style_linebr)
+
+bgcolor(in_discount ? color.new(color.green, 96) : na, title="Discount")
+bgcolor(in_premium  ? color.new(color.red,   96) : na, title="Premium")
+
+plot(bull ? f786_b : na, "Fib 0.786 Bull",
+     color=color.new(color.teal,   20), linewidth=2, style=plot.style_linebr)
+plot(bear ? f786_s : na, "Fib 0.786 Bear",
+     color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
+
+plotshape(setup_l, "A+ BUY",
+          shape.labelup,   location.belowbar,
+          color.new(color.green, 0), text="A+\nBUY",  textcolor=color.white, size=size.normal)
+plotshape(setup_s, "A+ SELL",
+          shape.labeldown, location.abovebar,
+          color.new(color.red,   0), text="A+\nSELL", textcolor=color.white, size=size.normal)
+
+bgcolor(hi_rvol ? color.new(color.yellow, 92) : na, title="High RVOL")
+
+// SL/TP lines pe pozitia curenta
+plot(strategy.position_size > 0 ? strategy.position_avg_price - sl_dist : na,
+     "SL Long",  color=color.new(color.red,   30), linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size > 0 ? strategy.position_avg_price + tp_dist : na,
+     "TP Long",  color=color.new(color.green, 30), linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? strategy.position_avg_price + sl_dist : na,
+     "SL Short", color=color.new(color.red,   30), linewidth=1, style=plot.style_linebr)
+plot(strategy.position_size < 0 ? strategy.position_avg_price - tp_dist : na,
+     "TP Short", color=color.new(color.green, 30), linewidth=1, style=plot.style_linebr)
+
+// ════════════════════════════════════════════════════════════════════
+// PERFORMANCE TABLE (top_left)
+// ════════════════════════════════════════════════════════════════════
+var table STATS = table.new(position.top_left, 2, 10,
+     bgcolor=color.new(color.black, 55),
+     border_color=color.new(color.gray, 60), border_width=1,
+     frame_color=color.new(color.blue, 40), frame_width=2)
+
+if barstate.islast
+    C_ok  = color.new(color.green,  50)
+    C_no  = color.new(color.red,    60)
+    C_mid = color.new(color.orange, 55)
+    C_hd  = color.new(color.navy,   40)
+    C_lb  = color.new(color.gray,   65)
+    CW    = color.white
+    SZ    = size.small
+
+    net_pct      = strategy.netprofit / strategy.initial_capital * 100
+    win_rate     = strategy.closedtrades > 0 ?
+                    strategy.wintrades / strategy.closedtrades * 100 : 0.0
+    avg_win      = strategy.wintrades > 0 ?
+                    strategy.grossprofit / strategy.wintrades : 0.0
+    avg_loss     = strategy.losstrades > 0 ?
+                    math.abs(strategy.grossloss) / strategy.losstrades : 0.0
+    profit_factor = strategy.grossloss != 0 ?
+                    math.abs(strategy.grossprofit / strategy.grossloss) : 0.0
+
+    table.cell(STATS, 0, 0, "📊 BACKTEST STATS",
+               text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
+    table.cell(STATS, 1, 0, "RR: 1:" + str.tostring(rr_ratio),
+               text_color=CW, bgcolor=C_hd, text_size=SZ)
+
+    table.cell(STATS, 0, 1, "Net Profit",    text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 1, str.tostring(math.round(net_pct, 2)) + "%",
+               text_color=CW, bgcolor=net_pct > 0 ? C_ok : C_no, text_size=SZ)
+
+    table.cell(STATS, 0, 2, "Win Rate",      text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 2, str.tostring(math.round(win_rate, 1)) + "%",
+               text_color=CW, bgcolor=win_rate >= 50 ? C_ok : C_no, text_size=SZ)
+
+    table.cell(STATS, 0, 3, "Total Trades",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 3, str.tostring(strategy.closedtrades),
+               text_color=CW, bgcolor=C_lb, text_size=SZ)
+
+    table.cell(STATS, 0, 4, "Castigatoare",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 4, str.tostring(strategy.wintrades),
+               text_color=CW, bgcolor=C_ok, text_size=SZ)
+
+    table.cell(STATS, 0, 5, "Pierdute",      text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 5, str.tostring(strategy.losstrades),
+               text_color=CW, bgcolor=C_no, text_size=SZ)
+
+    table.cell(STATS, 0, 6, "Profit Factor", text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 6, str.tostring(math.round(profit_factor, 2)),
+               text_color=CW, bgcolor=profit_factor >= 1.5 ? C_ok : profit_factor >= 1.0 ? C_mid : C_no, text_size=SZ)
+
+    table.cell(STATS, 0, 7, "Avg Win $",     text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 7, str.tostring(math.round(avg_win, 2)),
+               text_color=CW, bgcolor=C_ok, text_size=SZ)
+
+    table.cell(STATS, 0, 8, "Avg Loss $",    text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 8, str.tostring(math.round(avg_loss, 2)),
+               text_color=CW, bgcolor=C_no, text_size=SZ)
+
+    table.cell(STATS, 0, 9, "Max Drawdown",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(STATS, 1, 9,
+               str.tostring(math.round(strategy.max_drawdown / strategy.initial_capital * 100, 2)) + "%",
+               text_color=CW,
+               bgcolor=strategy.max_drawdown / strategy.initial_capital * 100 < 10 ? C_ok :
+                       strategy.max_drawdown / strategy.initial_capital * 100 < 20 ? C_mid : C_no,
+               text_size=SZ)
