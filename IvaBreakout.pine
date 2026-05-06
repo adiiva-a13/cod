@@ -47,9 +47,7 @@ if timeframe.period != "1"
 // ═══════════════════════════════════════════════════════════
 //  PRESET RESOLUTION
 // ═══════════════════════════════════════════════════════════
-autoInstr = str.contains(syminfo.root, "NQ") or syminfo.root == "MNQ" ? "NQ" :
-            str.contains(syminfo.root, "CL") or syminfo.root == "MCL" ? "CL" :
-            str.contains(syminfo.root, "6E") ? "6E" : "NQ"
+autoInstr = str.contains(syminfo.root, "NQ") or syminfo.root == "MNQ" ? "NQ" : str.contains(syminfo.root, "CL") or syminfo.root == "MCL" ? "CL" : str.contains(syminfo.root, "6E") ? "6E" : "NQ"
 effPreset = i_preset == "Auto" ? autoInstr : i_preset
 
 effTicks  = effPreset == "NQ" ? 10 : effPreset == "CL" ? 5  : effPreset == "6E" ? 2  : i_ticksPerRow
@@ -449,7 +447,7 @@ if nyP2Done and not nyOpen2 and not eod and bar_index > nz(nyP2EntryBar, -1)
 // ═══════════════════════════════════════════════════════════
 lonRSMins = i_lonRSH * 60 + i_lonRSM
 lonREMins = i_lonREH * 60 + i_lonREM
-lonEEMins = i_lonEEH * 60 + i_lonREM
+lonEEMins = i_lonEEH * 60 + i_lonEEM
 
 inRangeLon = i_lonEnabled and nyMins >= lonRSMins and nyMins <= lonREMins
 
