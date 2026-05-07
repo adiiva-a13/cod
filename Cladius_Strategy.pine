@@ -3,7 +3,7 @@
 // SWING A+ STRATEGY — Backtesting Version
 // Aceeasi logica ca indicatorul, cu entry/exit automat si stats table
 // ════════════════════════════════════════════════════════════════════
-strategy("🎯 Swing A+ Strategy [Backtest]",
+strategy("⚡ CLADIUS Strategy [Backtest]",
          overlay            = true,
          default_qty_type   = strategy.percent_of_equity,
          default_qty_value  = 2,
@@ -273,17 +273,14 @@ if barstate.islast
     CW    = color.white
     SZ    = size.small
 
-    net_pct      = strategy.netprofit / strategy.initial_capital * 100
-    win_rate     = strategy.closedtrades > 0 ?
-                    strategy.wintrades / strategy.closedtrades * 100 : 0.0
-    avg_win      = strategy.wintrades > 0 ?
-                    strategy.grossprofit / strategy.wintrades : 0.0
-    avg_loss     = strategy.losstrades > 0 ?
-                    math.abs(strategy.grossloss) / strategy.losstrades : 0.0
-    profit_factor = strategy.grossloss != 0 ?
-                    math.abs(strategy.grossprofit / strategy.grossloss) : 0.0
+    net_pct       = strategy.netprofit / strategy.initial_capital * 100
+    win_rate      = strategy.closedtrades > 0 ? strategy.wintrades / strategy.closedtrades * 100 : 0.0
+    avg_win       = strategy.wintrades  > 0 ? strategy.grossprofit / strategy.wintrades : 0.0
+    avg_loss      = strategy.losstrades > 0 ? math.abs(strategy.grossloss) / strategy.losstrades : 0.0
+    profit_factor = strategy.grossloss  != 0 ? math.abs(strategy.grossprofit / strategy.grossloss) : 0.0
+    dd_pct        = strategy.max_drawdown / strategy.initial_capital * 100
 
-    table.cell(STATS, 0, 0, "📊 BACKTEST STATS",
+    table.cell(STATS, 0, 0, "⚡ CLADIUS BACKTEST",
                text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
     table.cell(STATS, 1, 0, "RR: 1:" + str.tostring(rr_ratio),
                text_color=CW, bgcolor=C_hd, text_size=SZ)
@@ -320,10 +317,7 @@ if barstate.islast
     table.cell(STATS, 1, 8, str.tostring(math.round(avg_loss, 2)),
                text_color=CW, bgcolor=C_no, text_size=SZ)
 
+    dd_col = dd_pct < 10 ? C_ok : dd_pct < 20 ? C_mid : C_no
     table.cell(STATS, 0, 9, "Max Drawdown",  text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(STATS, 1, 9,
-               str.tostring(math.round(strategy.max_drawdown / strategy.initial_capital * 100, 2)) + "%",
-               text_color=CW,
-               bgcolor=strategy.max_drawdown / strategy.initial_capital * 100 < 10 ? C_ok :
-                       strategy.max_drawdown / strategy.initial_capital * 100 < 20 ? C_mid : C_no,
-               text_size=SZ)
+    table.cell(STATS, 1, 9, str.tostring(math.round(dd_pct, 2)) + "%",
+               text_color=CW, bgcolor=dd_col, text_size=SZ)

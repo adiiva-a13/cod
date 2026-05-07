@@ -1,5 +1,5 @@
 //@version=5
-indicator("🎯 Swing A+ Setup Detector [PRO]", overlay=true,
+indicator("⚡ CLADIUS — Swing Setup Detector [PRO]", overlay=true,
           max_bars_back=1000, max_lines_count=200, max_labels_count=200)
 
 // ════════════════════════════════════════════════════════════════════
@@ -366,7 +366,7 @@ if barstate.islast
     CW    = color.white
     SZ    = size.small
 
-    table.cell(T, 0,  0, "🎯 SWING A+ PRO",
+    table.cell(T, 0,  0, "⚡ CLADIUS PRO",
                text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
     table.cell(T, 1,  0, syminfo.ticker + " [" + timeframe.period + "]",
                text_color=CW, bgcolor=C_hd, text_size=SZ)
