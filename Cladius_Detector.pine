@@ -140,13 +140,15 @@ s1_valid = s1_hi > s1_lo and s1_lo > 0.0
 s2_valid = s2_hi > s2_lo and s2_lo > 0.0
 s3_valid = s3_hi > s3_lo and s3_lo > 0.0
 
-in_demand = (d1_valid and close >= d1_lo and close <= d1_hi) or
-            (d2_valid and close >= d2_lo and close <= d2_hi) or
-            (d3_valid and close >= d3_lo and close <= d3_hi)
+in_d1 = d1_valid and close >= d1_lo and close <= d1_hi
+in_d2 = d2_valid and close >= d2_lo and close <= d2_hi
+in_d3 = d3_valid and close >= d3_lo and close <= d3_hi
+in_demand = in_d1 or in_d2 or in_d3
 
-in_supply = (s1_valid and close >= s1_lo and close <= s1_hi) or
-            (s2_valid and close >= s2_lo and close <= s2_hi) or
-            (s3_valid and close >= s3_lo and close <= s3_hi)
+in_s1 = s1_valid and close >= s1_lo and close <= s1_hi
+in_s2 = s2_valid and close >= s2_lo and close <= s2_hi
+in_s3 = s3_valid and close >= s3_lo and close <= s3_hi
+in_supply = in_s1 or in_s2 or in_s3
 
 // Zona activa pentru setup: manuala sau Fibonacci
 in_zone_b = use_manual ? (bull and in_demand) : at_f_b
@@ -186,19 +188,10 @@ c_upper  = high - math.max(close, open)
 c_lower  = math.min(close, open) - low
 c_range  = high - low
 
-hammer     = use_candles and c_range > 0 and c_body > 0 and
-             c_lower >= c_body * wick_ratio and c_upper <= c_body * 0.5
-
-shoot_star = use_candles and c_range > 0 and c_body > 0 and
-             c_upper >= c_body * wick_ratio and c_lower <= c_body * 0.5
-
-bull_engulf = use_candles and
-              close > open and close[1] < open[1] and
-              open <= close[1] and close >= open[1]
-
-bear_engulf = use_candles and
-              close < open and close[1] > open[1] and
-              open >= close[1] and close <= open[1]
+hammer     = use_candles and c_range > 0 and c_body > 0 and c_lower >= c_body * wick_ratio and c_upper <= c_body * 0.5
+shoot_star = use_candles and c_range > 0 and c_body > 0 and c_upper >= c_body * wick_ratio and c_lower <= c_body * 0.5
+bull_engulf = use_candles and close > open and close[1] < open[1] and open <= close[1] and close >= open[1]
+bear_engulf = use_candles and close < open and close[1] > open[1] and open >= close[1] and close <= open[1]
 
 // Patternul conteaza DOAR cand pretul e in zona relevanta
 candle_bull = (hammer or bull_engulf) and in_zone_b
