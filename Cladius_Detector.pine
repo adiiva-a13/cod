@@ -612,63 +612,30 @@ if barstate.islast and show_mtf
 // ════════════════════════════════════════════════════════════════════
 
 // ── Alerta timpurie (scor partial) ──────────────────────────────────
-alertcondition(warn_l,
-     title   = "👀 CLADIUS Atentie LONG — Scor Partial",
-     message = "👀 ATENTIE LONG — {{ticker}} [{{interval}}]\n" +
-               "Scor: " + str.tostring(core_b) + "/5 conditii indeplinite\n" +
-               "✅ Trend:   " + (bull      ? "DA" : "NU") + "\n" +
-               "✅ Impulse: " + (strong_imp ? "DA" : "NU") + "\n" +
-               "✅ Zona D/S:" + (in_zone_b  ? "DA" : "NU") + "\n" +
-               "✅ RVOL:    " + (hi_rvol    ? "DA" : "NU") + "\n" +
-               "✅ CVD:     " + (cvd_ok_b   ? "DA" : "NU") + "\n" +
-               "⏳ Asteapta confirmarea A+ completa!")
+if warn_l
+    alert("👀 ATENTIE LONG — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_b) + "/5 conditii indeplinite\nTrend: " + (bull ? "DA" : "NU") + " | Impulse: " + (strong_imp ? "DA" : "NU") + " | Zona: " + (in_zone_b ? "DA" : "NU") + " | RVOL: " + (hi_rvol ? "DA" : "NU") + " | CVD: " + (cvd_ok_b ? "DA" : "NU") + "\n⏳ Asteapta confirmarea A+ completa!", alert.freq_once_per_bar_close)
 
-alertcondition(warn_s,
-     title   = "👀 CLADIUS Atentie SHORT — Scor Partial",
-     message = "👀 ATENTIE SHORT — {{ticker}} [{{interval}}]\n" +
-               "Scor: " + str.tostring(core_s) + "/5 conditii indeplinite\n" +
-               "✅ Trend:   " + (bear      ? "DA" : "NU") + "\n" +
-               "✅ Impulse: " + (strong_imp ? "DA" : "NU") + "\n" +
-               "✅ Zona D/S:" + (in_zone_s  ? "DA" : "NU") + "\n" +
-               "✅ RVOL:    " + (hi_rvol    ? "DA" : "NU") + "\n" +
-               "✅ CVD:     " + (cvd_ok_s   ? "DA" : "NU") + "\n" +
-               "⏳ Asteapta confirmarea A+ completa!")
+if warn_s
+    alert("👀 ATENTIE SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_s) + "/5 conditii indeplinite\nTrend: " + (bear ? "DA" : "NU") + " | Impulse: " + (strong_imp ? "DA" : "NU") + " | Zona: " + (in_zone_s ? "DA" : "NU") + " | RVOL: " + (hi_rvol ? "DA" : "NU") + " | CVD: " + (cvd_ok_s ? "DA" : "NU") + "\n⏳ Asteapta confirmarea A+ completa!", alert.freq_once_per_bar_close)
 
 // ── Setup A+ complet ─────────────────────────────────────────────────
-alertcondition(setup_l,
-     title   = "🟢 Setup A+ LONG Detectat",
-     message = "🟢 SETUP A+ LONG Detectat!\n{{ticker}} [{{interval}}]\n" +
-               "📐 Demand Zone 0.886 atins\n" +
-               "📈 RVOL ridicat — bani grei\n" +
-               "🌊 CVD Bullish / Absorbtie\n" +
-               "🏗 Structura bullish confirmata\n" +
-               "💎 Verifica POC si seteaza SL!")
+if setup_l
+    alert("🟢 SETUP A+ LONG Detectat!\n" + syminfo.ticker + " [" + timeframe.period + "]\n📐 Demand Zone 0.886 atins\n📈 RVOL ridicat — bani grei\n🌊 CVD Bullish / Absorbtie\n🏗 Structura bullish confirmata\n💎 Verifica POC si seteaza SL!", alert.freq_once_per_bar_close)
 
-alertcondition(setup_s,
-     title   = "🔴 Setup A+ SHORT Detectat",
-     message = "🔴 SETUP A+ SHORT Detectat!\n{{ticker}} [{{interval}}]\n" +
-               "📐 Supply Zone 0.886 atins\n" +
-               "📈 RVOL ridicat — bani grei\n" +
-               "🌊 CVD Bearish / Absorbtie\n" +
-               "🏗 Structura bearish confirmata\n" +
-               "💎 Verifica POC si seteaza SL!")
+if setup_s
+    alert("🔴 SETUP A+ SHORT Detectat!\n" + syminfo.ticker + " [" + timeframe.period + "]\n📐 Supply Zone 0.886 atins\n📈 RVOL ridicat — bani grei\n🌊 CVD Bearish / Absorbtie\n🏗 Structura bearish confirmata\n💎 Verifica POC si seteaza SL!", alert.freq_once_per_bar_close)
 
-alertcondition(bos_bull,
-     title   = "📈 BOS Bullish",
-     message = "📈 Break of Structure BULL — {{ticker}} [{{interval}}]\nTrendul ascendent confirmat!")
+if bos_bull
+    alert("📈 Break of Structure BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nTrendul ascendent confirmat!", alert.freq_once_per_bar_close)
 
-alertcondition(bos_bear,
-     title   = "📉 BOS Bearish",
-     message = "📉 Break of Structure BEAR — {{ticker}} [{{interval}}]\nTrendul descendent confirmat!")
+if bos_bear
+    alert("📉 Break of Structure BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nTrendul descendent confirmat!", alert.freq_once_per_bar_close)
 
-alertcondition(choch_to_bear,
-     title   = "⚠ CHOCH — Reversal Bear posibil",
-     message = "⚠ CHOCH BEAR — {{ticker}} [{{interval}}]\nSwing low rupt in uptrend — posibil reversal!")
+if choch_to_bear
+    alert("⚠ CHOCH BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nSwing low rupt in uptrend — posibil reversal!", alert.freq_once_per_bar_close)
 
-alertcondition(choch_to_bull,
-     title   = "⚠ CHOCH — Reversal Bull posibil",
-     message = "⚠ CHOCH BULL — {{ticker}} [{{interval}}]\nSwing high rupt in downtrend — posibil reversal!")
+if choch_to_bull
+    alert("⚠ CHOCH BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nSwing high rupt in downtrend — posibil reversal!", alert.freq_once_per_bar_close)
 
-alertcondition(near_psych and hi_rvol,
-     title   = "🔵 Nivel Psihologic + RVOL",
-     message = "🔵 Nivel psihologic + RVOL ridicat!\n{{ticker}} [{{interval}}]\nAtentie la reactie institutionala!")
+if near_psych and hi_rvol
+    alert("🔵 Nivel psihologic + RVOL ridicat!\n" + syminfo.ticker + " [" + timeframe.period + "]\nAtentie la reactie institutionala!", alert.freq_once_per_bar_close)
