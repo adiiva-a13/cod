@@ -1,6 +1,6 @@
 //@version=5
 indicator("⚡ CLADIUS — Swing Setup Detector [PRO]", overlay=true,
-          max_bars_back=1000, max_lines_count=200, max_labels_count=200)
+          max_bars_back=1000, max_lines_count=200, max_labels_count=200, max_boxes_count=20)
 
 // ════════════════════════════════════════════════════════════════════
 // INPUTS
@@ -20,6 +20,22 @@ fib_tol   = input.float(0.15,  "Fib Zone Tolerance %",  step=0.01, minval=0.01, 
 show_fib  = input.bool(true,   "Show Fib Lines",         group=G3)
 show_piv  = input.bool(true,   "Show Pivots",            group=G3)
 show_zone = input.bool(true,   "Show Premium/Discount",  group=G3)
+
+var string GZ = "═══ ZONE DEMAND / SUPPLY (Manual) ═══"
+use_manual = input.bool(true,  "✅ Foloseste zone manuale (dezactiveaza Fib auto)", group=GZ)
+show_zones = input.bool(true,  "Afiseaza zonele pe grafic",                         group=GZ)
+d1_hi = input.float(0.0, "📗 Demand 1 — Top",    step=0.00001, group=GZ)
+d1_lo = input.float(0.0, "📗 Demand 1 — Bottom", step=0.00001, group=GZ)
+d2_hi = input.float(0.0, "📗 Demand 2 — Top",    step=0.00001, group=GZ)
+d2_lo = input.float(0.0, "📗 Demand 2 — Bottom", step=0.00001, group=GZ)
+d3_hi = input.float(0.0, "📗 Demand 3 — Top",    step=0.00001, group=GZ)
+d3_lo = input.float(0.0, "📗 Demand 3 — Bottom", step=0.00001, group=GZ)
+s1_hi = input.float(0.0, "📕 Supply 1 — Top",    step=0.00001, group=GZ)
+s1_lo = input.float(0.0, "📕 Supply 1 — Bottom", step=0.00001, group=GZ)
+s2_hi = input.float(0.0, "📕 Supply 2 — Top",    step=0.00001, group=GZ)
+s2_lo = input.float(0.0, "📕 Supply 2 — Bottom", step=0.00001, group=GZ)
+s3_hi = input.float(0.0, "📕 Supply 3 — Top",    step=0.00001, group=GZ)
+s3_lo = input.float(0.0, "📕 Supply 3 — Bottom", step=0.00001, group=GZ)
 
 var string G4 = "═══ RVOL ═══"
 rvol_ma   = input.int(20,    "RVOL Average Bars",        minval=5,  group=G4)
@@ -101,6 +117,30 @@ at_f_b = bull and not na(f786_b) and in_discount and
          close >= (f786_b - tol_b) and close <= (f786_b + tol_b)
 at_f_s = bear and not na(f786_s) and in_premium and
          close >= (f786_s - tol_s) and close <= (f786_s + tol_s)
+
+// ════════════════════════════════════════════════════════════════════
+// 3b. ZONE MANUALE DEMAND / SUPPLY
+//     Zona valida = ambele valori non-zero si top > bottom
+//     Daca use_manual=false → fallback la nivelul Fibonacci auto
+// ════════════════════════════════════════════════════════════════════
+d1_valid = d1_hi > d1_lo and d1_lo > 0.0
+d2_valid = d2_hi > d2_lo and d2_lo > 0.0
+d3_valid = d3_hi > d3_lo and d3_lo > 0.0
+s1_valid = s1_hi > s1_lo and s1_lo > 0.0
+s2_valid = s2_hi > s2_lo and s2_lo > 0.0
+s3_valid = s3_hi > s3_lo and s3_lo > 0.0
+
+in_demand = (d1_valid and close >= d1_lo and close <= d1_hi) or
+            (d2_valid and close >= d2_lo and close <= d2_hi) or
+            (d3_valid and close >= d3_lo and close <= d3_hi)
+
+in_supply = (s1_valid and close >= s1_lo and close <= s1_hi) or
+            (s2_valid and close >= s2_lo and close <= s2_hi) or
+            (s3_valid and close >= s3_lo and close <= s3_hi)
+
+// Zona activa pentru setup: manuala sau Fibonacci
+in_zone_b = use_manual ? (bull and in_demand) : at_f_b
+in_zone_s = use_manual ? (bear and in_supply) : at_f_s
 
 // ════════════════════════════════════════════════════════════════════
 // 4. RVOL
@@ -265,17 +305,17 @@ mtf_all_bear = not tf1_bull and not tf2_bull and not tf3_bull and not tf4_bull
 // ════════════════════════════════════════════════════════════════════
 // 12. CONFLUENCE SCORE & SETUP A+  (max 7 puncte)
 // ════════════════════════════════════════════════════════════════════
-sc_b = (bull        ? 1 : 0) + (strong_imp ? 1 : 0) + (at_f_b     ? 1 : 0) +
-       (hi_rvol     ? 1 : 0) + (cvd_ok_b   ? 1 : 0) + (near_psych ? 1 : 0) +
+sc_b = (bull         ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_b   ? 1 : 0) +
+       (hi_rvol      ? 1 : 0) + (cvd_ok_b    ? 1 : 0) + (near_psych  ? 1 : 0) +
        (mtf_all_bull ? 1 : 0)
-sc_s = (bear        ? 1 : 0) + (strong_imp ? 1 : 0) + (at_f_s     ? 1 : 0) +
-       (hi_rvol     ? 1 : 0) + (cvd_ok_s   ? 1 : 0) + (near_psych ? 1 : 0) +
+sc_s = (bear         ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_s   ? 1 : 0) +
+       (hi_rvol      ? 1 : 0) + (cvd_ok_s    ? 1 : 0) + (near_psych  ? 1 : 0) +
        (mtf_all_bear ? 1 : 0)
 
 // CHOCH activ blocheaza semnalul pana la urmatorul BOS
-setup_l = bull and strong_imp and at_f_b and hi_rvol and cvd_ok_b and
+setup_l = bull and strong_imp and in_zone_b and hi_rvol and cvd_ok_b and
           in_sess and not choch_bear_active
-setup_s = bear and strong_imp and at_f_s and hi_rvol and cvd_ok_s and
+setup_s = bear and strong_imp and in_zone_s and hi_rvol and cvd_ok_s and
           in_sess and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
@@ -284,16 +324,60 @@ setup_s = bear and strong_imp and at_f_s and hi_rvol and cvd_ok_s and
 plot(ema200, "EMA 200 H1",
      color = bull ? color.new(color.lime, 20) : color.new(color.red, 20), linewidth=2)
 
-plot(show_zone ? equil : na, "Echilibru 50%",
+// Fibonacci auto — vizibil DOAR cand use_manual=false
+plot(not use_manual and show_zone ? equil : na, "Echilibru 50%",
      color=color.new(color.white, 60), linewidth=1, style=plot.style_linebr)
 
-bgcolor(show_zone and in_discount ? color.new(color.green, 96) : na, title="Discount Zone")
-bgcolor(show_zone and in_premium  ? color.new(color.red,   96) : na, title="Premium Zone")
+bgcolor(not use_manual and show_zone and in_discount ? color.new(color.green, 96) : na, title="Discount Zone")
+bgcolor(not use_manual and show_zone and in_premium  ? color.new(color.red,   96) : na, title="Premium Zone")
 
-plot(show_fib and bull ? f786_b : na, "Fib D/S Bull",
+plot(not use_manual and show_fib and bull ? f786_b : na, "Fib D/S Bull",
      color=color.new(color.teal,   20), linewidth=2, style=plot.style_linebr)
-plot(show_fib and bear ? f786_s : na, "Fib D/S Bear",
+plot(not use_manual and show_fib and bear ? f786_s : na, "Fib D/S Bear",
      color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
+
+// Zone manuale — desenate ca dreptunghiuri pe grafic
+// Extinse cu 50 bare la dreapta pentru vizibilitate
+if use_manual and show_zones and barstate.islast
+    bl = math.max(0, bar_index - 300)
+    br = bar_index + 50
+
+    if d1_valid
+        box.new(bl, d1_hi, br, d1_lo,
+                bgcolor=color.new(color.green, 80),
+                border_color=color.new(color.green, 20), border_width=1,
+                text="DEMAND 1", text_color=color.green, text_size=size.small,
+                text_halign=text.align_left)
+    if d2_valid
+        box.new(bl, d2_hi, br, d2_lo,
+                bgcolor=color.new(color.green, 80),
+                border_color=color.new(color.green, 20), border_width=1,
+                text="DEMAND 2", text_color=color.green, text_size=size.small,
+                text_halign=text.align_left)
+    if d3_valid
+        box.new(bl, d3_hi, br, d3_lo,
+                bgcolor=color.new(color.green, 80),
+                border_color=color.new(color.green, 20), border_width=1,
+                text="DEMAND 3", text_color=color.green, text_size=size.small,
+                text_halign=text.align_left)
+    if s1_valid
+        box.new(bl, s1_hi, br, s1_lo,
+                bgcolor=color.new(color.red, 80),
+                border_color=color.new(color.red, 20), border_width=1,
+                text="SUPPLY 1", text_color=color.red, text_size=size.small,
+                text_halign=text.align_left)
+    if s2_valid
+        box.new(bl, s2_hi, br, s2_lo,
+                bgcolor=color.new(color.red, 80),
+                border_color=color.new(color.red, 20), border_width=1,
+                text="SUPPLY 2", text_color=color.red, text_size=size.small,
+                text_halign=text.align_left)
+    if s3_valid
+        box.new(bl, s3_hi, br, s3_lo,
+                bgcolor=color.new(color.red, 80),
+                border_color=color.new(color.red, 20), border_width=1,
+                text="SUPPLY 3", text_color=color.red, text_size=size.small,
+                text_halign=text.align_left)
 
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
 
@@ -386,8 +470,10 @@ if barstate.islast
     table.cell(T, 1,  3, zone_txt, text_color=CW, bgcolor=zone_col, text_size=SZ)
 
     table.cell(T, 0,  4, "📐 Demand/Supply",  text_color=CW, bgcolor=C_lb, text_size=SZ)
-    table.cell(T, 1,  4, (at_f_b or at_f_s) ? "IN ZONA ✓" : "IN AFARA ✗",
-               text_color=CW, bgcolor=(at_f_b or at_f_s) ? C_ok : C_no, text_size=SZ)
+    zone_src  = use_manual ? "manual" : "Fib " + str.tostring(fib_level)
+    zone_hit  = in_zone_b or in_zone_s
+    zone_lbl  = zone_hit ? "IN ZONA ✓ [" + zone_src + "]" : "IN AFARA ✗"
+    table.cell(T, 1,  4, zone_lbl, text_color=CW, bgcolor=zone_hit ? C_ok : C_no, text_size=SZ)
 
     table.cell(T, 0,  5, "📈 RVOL",       text_color=CW, bgcolor=C_lb, text_size=SZ)
     table.cell(T, 1,  5, str.tostring(math.round(rvol_now, 2)) + "x",
