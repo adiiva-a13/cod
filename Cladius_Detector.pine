@@ -387,24 +387,64 @@ plot(not use_manual and show_fib and bull ? f786_b : na, "Fib D/S Bull",
 plot(not use_manual and show_fib and bear ? f786_s : na, "Fib D/S Bear",
      color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
 
-// Zone manuale — desenate ca dreptunghiuri pe grafic
-// Extinse cu 50 bare la dreapta pentru vizibilitate
-if use_manual and show_zones and barstate.islast
-    bl = math.max(0, bar_index - 300)
-    br = bar_index + 50
+// Zone manuale — var box pentru persistenta corecta pe tot graficul
+var box bx_d1 = na
+var box bx_d2 = na
+var box bx_d3 = na
+var box bx_s1 = na
+var box bx_s2 = na
+var box bx_s3 = na
 
+if use_manual and show_zones
+    br = bar_index + 50
     if d1_valid
-        box.new(bl, d1_hi, br, d1_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 1", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+        if na(bx_d1)
+            bx_d1 := box.new(0, d1_hi, br, d1_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 1", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+        else
+            box.set_right(bx_d1, br)
+    else
+        box.delete(bx_d1)
+        bx_d1 := na
     if d2_valid
-        box.new(bl, d2_hi, br, d2_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 2", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+        if na(bx_d2)
+            bx_d2 := box.new(0, d2_hi, br, d2_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 2", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+        else
+            box.set_right(bx_d2, br)
+    else
+        box.delete(bx_d2)
+        bx_d2 := na
     if d3_valid
-        box.new(bl, d3_hi, br, d3_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 3", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+        if na(bx_d3)
+            bx_d3 := box.new(0, d3_hi, br, d3_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 3", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+        else
+            box.set_right(bx_d3, br)
+    else
+        box.delete(bx_d3)
+        bx_d3 := na
     if s1_valid
-        box.new(bl, s1_hi, br, s1_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 1", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+        if na(bx_s1)
+            bx_s1 := box.new(0, s1_hi, br, s1_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 1", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+        else
+            box.set_right(bx_s1, br)
+    else
+        box.delete(bx_s1)
+        bx_s1 := na
     if s2_valid
-        box.new(bl, s2_hi, br, s2_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 2", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+        if na(bx_s2)
+            bx_s2 := box.new(0, s2_hi, br, s2_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 2", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+        else
+            box.set_right(bx_s2, br)
+    else
+        box.delete(bx_s2)
+        bx_s2 := na
     if s3_valid
-        box.new(bl, s3_hi, br, s3_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 3", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+        if na(bx_s3)
+            bx_s3 := box.new(0, s3_hi, br, s3_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 3", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+        else
+            box.set_right(bx_s3, br)
+    else
+        box.delete(bx_s3)
+        bx_s3 := na
 
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
 
