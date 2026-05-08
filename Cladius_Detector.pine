@@ -58,6 +58,11 @@ use_psych  = input.bool(true,  "Activare Nivele Psihologice",  group=G8)
 psych_tol  = input.float(0.05, "Toleranta %",             step=0.01, minval=0.01, group=G8)
 show_psych = input.bool(true,  "Arata Linii Psihologice",        group=G8)
 
+var string GA = "═══ ALERTE TIMPURII ═══"
+warn_min  = input.int(3, "⚠ Alerta cand scorul atinge minim X din 5",
+                       minval=1, maxval=5, group=GA,
+                       tooltip="5 = doar A+ complet  |  3 = avertizare timpurie  |  1 = orice semnal")
+
 var string G9 = "═══ MARKET STRUCTURE (BOS/CHOCH) ═══"
 show_bos   = input.bool(true, "Show BOS Labels",          group=G9)
 show_choch = input.bool(true, "Show CHOCH Labels",        group=G9)
@@ -317,6 +322,19 @@ setup_l = bull and strong_imp and in_zone_b and hi_rvol and cvd_ok_b and
           in_sess and not choch_bear_active
 setup_s = bear and strong_imp and in_zone_s and hi_rvol and cvd_ok_s and
           in_sess and not choch_bull_active
+
+// ════════════════════════════════════════════════════════════════════
+// SCOR DE BAZA (5 conditii principale) — pentru alerta timpurie
+//   1. Trend   2. Impulse   3. Zona D/S   4. RVOL   5. CVD
+// ════════════════════════════════════════════════════════════════════
+core_b = (bull      ? 1 : 0) + (strong_imp ? 1 : 0) + (in_zone_b ? 1 : 0) +
+         (hi_rvol   ? 1 : 0) + (cvd_ok_b   ? 1 : 0)
+core_s = (bear      ? 1 : 0) + (strong_imp ? 1 : 0) + (in_zone_s ? 1 : 0) +
+         (hi_rvol   ? 1 : 0) + (cvd_ok_s   ? 1 : 0)
+
+// Alerta timpurie: scor atinge pragul DAR nu e inca A+ complet
+warn_l = bull and core_b >= warn_min and not setup_l
+warn_s = bear and core_s >= warn_min and not setup_s
 
 // ════════════════════════════════════════════════════════════════════
 // PLOTS
@@ -589,6 +607,31 @@ if barstate.islast and show_mtf
 // ════════════════════════════════════════════════════════════════════
 // ALERTS
 // ════════════════════════════════════════════════════════════════════
+
+// ── Alerta timpurie (scor partial) ──────────────────────────────────
+alertcondition(warn_l,
+     title   = "👀 CLADIUS Atentie LONG — Scor Partial",
+     message = "👀 ATENTIE LONG — {{ticker}} [{{interval}}]\n" +
+               "Scor: " + str.tostring(core_b) + "/5 conditii indeplinite\n" +
+               "✅ Trend:   " + (bull      ? "DA" : "NU") + "\n" +
+               "✅ Impulse: " + (strong_imp ? "DA" : "NU") + "\n" +
+               "✅ Zona D/S:" + (in_zone_b  ? "DA" : "NU") + "\n" +
+               "✅ RVOL:    " + (hi_rvol    ? "DA" : "NU") + "\n" +
+               "✅ CVD:     " + (cvd_ok_b   ? "DA" : "NU") + "\n" +
+               "⏳ Asteapta confirmarea A+ completa!")
+
+alertcondition(warn_s,
+     title   = "👀 CLADIUS Atentie SHORT — Scor Partial",
+     message = "👀 ATENTIE SHORT — {{ticker}} [{{interval}}]\n" +
+               "Scor: " + str.tostring(core_s) + "/5 conditii indeplinite\n" +
+               "✅ Trend:   " + (bear      ? "DA" : "NU") + "\n" +
+               "✅ Impulse: " + (strong_imp ? "DA" : "NU") + "\n" +
+               "✅ Zona D/S:" + (in_zone_s  ? "DA" : "NU") + "\n" +
+               "✅ RVOL:    " + (hi_rvol    ? "DA" : "NU") + "\n" +
+               "✅ CVD:     " + (cvd_ok_s   ? "DA" : "NU") + "\n" +
+               "⏳ Asteapta confirmarea A+ completa!")
+
+// ── Setup A+ complet ─────────────────────────────────────────────────
 alertcondition(setup_l,
      title   = "🟢 Setup A+ LONG Detectat",
      message = "🟢 SETUP A+ LONG Detectat!\n{{ticker}} [{{interval}}]\n" +
