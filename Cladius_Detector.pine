@@ -63,6 +63,11 @@ warn_min  = input.int(3, "⚠ Alerta cand scorul atinge minim X din 5",
                        minval=1, maxval=5, group=GA,
                        tooltip="5 = doar A+ complet  |  3 = avertizare timpurie  |  1 = orice semnal")
 
+var string GC = "═══ CANDLESTICK PATTERNS (bonus) ═══"
+use_candles  = input.bool(true,  "Activare Pattern Candle (+1 la scor)", group=GC)
+wick_ratio   = input.float(2.0,  "Min raport fitil / corp",  step=0.1, minval=1.0, group=GC)
+show_candles = input.bool(true,  "Arata markere pe grafic",  group=GC)
+
 var string G9 = "═══ MARKET STRUCTURE (BOS/CHOCH) ═══"
 show_bos   = input.bool(true, "Show BOS Labels",          group=G9)
 show_choch = input.bool(true, "Show CHOCH Labels",        group=G9)
@@ -167,6 +172,40 @@ abs_bull  = delta_bar > 0.0 and close < open
 abs_bear  = delta_bar < 0.0 and close > open
 cvd_ok_b  = cvd_up or abs_bull
 cvd_ok_s  = cvd_dn or abs_bear
+
+// ════════════════════════════════════════════════════════════════════
+// 5b. CANDLESTICK PATTERNS — Confirmare Price Action in zona
+//
+//  HAMMER        : fitil mare jos, corp mic sus  → respingere demand
+//  SHOOTING STAR : fitil mare sus, corp mic jos  → respingere supply
+//  BULL ENGULFING: lumânare verde engulfs cea rosie → momentum bull
+//  BEAR ENGULFING: lumânare rosie engulfs cea verde → momentum bear
+// ════════════════════════════════════════════════════════════════════
+c_body   = math.abs(close - open)
+c_upper  = high - math.max(close, open)
+c_lower  = math.min(close, open) - low
+c_range  = high - low
+
+hammer     = use_candles and c_range > 0 and c_body > 0 and
+             c_lower >= c_body * wick_ratio and c_upper <= c_body * 0.5
+
+shoot_star = use_candles and c_range > 0 and c_body > 0 and
+             c_upper >= c_body * wick_ratio and c_lower <= c_body * 0.5
+
+bull_engulf = use_candles and
+              close > open and close[1] < open[1] and
+              open <= close[1] and close >= open[1]
+
+bear_engulf = use_candles and
+              close < open and close[1] > open[1] and
+              open >= close[1] and close <= open[1]
+
+// Patternul conteaza DOAR cand pretul e in zona relevanta
+candle_bull = (hammer or bull_engulf) and in_zone_b
+candle_bear = (shoot_star or bear_engulf) and in_zone_s
+
+candle_lbl_b = hammer ? "HAMMER 🔨" : bull_engulf ? "ENGULF 🔥" : "─"
+candle_lbl_s = shoot_star ? "SHOOT ⭐" : bear_engulf ? "ENGULF 🔥" : "─"
 
 // ════════════════════════════════════════════════════════════════════
 // 6. POC — Fixed Range Volume Profile (proxy)
@@ -308,14 +347,15 @@ mtf_all_bull = tf1_bull  and tf2_bull  and tf3_bull  and tf4_bull
 mtf_all_bear = not tf1_bull and not tf2_bull and not tf3_bull and not tf4_bull
 
 // ════════════════════════════════════════════════════════════════════
-// 12. CONFLUENCE SCORE & SETUP A+  (max 7 puncte)
+// 12. CONFLUENCE SCORE & SETUP A+  (max 8 puncte)
+//   5 principale + 3 bonus (Psych, MTF Align, Candle Pattern)
 // ════════════════════════════════════════════════════════════════════
-sc_b = (bull         ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_b   ? 1 : 0) +
-       (hi_rvol      ? 1 : 0) + (cvd_ok_b    ? 1 : 0) + (near_psych  ? 1 : 0) +
-       (mtf_all_bull ? 1 : 0)
-sc_s = (bear         ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_s   ? 1 : 0) +
-       (hi_rvol      ? 1 : 0) + (cvd_ok_s    ? 1 : 0) + (near_psych  ? 1 : 0) +
-       (mtf_all_bear ? 1 : 0)
+sc_b = (bull          ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_b    ? 1 : 0) +
+       (hi_rvol       ? 1 : 0) + (cvd_ok_b    ? 1 : 0) + (near_psych   ? 1 : 0) +
+       (mtf_all_bull  ? 1 : 0) + (candle_bull  ? 1 : 0)
+sc_s = (bear          ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_s    ? 1 : 0) +
+       (hi_rvol       ? 1 : 0) + (cvd_ok_s    ? 1 : 0) + (near_psych   ? 1 : 0) +
+       (mtf_all_bear  ? 1 : 0) + (candle_bear  ? 1 : 0)
 
 // CHOCH activ blocheaza semnalul pana la urmatorul BOS
 setup_l = bull and strong_imp and in_zone_b and hi_rvol and cvd_ok_b and
@@ -423,10 +463,24 @@ plotchar(show_piv and not na(ph) ? ph : na, "PH", "▼",
 plotchar(show_piv and not na(pl) ? pl : na, "PL", "▲",
          location.belowbar, color.new(color.lime, 40), size=size.tiny, offset=-piv_r)
 
-plotchar(abs_bull and bull, "⚡ Absorb Bull", "⚡",
+plotchar(abs_bull and bull, "Absorb Bull", "⚡",
          location.belowbar, color.new(color.aqua,    10), size=size.tiny)
-plotchar(abs_bear and bear, "⚡ Absorb Bear", "⚡",
+plotchar(abs_bear and bear, "Absorb Bear", "⚡",
          location.abovebar, color.new(color.fuchsia, 10), size=size.tiny)
+
+// Candlestick pattern markers (apar doar in zona relevanta)
+plotshape(show_candles and hammer      and in_zone_b, "Hammer",
+          shape.triangleup,   location.belowbar,
+          color.new(color.lime,   10), text="H", textcolor=color.lime,   size=size.small)
+plotshape(show_candles and bull_engulf and in_zone_b, "Bull Engulfing",
+          shape.triangleup,   location.belowbar,
+          color.new(color.green,  10), text="E", textcolor=color.green,  size=size.small)
+plotshape(show_candles and shoot_star  and in_zone_s, "Shooting Star",
+          shape.triangledown, location.abovebar,
+          color.new(color.orange, 10), text="S", textcolor=color.orange, size=size.small)
+plotshape(show_candles and bear_engulf and in_zone_s, "Bear Engulfing",
+          shape.triangledown, location.abovebar,
+          color.new(color.red,    10), text="E", textcolor=color.red,    size=size.small)
 
 plotchar(near_psych, "Psych Level", "🔵",
          location.abovebar, color.new(color.purple, 20), size=size.tiny)
@@ -454,7 +508,7 @@ if show_choch and choch_to_bull
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Principal (top_right)
 // ════════════════════════════════════════════════════════════════════
-var table T = table.new(position.top_right, 2, 13,
+var table T = table.new(position.top_right, 2, 14,
      bgcolor=color.new(color.black, 55),
      border_color=color.new(color.gray, 60), border_width=1,
      frame_color=color.new(color.blue, 40), frame_width=2)
@@ -528,13 +582,18 @@ if barstate.islast
     mtf_col = mtf_all_bull ? C_ok : mtf_all_bear ? C_no : C_mid
     table.cell(T, 1, 11, mtf_txt, text_color=CW, bgcolor=mtf_col, text_size=SZ)
 
+    table.cell(T, 0, 12, "🕯 Candle",     text_color=CW, bgcolor=C_lb, text_size=SZ)
+    cdl_active = candle_bull or candle_bear
+    cdl_lbl    = candle_bull ? candle_lbl_b : candle_bear ? candle_lbl_s : "─ NIMIC ─"
+    cdl_col    = candle_bull ? C_ok : candle_bear ? C_no : C_mid
+    table.cell(T, 1, 12, cdl_lbl, text_color=CW, bgcolor=cdl_col, text_size=SZ)
+
     score_now = bull ? sc_b : sc_s
-    sc_color  = score_now >= 6 ? C_ok : score_now >= 4 ? C_mid : C_no
-    table.cell(T, 0, 12, "⭐ Confluenta",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    sc_color  = score_now >= 7 ? C_ok : score_now >= 5 ? C_mid : C_no
+    table.cell(T, 0, 13, "⭐ Confluenta",  text_color=CW, bgcolor=C_lb, text_size=SZ)
     s_txt = setup_l ? "LONG  🟢" : setup_s ? "SHORT 🔴" : "ASTEPT ⏳"
     s_col = setup_l ? C_ok : setup_s ? C_no : C_mid
-    // Combine score + setup in last 2 cells
-    table.cell(T, 1, 12, s_txt + "  [" + str.tostring(score_now) + "/7]",
+    table.cell(T, 1, 13, s_txt + "  [" + str.tostring(score_now) + "/8]",
                text_color=CW, bgcolor=s_col, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
