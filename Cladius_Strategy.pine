@@ -26,7 +26,8 @@ piv_l     = input.int(10,    "Pivot Left Bars",         minval=2, maxval=50,   g
 piv_r     = input.int(10,    "Pivot Right Bars",        minval=2, maxval=50,   group=G2)
 
 var string G3 = "═══ FIBONACCI & ZONE ═══"
-fib_tol   = input.float(0.15, "Fib Zone Tolerance %",  step=0.01, minval=0.01, group=G3)
+fib_level = input.float(0.886, "Fib Entry Level (0.886 Deep D/S  |  0.786 Standard)", step=0.001, minval=0.5, maxval=0.99, group=G3)
+fib_tol   = input.float(0.15,  "Fib Zone Tolerance %", step=0.01, minval=0.01, group=G3)
 
 var string G4 = "═══ RVOL ═══"
 rvol_ma   = input.int(20,    "RVOL Average Bars",       minval=5,  group=G4)
@@ -86,8 +87,8 @@ strong_imp  = imp_pct_now >= imp_pct
 // ════════════════════════════════════════════════════════════════════
 // 3. FIBONACCI + PREMIUM/DISCOUNT
 // ════════════════════════════════════════════════════════════════════
-f786_b = (not na(_ph) and not na(_pl)) ? _ph - 0.786 * swing_range : na
-f786_s = (not na(_ph) and not na(_pl)) ? _pl + 0.786 * swing_range : na
+f786_b = (not na(_ph) and not na(_pl)) ? _ph - fib_level * swing_range : na
+f786_s = (not na(_ph) and not na(_pl)) ? _pl + fib_level * swing_range : na
 equil  = (not na(_ph) and not na(_pl)) ? _pl + 0.5   * swing_range : na
 
 in_discount = not na(equil) and close < equil
@@ -232,9 +233,9 @@ plot((not na(_ph) and not na(_pl)) ? equil : na, "Echilibru 50%",
 bgcolor(in_discount ? color.new(color.green, 96) : na, title="Discount")
 bgcolor(in_premium  ? color.new(color.red,   96) : na, title="Premium")
 
-plot(bull ? f786_b : na, "Fib 0.786 Bull",
+plot(bull ? f786_b : na, "Demand Zone",
      color=color.new(color.teal,   20), linewidth=2, style=plot.style_linebr)
-plot(bear ? f786_s : na, "Fib 0.786 Bear",
+plot(bear ? f786_s : na, "Supply Zone",
      color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
 
 plotshape(setup_l, "A+ BUY",

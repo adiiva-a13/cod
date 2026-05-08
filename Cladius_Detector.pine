@@ -15,10 +15,11 @@ piv_l     = input.int(10,    "Pivot Left Bars",          minval=2, maxval=50,   
 piv_r     = input.int(10,    "Pivot Right Bars",         minval=2, maxval=50,   group=G2)
 
 var string G3 = "═══ FIBONACCI & ZONE ═══"
-fib_tol   = input.float(0.15, "Fib Zone Tolerance %",   step=0.01, minval=0.01, group=G3)
-show_fib  = input.bool(true,  "Show Fib Lines",          group=G3)
-show_piv  = input.bool(true,  "Show Pivots",             group=G3)
-show_zone = input.bool(true,  "Show Premium/Discount",   group=G3)
+fib_level = input.float(0.886, "Fib Entry Level (0.886 Deep D/S  |  0.786 Standard)", step=0.001, minval=0.5, maxval=0.99, group=G3)
+fib_tol   = input.float(0.15,  "Fib Zone Tolerance %",  step=0.01, minval=0.01, group=G3)
+show_fib  = input.bool(true,   "Show Fib Lines",         group=G3)
+show_piv  = input.bool(true,   "Show Pivots",            group=G3)
+show_zone = input.bool(true,   "Show Premium/Discount",  group=G3)
 
 var string G4 = "═══ RVOL ═══"
 rvol_ma   = input.int(20,    "RVOL Average Bars",        minval=5,  group=G4)
@@ -84,10 +85,10 @@ imp_pct_now = swing_range / base_p * 100.0
 strong_imp  = imp_pct_now >= imp_pct
 
 // ════════════════════════════════════════════════════════════════════
-// 3. FIBONACCI 0.786 + PREMIUM / DISCOUNT ZONE
+// 3. FIBONACCI ENTRY LEVEL + PREMIUM / DISCOUNT ZONE
 // ════════════════════════════════════════════════════════════════════
-f786_b = (not na(_ph) and not na(_pl)) ? _ph - 0.786 * swing_range : na
-f786_s = (not na(_ph) and not na(_pl)) ? _pl + 0.786 * swing_range : na
+f786_b = (not na(_ph) and not na(_pl)) ? _ph - fib_level * swing_range : na
+f786_s = (not na(_ph) and not na(_pl)) ? _pl + fib_level * swing_range : na
 equil  = (not na(_ph) and not na(_pl)) ? _pl + 0.5   * swing_range : na
 
 in_discount = not na(equil) and close < equil
@@ -216,8 +217,8 @@ f_mtf_score() =>
     _imp  = _rng / _bp * 100.0
     _simp = _imp >= imp_pct
 
-    _f786b = (not na(_lph) and not na(_lpl)) ? _lph - 0.786 * _rng : na
-    _f786s = (not na(_lph) and not na(_lpl)) ? _lpl + 0.786 * _rng : na
+    _f786b = (not na(_lph) and not na(_lpl)) ? _lph - fib_level * _rng : na
+    _f786s = (not na(_lph) and not na(_lpl)) ? _lpl + fib_level * _rng : na
     _eq    = (not na(_lph) and not na(_lpl)) ? _lpl + 0.5   * _rng : na
     _disc  = not na(_eq) and close < _eq
     _prem  = not na(_eq) and close > _eq
@@ -289,9 +290,9 @@ plot(show_zone ? equil : na, "Echilibru 50%",
 bgcolor(show_zone and in_discount ? color.new(color.green, 96) : na, title="Discount Zone")
 bgcolor(show_zone and in_premium  ? color.new(color.red,   96) : na, title="Premium Zone")
 
-plot(show_fib and bull ? f786_b : na, "Fib 0.786 Bull",
+plot(show_fib and bull ? f786_b : na, "Fib D/S Bull",
      color=color.new(color.teal,   20), linewidth=2, style=plot.style_linebr)
-plot(show_fib and bear ? f786_s : na, "Fib 0.786 Bear",
+plot(show_fib and bear ? f786_s : na, "Fib D/S Bear",
      color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
 
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
@@ -384,7 +385,7 @@ if barstate.islast
     zone_col = in_discount ? C_ok : in_premium ? C_no : C_mid
     table.cell(T, 1,  3, zone_txt, text_color=CW, bgcolor=zone_col, text_size=SZ)
 
-    table.cell(T, 0,  4, "📐 Fib 0.786",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    table.cell(T, 0,  4, "📐 Demand/Supply",  text_color=CW, bgcolor=C_lb, text_size=SZ)
     table.cell(T, 1,  4, (at_f_b or at_f_s) ? "IN ZONA ✓" : "IN AFARA ✗",
                text_color=CW, bgcolor=(at_f_b or at_f_s) ? C_ok : C_no, text_size=SZ)
 
@@ -505,7 +506,7 @@ if barstate.islast and show_mtf
 alertcondition(setup_l,
      title   = "🟢 Setup A+ LONG Detectat",
      message = "🟢 SETUP A+ LONG Detectat!\n{{ticker}} [{{interval}}]\n" +
-               "📐 Fib 0.786 — Deep Discount\n" +
+               "📐 Demand Zone 0.886 atins\n" +
                "📈 RVOL ridicat — bani grei\n" +
                "🌊 CVD Bullish / Absorbtie\n" +
                "🏗 Structura bullish confirmata\n" +
@@ -514,7 +515,7 @@ alertcondition(setup_l,
 alertcondition(setup_s,
      title   = "🔴 Setup A+ SHORT Detectat",
      message = "🔴 SETUP A+ SHORT Detectat!\n{{ticker}} [{{interval}}]\n" +
-               "📐 Fib 0.786 — Deep Premium\n" +
+               "📐 Supply Zone 0.886 atins\n" +
                "📈 RVOL ridicat — bani grei\n" +
                "🌊 CVD Bearish / Absorbtie\n" +
                "🏗 Structura bearish confirmata\n" +
