@@ -394,41 +394,17 @@ if use_manual and show_zones and barstate.islast
     br = bar_index + 50
 
     if d1_valid
-        box.new(bl, d1_hi, br, d1_lo,
-                bgcolor=color.new(color.green, 80),
-                border_color=color.new(color.green, 20), border_width=1,
-                text="DEMAND 1", text_color=color.green, text_size=size.small,
-                text_halign=text.align_left)
+        box.new(bl, d1_hi, br, d1_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 1", text_color=color.green, text_size=size.small, text_halign=text.align_left)
     if d2_valid
-        box.new(bl, d2_hi, br, d2_lo,
-                bgcolor=color.new(color.green, 80),
-                border_color=color.new(color.green, 20), border_width=1,
-                text="DEMAND 2", text_color=color.green, text_size=size.small,
-                text_halign=text.align_left)
+        box.new(bl, d2_hi, br, d2_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 2", text_color=color.green, text_size=size.small, text_halign=text.align_left)
     if d3_valid
-        box.new(bl, d3_hi, br, d3_lo,
-                bgcolor=color.new(color.green, 80),
-                border_color=color.new(color.green, 20), border_width=1,
-                text="DEMAND 3", text_color=color.green, text_size=size.small,
-                text_halign=text.align_left)
+        box.new(bl, d3_hi, br, d3_lo, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 20), border_width=1, text="DEMAND 3", text_color=color.green, text_size=size.small, text_halign=text.align_left)
     if s1_valid
-        box.new(bl, s1_hi, br, s1_lo,
-                bgcolor=color.new(color.red, 80),
-                border_color=color.new(color.red, 20), border_width=1,
-                text="SUPPLY 1", text_color=color.red, text_size=size.small,
-                text_halign=text.align_left)
+        box.new(bl, s1_hi, br, s1_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 1", text_color=color.red, text_size=size.small, text_halign=text.align_left)
     if s2_valid
-        box.new(bl, s2_hi, br, s2_lo,
-                bgcolor=color.new(color.red, 80),
-                border_color=color.new(color.red, 20), border_width=1,
-                text="SUPPLY 2", text_color=color.red, text_size=size.small,
-                text_halign=text.align_left)
+        box.new(bl, s2_hi, br, s2_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 2", text_color=color.red, text_size=size.small, text_halign=text.align_left)
     if s3_valid
-        box.new(bl, s3_hi, br, s3_lo,
-                bgcolor=color.new(color.red, 80),
-                border_color=color.new(color.red, 20), border_width=1,
-                text="SUPPLY 3", text_color=color.red, text_size=size.small,
-                text_halign=text.align_left)
+        box.new(bl, s3_hi, br, s3_lo, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 20), border_width=1, text="SUPPLY 3", text_color=color.red, text_size=size.small, text_halign=text.align_left)
 
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
 
@@ -445,58 +421,33 @@ plotshape(setup_s, "A+ SELL",
           color.new(color.red, 0),   text="A+\nSELL", textcolor=color.white, size=size.normal)
 
 if show_sl and setup_l
-    line.new(bar_index, sl_long,  bar_index + 8, sl_long,
-             color=color.new(color.red,   30), width=2, style=line.style_dotted)
+    line.new(bar_index, sl_long,  bar_index + 8, sl_long,  color=color.new(color.red,   30), width=2, style=line.style_dotted)
 if show_sl and setup_s
-    line.new(bar_index, sl_short, bar_index + 8, sl_short,
-             color=color.new(color.green, 30), width=2, style=line.style_dotted)
+    line.new(bar_index, sl_short, bar_index + 8, sl_short, color=color.new(color.green, 30), width=2, style=line.style_dotted)
 
-plotchar(show_piv and not na(ph) ? ph : na, "PH", "▼",
-         location.abovebar, color.new(color.red,  40), size=size.tiny, offset=-piv_r)
-plotchar(show_piv and not na(pl) ? pl : na, "PL", "▲",
-         location.belowbar, color.new(color.lime, 40), size=size.tiny, offset=-piv_r)
-
-plotchar(abs_bull and bull, "Absorb Bull", "⚡",
-         location.belowbar, color.new(color.aqua,    10), size=size.tiny)
-plotchar(abs_bear and bear, "Absorb Bear", "⚡",
-         location.abovebar, color.new(color.fuchsia, 10), size=size.tiny)
+plotchar(show_piv and not na(ph) ? ph : na, "PH", "▼", location.abovebar, color.new(color.red,  40), size=size.tiny, offset=-piv_r)
+plotchar(show_piv and not na(pl) ? pl : na, "PL", "▲", location.belowbar, color.new(color.lime, 40), size=size.tiny, offset=-piv_r)
+plotchar(abs_bull and bull, "Absorb Bull", "⚡", location.belowbar, color.new(color.aqua,    10), size=size.tiny)
+plotchar(abs_bear and bear, "Absorb Bear", "⚡", location.abovebar, color.new(color.fuchsia, 10), size=size.tiny)
 
 // Candlestick pattern markers (apar doar in zona relevanta)
-plotshape(show_candles and hammer      and in_zone_b, "Hammer",
-          shape.triangleup,   location.belowbar,
-          color.new(color.lime,   10), text="H", textcolor=color.lime,   size=size.small)
-plotshape(show_candles and bull_engulf and in_zone_b, "Bull Engulfing",
-          shape.triangleup,   location.belowbar,
-          color.new(color.green,  10), text="E", textcolor=color.green,  size=size.small)
-plotshape(show_candles and shoot_star  and in_zone_s, "Shooting Star",
-          shape.triangledown, location.abovebar,
-          color.new(color.orange, 10), text="S", textcolor=color.orange, size=size.small)
-plotshape(show_candles and bear_engulf and in_zone_s, "Bear Engulfing",
-          shape.triangledown, location.abovebar,
-          color.new(color.red,    10), text="E", textcolor=color.red,    size=size.small)
+plotshape(show_candles and hammer      and in_zone_b, "Hammer",       shape.triangleup,   location.belowbar, color.new(color.lime,   10), text="H", textcolor=color.lime,   size=size.small)
+plotshape(show_candles and bull_engulf and in_zone_b, "Bull Engulf",  shape.triangleup,   location.belowbar, color.new(color.green,  10), text="E", textcolor=color.green,  size=size.small)
+plotshape(show_candles and shoot_star  and in_zone_s, "Shoot Star",   shape.triangledown, location.abovebar, color.new(color.orange, 10), text="S", textcolor=color.orange, size=size.small)
+plotshape(show_candles and bear_engulf and in_zone_s, "Bear Engulf",  shape.triangledown, location.abovebar, color.new(color.red,    10), text="E", textcolor=color.red,    size=size.small)
 
-plotchar(near_psych, "Psych Level", "🔵",
-         location.abovebar, color.new(color.purple, 20), size=size.tiny)
-
+plotchar(near_psych, "Psych Level", "🔵", location.abovebar, color.new(color.purple, 20), size=size.tiny)
 bgcolor(hi_rvol ? color.new(color.yellow, 92) : na, title="High RVOL")
 
 // BOS / CHOCH labels
 if show_bos and bos_bull
-    label.new(bar_index, high, "BOS ▲",
-              color=color.new(color.green, 20), textcolor=color.white,
-              style=label.style_label_down, size=size.small)
+    label.new(bar_index, high, "BOS ▲", color=color.new(color.green,  20), textcolor=color.white, style=label.style_label_down, size=size.small)
 if show_bos and bos_bear
-    label.new(bar_index, low, "BOS ▼",
-              color=color.new(color.red, 20), textcolor=color.white,
-              style=label.style_label_up, size=size.small)
+    label.new(bar_index, low,  "BOS ▼", color=color.new(color.red,    20), textcolor=color.white, style=label.style_label_up,   size=size.small)
 if show_choch and choch_to_bear
-    label.new(bar_index, low, "CHOCH ⚠",
-              color=color.new(color.orange, 20), textcolor=color.white,
-              style=label.style_label_up, size=size.small)
+    label.new(bar_index, low,  "CHOCH ⚠", color=color.new(color.orange, 20), textcolor=color.white, style=label.style_label_up,   size=size.small)
 if show_choch and choch_to_bull
-    label.new(bar_index, high, "CHOCH ⚠",
-              color=color.new(color.orange, 20), textcolor=color.white,
-              style=label.style_label_down, size=size.small)
+    label.new(bar_index, high, "CHOCH ⚠", color=color.new(color.orange, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
 
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Principal (top_right)
