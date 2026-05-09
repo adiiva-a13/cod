@@ -396,10 +396,12 @@ warn_s = bear and core_s >= warn_min and not setup_s
 // SETUP B — context HTF + confirmare LTF
 //   HTF (TF curent): scor >= sb_htf_min din 5 conditii principale
 //   LTF (TF1):       scor >= sb_ltf_min din 5 conditii principale
-//   Nu necesita zona D/S setata manual — ideal cu 15min entry
+//   Zone: manual → in zona setata de user | auto → Discount/Premium Fib
 // ════════════════════════════════════════════════════════════════════
-setup_b_l = use_setup_b and bull and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and not setup_l and not choch_bear_active
-setup_b_s = use_setup_b and bear and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and not setup_s and not choch_bull_active
+sb_zone_ok_b = use_manual ? in_zone_b : in_discount
+sb_zone_ok_s = use_manual ? in_zone_s : in_premium
+setup_b_l = use_setup_b and bull and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and sb_zone_ok_b and not setup_l and not choch_bear_active
+setup_b_s = use_setup_b and bear and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and sb_zone_ok_s and not setup_s and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
 // PLOTS
