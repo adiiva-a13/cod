@@ -68,9 +68,16 @@ use_candles  = input.bool(true,  "Activare Pattern Candle (+1 la scor)", group=G
 wick_ratio   = input.float(2.0,  "Min raport fitil / corp",  step=0.1, minval=1.0, group=GC)
 show_candles = input.bool(true,  "Arata markere pe grafic",  group=GC)
 
-var string G9 = "═══ MARKET STRUCTURE (BOS/CHOCH) ═══"
-show_bos   = input.bool(true, "Show BOS Labels",          group=G9)
-show_choch = input.bool(true, "Show CHOCH Labels",        group=G9)
+var string G9 = "═══ MARKET STRUCTURE (BOS/CHOCH/MSS) ═══"
+show_bos   = input.bool(true,  "Show BOS Labels",          group=G9)
+show_choch = input.bool(true,  "Show CHOCH Labels",        group=G9)
+show_mss   = input.bool(true,  "Show MSS Labels",          group=G9)
+mss_len    = input.int(15,     "MSS Lookback (bare)",      minval=5, maxval=50, group=G9)
+
+var string GB = "═══ SETUP B (HTF context + LTF entry) ═══"
+use_setup_b = input.bool(true, "Activare Setup B",                              group=GB)
+sb_htf_min  = input.int(4,     "Min scor HTF (TF curent)",  minval=2, maxval=5, group=GB)
+sb_ltf_min  = input.int(3,     "Min scor LTF (TF1)",        minval=1, maxval=5, group=GB)
 
 var string G10 = "═══ MULTI-TIMEFRAME ═══"
 show_mtf  = input.bool(true,        "Show MTF Panel",     group=G10)
@@ -272,6 +279,22 @@ if bos_bear
     choch_bull_active := false
 
 // ════════════════════════════════════════════════════════════════════
+// 10b. MSS — Market Structure Shift
+//   Detecteaza ruptura unui swing HIGH/LOW LOCAL dupa un CHOCH
+//   MSS Bull = CHOCH bear activ + close rupe maximul local recent
+//   MSS Bear = CHOCH bull activ + close rupe minimul local recent
+//   MSS anuleaza CHOCH → permite setup-urile sa se activeze
+// ════════════════════════════════════════════════════════════════════
+mss_high = ta.highest(high, mss_len)[1]
+mss_low  = ta.lowest(low,   mss_len)[1]
+mss_bull = choch_bear_active and ta.crossover(close,  mss_high)
+mss_bear = choch_bull_active and ta.crossunder(close, mss_low)
+if mss_bull
+    choch_bear_active := false
+if mss_bear
+    choch_bull_active := false
+
+// ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
 //     Calculeaza scorul A+ pe orice timeframe via request.security
 // ════════════════════════════════════════════════════════════════════
@@ -370,6 +393,15 @@ warn_l = bull and core_b >= warn_min and not setup_l
 warn_s = bear and core_s >= warn_min and not setup_s
 
 // ════════════════════════════════════════════════════════════════════
+// SETUP B — context HTF + confirmare LTF
+//   HTF (TF curent): scor >= sb_htf_min din 5 conditii principale
+//   LTF (TF1):       scor >= sb_ltf_min din 5 conditii principale
+//   Nu necesita zona D/S setata manual — ideal cu 15min entry
+// ════════════════════════════════════════════════════════════════════
+setup_b_l = use_setup_b and bull and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and not setup_l and not choch_bear_active
+setup_b_s = use_setup_b and bear and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and not setup_s and not choch_bull_active
+
+// ════════════════════════════════════════════════════════════════════
 // PLOTS
 // ════════════════════════════════════════════════════════════════════
 plot(ema200, "EMA 200 H1",
@@ -453,12 +485,10 @@ plot(show_psych and use_psych ? psych_above : na, "Psych Above",
 plot(show_psych and use_psych ? psych_below : na, "Psych Below",
      color=color.new(color.fuchsia, 50), linewidth=1, style=plot.style_linebr)
 
-plotshape(setup_l, "A+ BUY",
-          shape.labelup,   location.belowbar,
-          color.new(color.green, 0), text="A+\nBUY",  textcolor=color.white, size=size.normal)
-plotshape(setup_s, "A+ SELL",
-          shape.labeldown, location.abovebar,
-          color.new(color.red, 0),   text="A+\nSELL", textcolor=color.white, size=size.normal)
+plotshape(setup_l,   "A+ BUY",      shape.labelup,   location.belowbar, color.new(color.green, 0),  text="A+\nBUY",  textcolor=color.white, size=size.normal)
+plotshape(setup_s,   "A+ SELL",     shape.labeldown, location.abovebar, color.new(color.red,   0),  text="A+\nSELL", textcolor=color.white, size=size.normal)
+plotshape(setup_b_l, "Setup B BUY", shape.labelup,   location.belowbar, color.new(color.aqua,  20), text="B\nBUY",   textcolor=color.white, size=size.small)
+plotshape(setup_b_s, "Setup B SELL",shape.labeldown, location.abovebar, color.new(color.aqua,  20), text="B\nSELL",  textcolor=color.white, size=size.small)
 
 if show_sl and setup_l
     line.new(bar_index, sl_long,  bar_index + 8, sl_long,  color=color.new(color.red,   30), width=2, style=line.style_dotted)
@@ -479,16 +509,20 @@ plotshape(show_candles and bear_engulf and in_zone_s, "Bear Engulf",  shape.tria
 plotchar(near_psych, "Psych Level", "🔵", location.abovebar, color.new(color.purple, 20), size=size.tiny)
 bgcolor(hi_rvol ? color.new(color.yellow, 92) : na, title="High RVOL")
 
-// BOS / CHOCH labels — un singur label per eveniment, offset ATR pentru spatiu
+// BOS / CHOCH / MSS labels — un singur label per eveniment, offset ATR
 _lbl_off = ta.atr(14) * 0.4
 if show_bos and bos_bull and not choch_bear_active[1]
-    label.new(bar_index, high + _lbl_off, "BOS ▲",   color=color.new(color.green,  20), textcolor=color.white, style=label.style_label_down, size=size.small)
+    label.new(bar_index, high + _lbl_off, "BOS ▲",   color=color.new(color.green,   20), textcolor=color.white, style=label.style_label_down, size=size.small)
 if show_bos and bos_bear and not choch_bull_active[1]
-    label.new(bar_index, low  - _lbl_off, "BOS ▼",   color=color.new(color.red,    20), textcolor=color.white, style=label.style_label_up,   size=size.small)
+    label.new(bar_index, low  - _lbl_off, "BOS ▼",   color=color.new(color.red,     20), textcolor=color.white, style=label.style_label_up,   size=size.small)
 if show_choch and choch_to_bear and not choch_bear_active[1]
-    label.new(bar_index, low  - _lbl_off, "CHOCH ⚠", color=color.new(color.orange, 20), textcolor=color.white, style=label.style_label_up,   size=size.small)
+    label.new(bar_index, low  - _lbl_off, "CHOCH ⚠", color=color.new(color.orange,  20), textcolor=color.white, style=label.style_label_up,   size=size.small)
 if show_choch and choch_to_bull and not choch_bull_active[1]
-    label.new(bar_index, high + _lbl_off, "CHOCH ⚠", color=color.new(color.orange, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
+    label.new(bar_index, high + _lbl_off, "CHOCH ⚠", color=color.new(color.orange,  20), textcolor=color.white, style=label.style_label_down, size=size.small)
+if show_mss and mss_bull
+    label.new(bar_index, low  - _lbl_off, "MSS ▲",   color=color.new(color.teal,    20), textcolor=color.white, style=label.style_label_up,   size=size.small)
+if show_mss and mss_bear
+    label.new(bar_index, high + _lbl_off, "MSS ▼",   color=color.new(color.fuchsia, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
 
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Principal (top_right)
@@ -555,11 +589,8 @@ if barstate.islast
                text_color=CW, bgcolor=C_bl, text_size=SZ)
 
     table.cell(T, 0, 10, "🏗 Structura",  text_color=CW, bgcolor=C_lb, text_size=SZ)
-    bos_txt = bos_bull       ? "BOS ▲ BULL"    : bos_bear       ? "BOS ▼ BEAR"    :
-              choch_to_bull  ? "CHOCH BULL ⚠"  : choch_to_bear  ? "CHOCH BEAR ⚠"  :
-              choch_bear_active ? "⚠ CHOCH ACT" : "─ INTACT ─"
-    bos_col = (bos_bull or choch_to_bull) ? C_ok :
-              (bos_bear or choch_to_bear or choch_bear_active) ? C_no : C_mid
+    bos_txt = mss_bull ? "MSS ▲ BULL" : mss_bear ? "MSS ▼ BEAR" : bos_bull ? "BOS ▲ BULL" : bos_bear ? "BOS ▼ BEAR" : choch_to_bull ? "CHOCH BULL ⚠" : choch_to_bear ? "CHOCH BEAR ⚠" : choch_bear_active ? "⚠ CHOCH ACT" : choch_bull_active ? "⚠ CHOCH ACT" : "─ INTACT ─"
+    bos_col = (mss_bull or bos_bull or choch_to_bull) ? C_ok : (mss_bear or bos_bear or choch_to_bear or choch_bear_active or choch_bull_active) ? C_no : C_mid
     table.cell(T, 1, 10, bos_txt, text_color=CW, bgcolor=bos_col, text_size=SZ)
 
     table.cell(T, 0, 11, "🔀 MTF Align",  text_color=CW, bgcolor=C_lb, text_size=SZ)
@@ -574,12 +605,11 @@ if barstate.islast
     table.cell(T, 1, 12, cdl_lbl, text_color=CW, bgcolor=cdl_col, text_size=SZ)
 
     score_now = bull ? sc_b : sc_s
-    sc_color  = score_now >= 7 ? C_ok : score_now >= 5 ? C_mid : C_no
+    C_cyan = color.new(color.aqua, 40)
     table.cell(T, 0, 13, "⭐ Confluenta",  text_color=CW, bgcolor=C_lb, text_size=SZ)
-    s_txt = setup_l ? "LONG  🟢" : setup_s ? "SHORT 🔴" : "ASTEPT ⏳"
-    s_col = setup_l ? C_ok : setup_s ? C_no : C_mid
-    table.cell(T, 1, 13, s_txt + "  [" + str.tostring(score_now) + "/8]",
-               text_color=CW, bgcolor=s_col, text_size=SZ)
+    s_txt = setup_l ? "LONG A+ 🟢" : setup_s ? "SHORT A+ 🔴" : setup_b_l ? "LONG B 🔵" : setup_b_s ? "SHORT B 🔵" : "ASTEPT ⏳"
+    s_col = setup_l ? C_ok : setup_s ? C_no : (setup_b_l or setup_b_s) ? C_cyan : C_mid
+    table.cell(T, 1, 13, s_txt + "  [" + str.tostring(score_now) + "/8]", text_color=CW, bgcolor=s_col, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Multi-Timeframe Panel (bottom_right)
@@ -680,3 +710,15 @@ if choch_to_bull
 
 if near_psych and hi_rvol
     alert("🔵 Nivel psihologic + RVOL ridicat!\n" + syminfo.ticker + " [" + timeframe.period + "]\nAtentie la reactie institutionala!", alert.freq_once_per_bar_close)
+
+if mss_bull
+    alert("📐 MSS BULLISH — " + syminfo.ticker + " [" + timeframe.period + "]\nMarket Structure Shift — structura bearish rupta!\nCauta entry LONG pe TF mic cu confirmare!", alert.freq_once_per_bar_close)
+
+if mss_bear
+    alert("📐 MSS BEARISH — " + syminfo.ticker + " [" + timeframe.period + "]\nMarket Structure Shift — structura bullish rupta!\nCauta entry SHORT pe TF mic cu confirmare!", alert.freq_once_per_bar_close)
+
+if setup_b_l
+    alert("🔵 SETUP B LONG — " + syminfo.ticker + " [" + timeframe.period + "]\nHTF Scor: " + str.tostring(core_b) + "/5 | LTF (TF1) Scor: " + str.tostring(tf1_scb) + "/5\nCauta entry pe " + mtf_tf1 + " cu SL sub demand!", alert.freq_once_per_bar_close)
+
+if setup_b_s
+    alert("🔵 SETUP B SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nHTF Scor: " + str.tostring(core_s) + "/5 | LTF (TF1) Scor: " + str.tostring(tf1_scs) + "/5\nCauta entry pe " + mtf_tf1 + " cu SL deasupra supply!", alert.freq_once_per_bar_close)
