@@ -28,7 +28,7 @@ input int    ExitMin        = 0;
 input group "=== FUS ORAR ==="
 input int    ServerOffsetWinter = 0;   // Offset 0 = orele de mai sus sunt direct ora server
 input int    ServerOffsetSummer = 0;   // Offset 0 = orele de mai sus sunt direct ora server
-// ─── Ghid configurare ───────────────────────────────────────────────
+// ─── Ghid configurare ────────────────────────────────────────────────────────────
 // Orele introduse mai sus sunt ORA SERVER din Market Watch (MT5).
 // Offsetul este 0 deoarece nu mai facem conversie locala->server.
 // Daca vrei sa revii la ore locale, seteaza offsetul corespunzator brokerului.
@@ -75,6 +75,12 @@ int      g_setup_dir    = 0;
 bool     g_high_vol     = false;
 // State machine breakout: 1=spart sus (g_hi), -1=spart jos (g_lo), 0=niciuna
 int      g_breakout_dir = 0;
+// DST offset cache: actualizat zilnic in OnTick si la OnInit
+// Elimina apelurile repetate IsEuropeanDST() la fiecare ToServerHour() per tick
+int      g_server_offset = 0;
+// Circuit Breaker cache per bara M1: evita HistorySelect pe fiecare tick
+bool     g_halted_cached  = false;
+datetime g_halted_bar_ts  = 0;
 // ─────────────────────────────────────────────
 // 3. FUNCTII FUS ORAR SI DST
 // ─────────────────────────────────────────────
@@ -120,11 +126,17 @@ bool IsEuropeanDST(datetime t)
       return (h < 3);
    }
 }
-// Converteste ora locala -> ora server (tine cont de DST)
+// Returneaza offsetul server curent tinand cont de DST.
+// Apelat rar (o data pe zi la reset + OnInit) pentru a actualiza g_server_offset.
+int CalcServerOffset()
+{
+   return IsEuropeanDST(TimeCurrent()) ? ServerOffsetSummer : ServerOffsetWinter;
+}
+// Converteste ora locala -> ora server folosind offsetul pre-calculat g_server_offset.
+// Nu mai apeleaza IsEuropeanDST() la fiecare tick.
 int ToServerHour(int localHour)
 {
-   int offset = IsEuropeanDST(TimeCurrent()) ? ServerOffsetSummer : ServerOffsetWinter;
-   return (localHour + offset + 24) % 24;
+   return (localHour + g_server_offset + 24) % 24;
 }
 // ─────────────────────────────────────────────
 // 4. CIRCUIT BREAKER - cu magic number filter
@@ -132,12 +144,15 @@ int ToServerHour(int localHour)
 datetime g_halted_since = 0;
 bool IsSystemHalted()
 {
+   // Calea rapida: CB activ, verifica doar daca pauza a expirat (fara HistorySelect)
    if(g_halted_since > 0)
    {
       if(TimeCurrent() >= g_halted_since + CB_PauseDays * 86400)
       {
          Print("✅ Circuit Breaker resetat automat dupa ", CB_PauseDays, " zile. Reluam tranzactionarea.");
-         g_halted_since = 0;
+         g_halted_since   = 0;
+         g_halted_cached  = false;
+         g_halted_bar_ts  = 0; // forteaza reevaluare la urmatoarea bara
          return false;
       }
       static datetime last_cb_log = 0;
@@ -151,8 +166,15 @@ bool IsSystemHalted()
       }
       return true;
    }
+   // Scanare scumpa (HistorySelect): executata cel mult o data per bara M1
+   datetime cur_bar = iTime(_Symbol, PERIOD_M1, 0);
+   if(cur_bar == g_halted_bar_ts) return g_halted_cached;
+   g_halted_bar_ts = cur_bar;
    if(!HistorySelect(TimeCurrent() - LookbackDays * 86400, TimeCurrent()))
+   {
+      g_halted_cached = false;
       return false;
+   }
    int losses = 0;
    int total  = HistoryDealsTotal();
    for(int i = total - 1; i >= 0; i--)
@@ -169,7 +191,8 @@ bool IsSystemHalted()
          losses++;
          if(losses >= MaxConsecLosses)
          {
-            g_halted_since = TimeCurrent();
+            g_halted_since  = TimeCurrent();
+            g_halted_cached = true;
             PrintFormat("⛔ Circuit Breaker activat: %d pierderi consecutive. Pauza %d zile pana la %s",
                         losses, CB_PauseDays,
                         TimeToString(g_halted_since + CB_PauseDays * 86400, TIME_DATE));
@@ -179,6 +202,7 @@ bool IsSystemHalted()
       else if(profit > 0)
          break;
    }
+   g_halted_cached = false;
    return false;
 }
 // ─────────────────────────────────────────────
@@ -498,7 +522,7 @@ void CollectRange()
                g_hi, g_lo, (g_hi - g_lo) / _Point, copied);
 }
 // ─────────────────────────────────────────────
-// 9. TRIMITERE ORDIN cu calcul lot bazat pe ContractSize
+// 10. TRIMITERE ORDIN cu calcul lot bazat pe ContractSize
 // ─────────────────────────────────────────────
 bool SendOrder(ENUM_ORDER_TYPE type, double entry, double sl, double tp)
 {
@@ -609,7 +633,7 @@ bool SendOrder(ENUM_ORDER_TYPE type, double entry, double sl, double tp)
    return sent;
 }
 // ─────────────────────────────────────────────
-// 10. BREAK-EVEN MANAGEMENT (cu magic filter)
+// 11. BREAK-EVEN MANAGEMENT (cu magic filter)
 // ─────────────────────────────────────────────
 void ManageBreakEven()
 {
@@ -661,7 +685,7 @@ void ManageBreakEven()
    }
 }
 // ─────────────────────────────────────────────
-// 11. INCHIDERE FORTATA LA ORA DE EXIT
+// 12. INCHIDERE FORTATA LA ORA DE EXIT
 // ─────────────────────────────────────────────
 void CloseAllPositions()
 {
@@ -699,7 +723,7 @@ void CloseAllPositions()
    }
 }
 // ─────────────────────────────────────────────
-// 12. NUMAR POZITII DESCHISE (cu magic filter)
+// 13. NUMAR POZITII DESCHISE (cu magic filter)
 // ─────────────────────────────────────────────
 int CountMyPositions()
 {
@@ -713,19 +737,20 @@ int CountMyPositions()
    return count;
 }
 // ─────────────────────────────────────────────
-// 13. OnInit / OnDeinit
+// 14. OnInit / OnDeinit
 // ─────────────────────────────────────────────
 int OnInit()
 {
    Print("✅ BreakoutEA v3 initializat pe ", _Symbol, " | Magic: ", MagicNumber);
+   // Initiaza offsetul DST la pornire
+   g_server_offset = CalcServerOffset();
    MqlDateTime srv;
    TimeCurrent(srv);
-   bool dst    = IsEuropeanDST(TimeCurrent());
-   int  offset = dst ? ServerOffsetSummer : ServerOffsetWinter;
+   bool dst = IsEuropeanDST(TimeCurrent());
    PrintFormat("🕐 Ora SERVER: %02d:%02d | DST: %s | Offset aplicat: %+dh",
                srv.hour, srv.min,
                dst ? "VARA (activ)" : "IARNA (inactiv)",
-               offset);
+               g_server_offset);
    PrintFormat("📅 Fereastra locala:  Range %02d:%02d-%02d:%02d | Entry pana %02d:00 | Exit %02d:%02d",
                RangeStartHour, RangeStartMin,
                RangeEndHour,   RangeEndMin,
@@ -803,7 +828,7 @@ void OnDeinit(const int reason)
    Print("EA oprit. Motiv: ", reason);
 }
 // ─────────────────────────────────────────────
-// 14. OnTick PRINCIPAL
+// 15. OnTick PRINCIPAL
 // ─────────────────────────────────────────────
 void OnTick()
 {
@@ -829,14 +854,16 @@ void OnTick()
       g_setup_dir    = 0;
       g_high_vol     = false;
       g_breakout_dir = 0;
+      g_halted_bar_ts = 0; // forteaza reevaluare CB la ziua noua
       last_reset_day = today;
+      // Actualizeaza offsetul DST o data pe zi
+      g_server_offset = CalcServerOffset();
       Print("🔄 Reset range + SVP pentru ziua noua: ", TimeToString(today, TIME_DATE));
-      bool dst    = IsEuropeanDST(TimeCurrent());
-      int  offset = dst ? ServerOffsetSummer : ServerOffsetWinter;
+      bool dst = IsEuropeanDST(TimeCurrent());
       PrintFormat("🕐 Ora server: %02d:%02d | DST: %s | Offset: %+dh | Fereastra server: %02d:%02d-%02d:%02d",
                   dt.hour, dt.min,
                   dst ? "VARA" : "IARNA",
-                  offset,
+                  g_server_offset,
                   ToServerHour(RangeStartHour), RangeStartMin,
                   ToServerHour(RangeEndHour),   RangeEndMin);
    }
@@ -864,7 +891,7 @@ void OnTick()
       CalcSVP();
    // --- Manage Break-Even ---
    ManageBreakEven();
-   // ── LOGICA DE INTRARE ──────────────────────
+   // ═ LOGICA DE INTRARE ══════════════════════════
    bool day_ok = (dt.day_of_week == 1 && Mon)
               || (dt.day_of_week == 2 && Tue)
               || (dt.day_of_week == 3 && Wed)
