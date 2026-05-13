@@ -86,6 +86,11 @@ use_setup_b = input.bool(true, "Activare Setup B",                              
 sb_htf_min  = input.int(4,     "Min scor HTF (TF curent)",  minval=2, maxval=5, group=GB)
 sb_ltf_min  = input.int(3,     "Min scor LTF (TF1)",        minval=1, maxval=5, group=GB)
 
+var string GD = "═══ RSI DIVERGENCE (bonus +1) ═══"
+use_div  = input.bool(true,  "Activare Divergenta RSI",            group=GD)
+rsi_len  = input.int(14,     "RSI Length",       minval=2,         group=GD)
+show_div = input.bool(true,  "Show Divergence Marker pe grafic",   group=GD)
+
 var string G10 = "═══ MULTI-TIMEFRAME ═══"
 show_mtf  = input.bool(true,        "Show MTF Panel",     group=G10)
 mtf_tf1   = input.timeframe("15",   "TF 1",               group=G10)
@@ -233,6 +238,38 @@ candle_bear = (shoot_star or bear_engulf) and in_zone_s
 
 candle_lbl_b = hammer ? "HAMMER 🔨" : bull_engulf ? "ENGULF 🔥" : "─"
 candle_lbl_s = shoot_star ? "SHOOT ⭐" : bear_engulf ? "ENGULF 🔥" : "─"
+
+// ════════════════════════════════════════════════════════════════════
+// 5b. RSI DIVERGENCE (bonus +1)
+//   Bull: price lower low + RSI higher low  → epuizare vanzatori
+//   Bear: price higher high + RSI lower high → epuizare cumparatori
+//   Detectat la confirmarea pivot-ului (piv_r bare intarziere)
+// ════════════════════════════════════════════════════════════════════
+rsi_val = ta.rsi(close, rsi_len)
+
+var float _rsi_last_pl  = na
+var float _rsi_prev_pl  = na
+var float _price_last_pl = na
+var float _price_prev_pl = na
+var float _rsi_last_ph  = na
+var float _rsi_prev_ph  = na
+var float _price_last_ph = na
+var float _price_prev_ph = na
+
+if not na(pl)
+    _rsi_prev_pl  := _rsi_last_pl
+    _price_prev_pl := _price_last_pl
+    _rsi_last_pl  := rsi_val[piv_r]
+    _price_last_pl := pl
+
+if not na(ph)
+    _rsi_prev_ph  := _rsi_last_ph
+    _price_prev_ph := _price_last_ph
+    _rsi_last_ph  := rsi_val[piv_r]
+    _price_last_ph := ph
+
+div_bull = use_div and not na(pl) and not na(_price_prev_pl) and not na(_rsi_prev_pl) and pl < _price_prev_pl and rsi_val[piv_r] > _rsi_prev_pl and in_zone_b
+div_bear = use_div and not na(ph) and not na(_price_prev_ph) and not na(_rsi_prev_ph) and ph > _price_prev_ph and rsi_val[piv_r] < _rsi_prev_ph and in_zone_s
 
 // ════════════════════════════════════════════════════════════════════
 // 6. POC — Fixed Range Volume Profile (proxy)
@@ -390,15 +427,15 @@ mtf_all_bull = tf1_bull  and tf2_bull  and tf3_bull  and tf4_bull
 mtf_all_bear = not tf1_bull and not tf2_bull and not tf3_bull and not tf4_bull
 
 // ════════════════════════════════════════════════════════════════════
-// 12. CONFLUENCE SCORE & SETUP A+  (max 8 puncte)
-//   5 principale + 3 bonus (Psych, MTF Align, Candle Pattern)
+// 12. CONFLUENCE SCORE & SETUP A+  (max 9 puncte)
+//   5 principale + 4 bonus (Psych, MTF Align, Candle Pattern, RSI Div)
 // ════════════════════════════════════════════════════════════════════
 sc_b = (bull          ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_b    ? 1 : 0) +
        (hi_rvol       ? 1 : 0) + (cvd_ok_b    ? 1 : 0) + (near_psych   ? 1 : 0) +
-       (mtf_all_bull  ? 1 : 0) + (candle_bull  ? 1 : 0)
+       (mtf_all_bull  ? 1 : 0) + (candle_bull  ? 1 : 0) + (div_bull     ? 1 : 0)
 sc_s = (bear          ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_s    ? 1 : 0) +
        (hi_rvol       ? 1 : 0) + (cvd_ok_s    ? 1 : 0) + (near_psych   ? 1 : 0) +
-       (mtf_all_bear  ? 1 : 0) + (candle_bear  ? 1 : 0)
+       (mtf_all_bear  ? 1 : 0) + (candle_bear  ? 1 : 0) + (div_bear     ? 1 : 0)
 
 // CHOCH activ blocheaza semnalul pana la urmatorul BOS
 setup_l = bull and strong_imp and in_zone_b and hi_rvol and cvd_ok_b and
@@ -534,6 +571,8 @@ plotshape(show_candles and hammer      and in_zone_b, "Hammer",       shape.tria
 plotshape(show_candles and bull_engulf and in_zone_b, "Bull Engulf",  shape.triangleup,   location.belowbar, color.new(color.green,  10), text="E", textcolor=color.green,  size=size.small)
 plotshape(show_candles and shoot_star  and in_zone_s, "Shoot Star",   shape.triangledown, location.abovebar, color.new(color.orange, 10), text="S", textcolor=color.orange, size=size.small)
 plotshape(show_candles and bear_engulf and in_zone_s, "Bear Engulf",  shape.triangledown, location.abovebar, color.new(color.red,    10), text="E", textcolor=color.red,    size=size.small)
+plotshape(show_div and div_bull, "RSI Div Bull", shape.circle, location.belowbar, color.new(color.yellow, 10), text="D", textcolor=color.yellow, size=size.small, offset=-piv_r)
+plotshape(show_div and div_bear, "RSI Div Bear", shape.circle, location.abovebar, color.new(color.yellow, 10), text="D", textcolor=color.yellow, size=size.small, offset=-piv_r)
 
 plotchar(near_psych, "Psych Level", "🔵", location.abovebar, color.new(color.purple, 20), size=size.tiny)
 bgcolor(hi_rvol ? color.new(color.yellow, 92) : na, title="High RVOL")
@@ -556,7 +595,7 @@ if show_mss and mss_bear
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Principal (top_right)
 // ════════════════════════════════════════════════════════════════════
-var table T = table.new(position.top_right, 2, 15,
+var table T = table.new(position.top_right, 2, 16,
      bgcolor=color.new(color.black, 55),
      border_color=color.new(color.gray, 60), border_width=1,
      frame_color=color.new(color.blue, 40), frame_width=2)
@@ -638,11 +677,16 @@ if barstate.islast
     table.cell(T, 0, 13, "⭐ Confluenta",  text_color=CW, bgcolor=C_lb, text_size=SZ)
     s_txt = setup_l ? "LONG A+ 🟢" : setup_s ? "SHORT A+ 🔴" : setup_b_l ? "LONG B 🔵" : setup_b_s ? "SHORT B 🔵" : "ASTEPT ⏳"
     s_col = setup_l ? C_ok : setup_s ? C_no : (setup_b_l or setup_b_s) ? C_cyan : C_mid
-    table.cell(T, 1, 13, s_txt + "  [" + str.tostring(score_now) + "/8]", text_color=CW, bgcolor=s_col, text_size=SZ)
+    table.cell(T, 1, 13, s_txt + "  [" + str.tostring(score_now) + "/9]", text_color=CW, bgcolor=s_col, text_size=SZ)
 
-    table.cell(T, 0, 14, "🗂 Profil", text_color=CW, bgcolor=C_hd, text_size=SZ)
+    table.cell(T, 0, 14, "📉 RSI Div",  text_color=CW, bgcolor=C_lb, text_size=SZ)
+    div_lbl = div_bull ? "BULL DIV ✓" : div_bear ? "BEAR DIV ✓" : "─ NU ─"
+    div_col = div_bull ? C_ok : div_bear ? C_no : C_mid
+    table.cell(T, 1, 14, div_lbl, text_color=CW, bgcolor=div_col, text_size=SZ)
+
+    table.cell(T, 0, 15, "🗂 Profil", text_color=CW, bgcolor=C_hd, text_size=SZ)
     p_rec_txt = profile == "CUSTOM" ? "Pivot: manual | Trend TF: manual" : "Pivot rec: " + p_piv_rec + " | Trend: " + p_tf_trend
-    table.cell(T, 1, 14, p_name + " — " + p_rec_txt, text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
+    table.cell(T, 1, 15, p_name + " — " + p_rec_txt, text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Multi-Timeframe Panel (bottom_right)
