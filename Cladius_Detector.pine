@@ -1,6 +1,6 @@
 //@version=5
 indicator("⚡ CLADIUS — Swing Setup Detector [PRO]", overlay=true,
-          max_bars_back=1000, max_lines_count=200, max_labels_count=200, max_boxes_count=20)
+          max_bars_back=1000, max_lines_count=200, max_labels_count=200, max_boxes_count=50)
 
 // ════════════════════════════════════════════════════════════════════
 // INPUTS
@@ -99,6 +99,11 @@ stoch_sd     = input.int(3,      "D Smooth",             minval=1,       group=G
 stoch_os     = input.int(30,     "Oversold (Buy sub)",   minval=1, maxval=49,  group=GS)
 stoch_ob     = input.int(70,     "Overbought (Sell peste)", minval=51, maxval=99, group=GS)
 show_stoch   = input.bool(true,  "Show Stoch Marker pe grafic",         group=GS)
+
+var string GF = "═══ FVG & ORDER BLOCKS ═══"
+show_fvg    = input.bool(true, "Show FVG (Fair Value Gap)",  group=GF)
+show_ob     = input.bool(true, "Show Order Blocks (OB)",     group=GF)
+ob_lookback = input.int(20,    "OB Lookback (bare)",         minval=5, maxval=50, group=GF)
 
 var string G10 = "═══ MULTI-TIMEFRAME ═══"
 show_mtf  = input.bool(true,        "Show MTF Panel",     group=G10)
@@ -337,6 +342,34 @@ nearest_psych  = math.abs(close - psych_below) <= math.abs(close - psych_above) 
 in_sess = not use_sess or not na(time(timeframe.period, sess_utc, "UTC"))
 
 // ════════════════════════════════════════════════════════════════════
+// 8b. FVG — Fair Value Gap
+//   Bull FVG: gap intre high[2] si low[0] → impuls bullish in mijloc
+//   Bear FVG: gap intre low[2] si high[0] → impuls bearish in mijloc
+// ════════════════════════════════════════════════════════════════════
+fvg_bull_now = low > high[2]
+fvg_bear_now = high < low[2]
+
+var float _fvg_b_top = na
+var float _fvg_b_bot = na
+var int   _fvg_b_idx = 0
+var float _fvg_s_top = na
+var float _fvg_s_bot = na
+var int   _fvg_s_idx = 0
+
+if fvg_bull_now
+    _fvg_b_top := low
+    _fvg_b_bot := high[2]
+    _fvg_b_idx := bar_index - 1
+
+if fvg_bear_now
+    _fvg_s_top := low[2]
+    _fvg_s_bot := high
+    _fvg_s_idx := bar_index - 1
+
+in_fvg_b = not na(_fvg_b_bot) and close >= _fvg_b_bot and close <= _fvg_b_top
+in_fvg_s = not na(_fvg_s_bot) and close >= _fvg_s_bot and close <= _fvg_s_top
+
+// ════════════════════════════════════════════════════════════════════
 // 9. ATR — Stop Loss Guide
 // ════════════════════════════════════════════════════════════════════
 atr_v    = ta.atr(atr_len)
@@ -384,6 +417,37 @@ if mss_bull
     choch_bear_active := false
 if mss_bear
     choch_bull_active := false
+
+// ════════════════════════════════════════════════════════════════════
+// 10c. ORDER BLOCKS (OB)
+//   Bull OB: ultima lumânare bearish inainte de BOS bullish
+//   Bear OB: ultima lumânare bullish inainte de BOS bearish
+// ════════════════════════════════════════════════════════════════════
+var float _ob_b_top = na
+var float _ob_b_bot = na
+var int   _ob_b_idx = 0
+var float _ob_s_top = na
+var float _ob_s_bot = na
+var int   _ob_s_idx = 0
+
+if bos_bull
+    for i = 1 to ob_lookback
+        if close[i] < open[i]
+            _ob_b_top := high[i]
+            _ob_b_bot := low[i]
+            _ob_b_idx := bar_index - i
+            break
+
+if bos_bear
+    for i = 1 to ob_lookback
+        if close[i] > open[i]
+            _ob_s_top := high[i]
+            _ob_s_bot := low[i]
+            _ob_s_idx := bar_index - i
+            break
+
+in_ob_b = not na(_ob_b_bot) and close >= _ob_b_bot and close <= _ob_b_top
+in_ob_s = not na(_ob_s_bot) and close >= _ob_s_bot and close <= _ob_s_top
 
 // ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
@@ -573,6 +637,52 @@ if use_manual and show_zones
 
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
 
+// FVG & OB Boxes
+var box bx_fvg_b = na
+var box bx_fvg_s = na
+var box bx_ob_b  = na
+var box bx_ob_s  = na
+
+_ext = bar_index + 50
+
+if show_fvg
+    if fvg_bull_now
+        if not na(bx_fvg_b)
+            box.delete(bx_fvg_b)
+        bx_fvg_b := box.new(_fvg_b_idx, _fvg_b_top, _ext, _fvg_b_bot,
+            bgcolor=color.new(color.teal, 75), border_color=color.new(color.teal, 30),
+            border_width=1, text="FVG↑", text_color=color.teal, text_size=size.tiny, text_halign=text.align_left)
+    else if not na(bx_fvg_b)
+        box.set_right(bx_fvg_b, _ext)
+
+    if fvg_bear_now
+        if not na(bx_fvg_s)
+            box.delete(bx_fvg_s)
+        bx_fvg_s := box.new(_fvg_s_idx, _fvg_s_top, _ext, _fvg_s_bot,
+            bgcolor=color.new(color.orange, 75), border_color=color.new(color.orange, 30),
+            border_width=1, text="FVG↓", text_color=color.orange, text_size=size.tiny, text_halign=text.align_left)
+    else if not na(bx_fvg_s)
+        box.set_right(bx_fvg_s, _ext)
+
+if show_ob
+    if bos_bull and not na(_ob_b_bot)
+        if not na(bx_ob_b)
+            box.delete(bx_ob_b)
+        bx_ob_b := box.new(_ob_b_idx, _ob_b_top, _ext, _ob_b_bot,
+            bgcolor=color.new(color.lime, 82), border_color=color.new(color.lime, 30),
+            border_width=1, text="OB↑", text_color=color.lime, text_size=size.tiny, text_halign=text.align_left)
+    else if not na(bx_ob_b)
+        box.set_right(bx_ob_b, _ext)
+
+    if bos_bear and not na(_ob_s_bot)
+        if not na(bx_ob_s)
+            box.delete(bx_ob_s)
+        bx_ob_s := box.new(_ob_s_idx, _ob_s_top, _ext, _ob_s_bot,
+            bgcolor=color.new(color.red, 82), border_color=color.new(color.red, 30),
+            border_width=1, text="OB↓", text_color=color.red, text_size=size.tiny, text_halign=text.align_left)
+    else if not na(bx_ob_s)
+        box.set_right(bx_ob_s, _ext)
+
 plot(show_psych and use_psych ? psych_above : na, "Psych Above",
      color=color.new(color.fuchsia, 50), linewidth=1, style=plot.style_linebr)
 plot(show_psych and use_psych ? psych_below : na, "Psych Below",
@@ -622,7 +732,7 @@ if show_mss and mss_bear
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Principal (top_right)
 // ════════════════════════════════════════════════════════════════════
-var table T = table.new(position.top_right, 2, 17,
+var table T = table.new(position.top_right, 2, 19,
      bgcolor=color.new(color.black, 55),
      border_color=color.new(color.gray, 60), border_width=1,
      frame_color=color.new(color.blue, 40), frame_width=2)
@@ -717,9 +827,19 @@ if barstate.islast
     st_col  = stoch_bull ? C_ok : stoch_bear ? C_no : C_mid
     table.cell(T, 1, 15, st_lbl, text_color=CW, bgcolor=st_col, text_size=SZ)
 
-    table.cell(T, 0, 16, "🗂 Profil", text_color=CW, bgcolor=C_hd, text_size=SZ)
+    table.cell(T, 0, 16, "📦 FVG",      text_color=CW, bgcolor=C_lb, text_size=SZ)
+    fvg_lbl = in_fvg_b ? "BULL FVG ✓" : in_fvg_s ? "BEAR FVG ✓" : "─ NU ─"
+    fvg_col = in_fvg_b ? C_ok : in_fvg_s ? C_no : C_mid
+    table.cell(T, 1, 16, fvg_lbl, text_color=CW, bgcolor=fvg_col, text_size=SZ)
+
+    table.cell(T, 0, 17, "🟩 OB",       text_color=CW, bgcolor=C_lb, text_size=SZ)
+    ob_lbl = in_ob_b ? "BULL OB ✓" : in_ob_s ? "BEAR OB ✓" : "─ NU ─"
+    ob_col = in_ob_b ? C_ok : in_ob_s ? C_no : C_mid
+    table.cell(T, 1, 17, ob_lbl, text_color=CW, bgcolor=ob_col, text_size=SZ)
+
+    table.cell(T, 0, 18, "🗂 Profil", text_color=CW, bgcolor=C_hd, text_size=SZ)
     p_rec_txt = profile == "CUSTOM" ? "Pivot: manual | Trend TF: manual" : "Pivot rec: " + p_piv_rec + " | Trend: " + p_tf_trend
-    table.cell(T, 1, 16, p_name + " — " + p_rec_txt, text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
+    table.cell(T, 1, 18, p_name + " — " + p_rec_txt, text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Multi-Timeframe Panel (bottom_right)
