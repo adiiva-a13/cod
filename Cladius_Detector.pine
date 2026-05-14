@@ -500,16 +500,16 @@ setup_b_s = use_setup_b and bear and in_premium  and core_s >= sb_htf_min and tf
 plot(ema200, "EMA 200 H1",
      color = bull ? color.new(color.lime, 20) : color.new(color.red, 20), linewidth=2)
 
-// Fibonacci auto — vizibil DOAR cand use_manual=false
-plot(not use_manual and show_zone ? equil : na, "Echilibru 50%",
+// Fibonacci auto — linia de echilibru 50% mereu vizibila
+plot(show_zone ? equil : na, "Echilibru 50%",
      color=color.new(color.white, 60), linewidth=1, style=plot.style_linebr)
 
-bgcolor(not use_manual and show_zone and in_discount ? color.new(color.green, 96) : na, title="Discount Zone")
-bgcolor(not use_manual and show_zone and in_premium  ? color.new(color.red,   96) : na, title="Premium Zone")
+bgcolor(show_zone and in_discount ? color.new(color.green, 96) : na, title="Discount Zone")
+bgcolor(show_zone and in_premium  ? color.new(color.red,   96) : na, title="Premium Zone")
 
-plot(not use_manual and show_fib and bull ? f786_b : na, "Fib D/S Bull",
+plot(show_fib and bull ? f786_b : na, "Fib D/S Bull",
      color=color.new(color.teal,   20), linewidth=2, style=plot.style_linebr)
-plot(not use_manual and show_fib and bear ? f786_s : na, "Fib D/S Bear",
+plot(show_fib and bear ? f786_s : na, "Fib D/S Bear",
      color=color.new(color.orange, 20), linewidth=2, style=plot.style_linebr)
 
 // Zone manuale — var box pentru persistenta corecta pe tot graficul
