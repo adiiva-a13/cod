@@ -784,7 +784,7 @@ if barstate.islast
     C_lb  = color.new(color.gray,   65)
     C_bl  = color.new(color.blue,   55)
     CW    = color.white
-    SZ    = size.small
+    SZ    = size.tiny
 
     table.cell(T, 0,  0, "⚡ CLADIUS PRO",
                text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
@@ -895,7 +895,7 @@ if barstate.islast and show_mtf
     C_hd  = color.new(color.navy,   40)
     C_lb  = color.new(color.gray,   65)
     CW    = color.white
-    SZ    = size.small
+    SZ    = size.tiny
 
     table.cell(MTF, 0, 0, "🔄 MTF",   text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
     table.cell(MTF, 1, 0, "Dir",       text_color=CW,            bgcolor=C_hd, text_size=SZ)
