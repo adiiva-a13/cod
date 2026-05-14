@@ -737,37 +737,39 @@ _sw_s3 = use_liq and not na(_eqhv3) and high > _eqhv3 and close < _eqhv3
 sweep_bull = _sw_b1 or _sw_b2 or _sw_b3
 sweep_bear = _sw_s1 or _sw_s2 or _sw_s3
 
-// Sterge liniile sweep-uite si reseteaza nivelurile
-if _sw_b1
-    if not na(_eqlln1)
-        line.delete(_eqlln1)
-    _eqlv1 := na
-    _eqlln1 := na
-if _sw_b2
-    if not na(_eqlln2)
-        line.delete(_eqlln2)
-    _eqlv2 := na
-    _eqlln2 := na
-if _sw_b3
-    if not na(_eqlln3)
-        line.delete(_eqlln3)
-    _eqlv3 := na
-    _eqlln3 := na
-if _sw_s1
-    if not na(_eqhln1)
-        line.delete(_eqhln1)
-    _eqhv1 := na
-    _eqhln1 := na
-if _sw_s2
-    if not na(_eqhln2)
-        line.delete(_eqhln2)
-    _eqhv2 := na
-    _eqhln2 := na
-if _sw_s3
-    if not na(_eqhln3)
-        line.delete(_eqhln3)
-    _eqhv3 := na
-    _eqhln3 := na
+// Sterge liniile mitiguate:
+// 1. Sweep clasic (fitil + close)  2. Close simplu deasupra/sub nivel (breakout)
+if use_liq
+    if not na(_eqlv1) and close > _eqlv1
+        if not na(_eqlln1)
+            line.delete(_eqlln1)
+        _eqlv1 := na
+        _eqlln1 := na
+    if not na(_eqlv2) and close > _eqlv2
+        if not na(_eqlln2)
+            line.delete(_eqlln2)
+        _eqlv2 := na
+        _eqlln2 := na
+    if not na(_eqlv3) and close > _eqlv3
+        if not na(_eqlln3)
+            line.delete(_eqlln3)
+        _eqlv3 := na
+        _eqlln3 := na
+    if not na(_eqhv1) and close < _eqhv1
+        if not na(_eqhln1)
+            line.delete(_eqhln1)
+        _eqhv1 := na
+        _eqhln1 := na
+    if not na(_eqhv2) and close < _eqhv2
+        if not na(_eqhln2)
+            line.delete(_eqhln2)
+        _eqhv2 := na
+        _eqhln2 := na
+    if not na(_eqhv3) and close < _eqhv3
+        if not na(_eqhln3)
+            line.delete(_eqhln3)
+        _eqhv3 := na
+        _eqhln3 := na
 
 // ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
