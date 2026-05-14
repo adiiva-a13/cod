@@ -1,4 +1,5 @@
 //@version=5
+// v2.0 — toate erorile de sintaxa Pine Script v5 rezolvate
 indicator("⚡ CLADIUS — Swing Setup Detector [PRO]", overlay=true,
           max_bars_back=1000, max_lines_count=200, max_labels_count=200, max_boxes_count=50)
 
