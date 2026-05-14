@@ -344,79 +344,80 @@ nearest_psych  = math.abs(close - psych_below) <= math.abs(close - psych_above) 
 in_sess = not use_sess or not na(time(timeframe.period, sess_utc, "UTC"))
 
 // ════════════════════════════════════════════════════════════════════
-// 8b. FVG — Fair Value Gap
-//   Bull FVG: gap intre high[2] si low[0] → impuls bullish in mijloc
-//   Bear FVG: gap intre low[2] si high[0] → impuls bearish in mijloc
+// 8b. FVG — Fair Value Gap (ultimele 3 bull + 3 bear, fara array-uri)
 //   Mitigation: pretul intra in gap → disparare automata
 // ════════════════════════════════════════════════════════════════════
 fvg_bull_now = low > high[2]
 fvg_bear_now = high < low[2]
 
-var box[]   _fvg_b_boxes = array.new<box>()
-var float[] _fvg_b_tops  = array.new<float>()
-var float[] _fvg_b_bots  = array.new<float>()
-var int[]   _fvg_b_idxs  = array.new<int>()
-var box[]   _fvg_s_boxes = array.new<box>()
-var float[] _fvg_s_tops  = array.new<float>()
-var float[] _fvg_s_bots  = array.new<float>()
-var int[]   _fvg_s_idxs  = array.new<int>()
+var float _fb1t=na,_fb1b=na  var float _fb2t=na,_fb2b=na  var float _fb3t=na,_fb3b=na
+var int   _fb1i=0            var int   _fb2i=0            var int   _fb3i=0
+var box   _fb1x=na           var box   _fb2x=na           var box   _fb3x=na
+
+var float _fs1t=na,_fs1b=na  var float _fs2t=na,_fs2b=na  var float _fs3t=na,_fs3b=na
+var int   _fs1i=0            var int   _fs2i=0            var int   _fs3i=0
+var box   _fs1x=na           var box   _fs2x=na           var box   _fs3x=na
 
 if show_fvg and fvg_bull_now
-    array.push(_fvg_b_tops,  low)
-    array.push(_fvg_b_bots,  high[2])
-    array.push(_fvg_b_idxs,  bar_index - 1)
-    array.push(_fvg_b_boxes, box.new(bar_index - 1, low, bar_index + 50, high[2], bgcolor=color.new(color.teal, 75), border_color=color.new(color.teal, 30), border_width=1, text="FVG↑", text_color=color.teal, text_size=size.tiny, text_halign=text.align_left))
-    if array.size(_fvg_b_boxes) > fvg_max
-        box.delete(array.shift(_fvg_b_boxes))
-        array.shift(_fvg_b_tops)
-        array.shift(_fvg_b_bots)
-        array.shift(_fvg_b_idxs)
+    if not na(_fb3x) then box.delete(_fb3x)
+    _fb3t:=_fb2t  _fb3b:=_fb2b  _fb3i:=_fb2i  _fb3x:=_fb2x
+    _fb2t:=_fb1t  _fb2b:=_fb1b  _fb2i:=_fb1i  _fb2x:=_fb1x
+    _fb1t:=low  _fb1b:=high[2]  _fb1i:=bar_index-1
+    _fb1x:=box.new(_fb1i,_fb1t,bar_index+50,_fb1b,bgcolor=color.new(color.teal,75),border_color=color.new(color.teal,30),border_width=1,text="FVG↑",text_color=color.teal,text_size=size.tiny,text_halign=text.align_left)
 
 if show_fvg and fvg_bear_now
-    array.push(_fvg_s_tops,  low[2])
-    array.push(_fvg_s_bots,  high)
-    array.push(_fvg_s_idxs,  bar_index - 1)
-    array.push(_fvg_s_boxes, box.new(bar_index - 1, low[2], bar_index + 50, high, bgcolor=color.new(color.orange, 75), border_color=color.new(color.orange, 30), border_width=1, text="FVG↓", text_color=color.orange, text_size=size.tiny, text_halign=text.align_left))
-    if array.size(_fvg_s_boxes) > fvg_max
-        box.delete(array.shift(_fvg_s_boxes))
-        array.shift(_fvg_s_tops)
-        array.shift(_fvg_s_bots)
-        array.shift(_fvg_s_idxs)
+    if not na(_fs3x) then box.delete(_fs3x)
+    _fs3t:=_fs2t  _fs3b:=_fs2b  _fs3i:=_fs2i  _fs3x:=_fs2x
+    _fs2t:=_fs1t  _fs2b:=_fs1b  _fs2i:=_fs1i  _fs2x:=_fs1x
+    _fs1t:=low[2]  _fs1b:=high  _fs1i:=bar_index-1
+    _fs1x:=box.new(_fs1i,_fs1t,bar_index+50,_fs1b,bgcolor=color.new(color.orange,75),border_color=color.new(color.orange,30),border_width=1,text="FVG↓",text_color=color.orange,text_size=size.tiny,text_halign=text.align_left)
 
-// Mitigation + extend FVG boxes
-var bool in_fvg_b = false
-var bool in_fvg_s = false
-in_fvg_b := false
-in_fvg_s := false
+// Mitigation + extend (fara loop)
+in_fvg_b = false
+in_fvg_s = false
 if show_fvg
-    if array.size(_fvg_b_boxes) > 0
-        for i = array.size(_fvg_b_boxes) - 1 to 0
-            t = array.get(_fvg_b_tops, i)
-            b = array.get(_fvg_b_bots, i)
-            if low <= t
-                box.delete(array.get(_fvg_b_boxes, i))
-                array.remove(_fvg_b_boxes, i)
-                array.remove(_fvg_b_tops, i)
-                array.remove(_fvg_b_bots, i)
-                array.remove(_fvg_b_idxs, i)
-            else
-                box.set_right(array.get(_fvg_b_boxes, i), bar_index + 50)
-                if close >= b and close <= t
-                    in_fvg_b := true
-    if array.size(_fvg_s_boxes) > 0
-        for i = array.size(_fvg_s_boxes) - 1 to 0
-            t = array.get(_fvg_s_tops, i)
-            b = array.get(_fvg_s_bots, i)
-            if high >= b
-                box.delete(array.get(_fvg_s_boxes, i))
-                array.remove(_fvg_s_boxes, i)
-                array.remove(_fvg_s_tops, i)
-                array.remove(_fvg_s_bots, i)
-                array.remove(_fvg_s_idxs, i)
-            else
-                box.set_right(array.get(_fvg_s_boxes, i), bar_index + 50)
-                if close >= b and close <= t
-                    in_fvg_s := true
+    // Bull FVG 1
+    if not na(_fb1t)
+        if low <= _fb1t
+            box.delete(_fb1x)  _fb1x:=na  _fb1t:=na  _fb1b:=na
+        else
+            box.set_right(_fb1x, bar_index+50)
+            if close>=_fb1b and close<=_fb1t then in_fvg_b:=true
+    // Bull FVG 2
+    if not na(_fb2t)
+        if low <= _fb2t
+            box.delete(_fb2x)  _fb2x:=na  _fb2t:=na  _fb2b:=na
+        else
+            box.set_right(_fb2x, bar_index+50)
+            if close>=_fb2b and close<=_fb2t then in_fvg_b:=true
+    // Bull FVG 3
+    if not na(_fb3t)
+        if low <= _fb3t
+            box.delete(_fb3x)  _fb3x:=na  _fb3t:=na  _fb3b:=na
+        else
+            box.set_right(_fb3x, bar_index+50)
+            if close>=_fb3b and close<=_fb3t then in_fvg_b:=true
+    // Bear FVG 1
+    if not na(_fs1t)
+        if high >= _fs1b
+            box.delete(_fs1x)  _fs1x:=na  _fs1t:=na  _fs1b:=na
+        else
+            box.set_right(_fs1x, bar_index+50)
+            if close>=_fs1b and close<=_fs1t then in_fvg_s:=true
+    // Bear FVG 2
+    if not na(_fs2t)
+        if high >= _fs2b
+            box.delete(_fs2x)  _fs2x:=na  _fs2t:=na  _fs2b:=na
+        else
+            box.set_right(_fs2x, bar_index+50)
+            if close>=_fs2b and close<=_fs2t then in_fvg_s:=true
+    // Bear FVG 3
+    if not na(_fs3t)
+        if high >= _fs3b
+            box.delete(_fs3x)  _fs3x:=na  _fs3t:=na  _fs3b:=na
+        else
+            box.set_right(_fs3x, bar_index+50)
+            if close>=_fs3b and close<=_fs3t then in_fvg_s:=true
 
 // ════════════════════════════════════════════════════════════════════
 // 9. ATR — Stop Loss Guide
@@ -468,74 +469,62 @@ if mss_bear
     choch_bull_active := false
 
 // ════════════════════════════════════════════════════════════════════
-// 10c. ORDER BLOCKS (OB)
-//   Bull OB: ultima lumânare bearish inainte de BOS bullish
-//   Bear OB: ultima lumânare bullish inainte de BOS bearish
-//   Mitigation: pretul intra in OB → disparare automata
+// 10c. ORDER BLOCKS (ultimele 2 bull + 2 bear, fara array-uri)
 // ════════════════════════════════════════════════════════════════════
-var box[]   _ob_b_boxes = array.new<box>()
-var float[] _ob_b_tops  = array.new<float>()
-var float[] _ob_b_bots  = array.new<float>()
-var box[]   _ob_s_boxes = array.new<box>()
-var float[] _ob_s_tops  = array.new<float>()
-var float[] _ob_s_bots  = array.new<float>()
+var float _ob1t=na,_ob1b=na  var float _ob2t=na,_ob2b=na
+var int   _ob1i=0            var int   _ob2i=0
+var box   _ob1x=na           var box   _ob2x=na
+
+var float _os1t=na,_os1b=na  var float _os2t=na,_os2b=na
+var int   _os1i=0            var int   _os2i=0
+var box   _os1x=na           var box   _os2x=na
 
 if show_ob and bos_bull
     for i = 1 to ob_lookback
         if close[i] < open[i]
-            array.push(_ob_b_tops,  high[i])
-            array.push(_ob_b_bots,  low[i])
-            array.push(_ob_b_boxes, box.new(bar_index - i, high[i], bar_index + 50, low[i], bgcolor=color.new(color.lime, 82), border_color=color.new(color.lime, 30), border_width=1, text="OB↑", text_color=color.lime, text_size=size.tiny, text_halign=text.align_left))
-            if array.size(_ob_b_boxes) > ob_max
-                box.delete(array.shift(_ob_b_boxes))
-                array.shift(_ob_b_tops)
-                array.shift(_ob_b_bots)
+            if not na(_ob2x) then box.delete(_ob2x)
+            _ob2t:=_ob1t  _ob2b:=_ob1b  _ob2i:=_ob1i  _ob2x:=_ob1x
+            _ob1t:=high[i]  _ob1b:=low[i]  _ob1i:=bar_index-i
+            _ob1x:=box.new(_ob1i,_ob1t,bar_index+50,_ob1b,bgcolor=color.new(color.lime,82),border_color=color.new(color.lime,30),border_width=1,text="OB↑",text_color=color.lime,text_size=size.tiny,text_halign=text.align_left)
             break
 
 if show_ob and bos_bear
     for i = 1 to ob_lookback
         if close[i] > open[i]
-            array.push(_ob_s_tops,  high[i])
-            array.push(_ob_s_bots,  low[i])
-            array.push(_ob_s_boxes, box.new(bar_index - i, high[i], bar_index + 50, low[i], bgcolor=color.new(color.red, 82), border_color=color.new(color.red, 30), border_width=1, text="OB↓", text_color=color.red, text_size=size.tiny, text_halign=text.align_left))
-            if array.size(_ob_s_boxes) > ob_max
-                box.delete(array.shift(_ob_s_boxes))
-                array.shift(_ob_s_tops)
-                array.shift(_ob_s_bots)
+            if not na(_os2x) then box.delete(_os2x)
+            _os2t:=_os1t  _os2b:=_os1b  _os2i:=_os1i  _os2x:=_os1x
+            _os1t:=high[i]  _os1b:=low[i]  _os1i:=bar_index-i
+            _os1x:=box.new(_os1i,_os1t,bar_index+50,_os1b,bgcolor=color.new(color.red,82),border_color=color.new(color.red,30),border_width=1,text="OB↓",text_color=color.red,text_size=size.tiny,text_halign=text.align_left)
             break
 
-// Mitigation + extend OB boxes
-var bool in_ob_b = false
-var bool in_ob_s = false
-in_ob_b := false
-in_ob_s := false
+// Mitigation + extend OB (fara loop)
+in_ob_b = false
+in_ob_s = false
 if show_ob
-    if array.size(_ob_b_boxes) > 0
-        for i = array.size(_ob_b_boxes) - 1 to 0
-            t = array.get(_ob_b_tops, i)
-            b = array.get(_ob_b_bots, i)
-            if low <= t
-                box.delete(array.get(_ob_b_boxes, i))
-                array.remove(_ob_b_boxes, i)
-                array.remove(_ob_b_tops, i)
-                array.remove(_ob_b_bots, i)
-            else
-                box.set_right(array.get(_ob_b_boxes, i), bar_index + 50)
-                if close >= b and close <= t
-                    in_ob_b := true
-    if array.size(_ob_s_boxes) > 0
-        for i = array.size(_ob_s_boxes) - 1 to 0
-            t = array.get(_ob_s_tops, i)
-            b = array.get(_ob_s_bots, i)
-            if high >= b
-                box.delete(array.get(_ob_s_boxes, i))
-                array.remove(_ob_s_boxes, i)
-                array.remove(_ob_s_tops, i)
-                array.remove(_ob_s_bots, i)
-            else
-                box.set_right(array.get(_ob_s_boxes, i), bar_index + 50)
-                if close >= b and close <= t
-                    in_ob_s := true
+    if not na(_ob1t)
+        if low <= _ob1t
+            box.delete(_ob1x)  _ob1x:=na  _ob1t:=na  _ob1b:=na
+        else
+            box.set_right(_ob1x, bar_index+50)
+            if close>=_ob1b and close<=_ob1t then in_ob_b:=true
+    if not na(_ob2t)
+        if low <= _ob2t
+            box.delete(_ob2x)  _ob2x:=na  _ob2t:=na  _ob2b:=na
+        else
+            box.set_right(_ob2x, bar_index+50)
+            if close>=_ob2b and close<=_ob2t then in_ob_b:=true
+    if not na(_os1t)
+        if high >= _os1b
+            box.delete(_os1x)  _os1x:=na  _os1t:=na  _os1b:=na
+        else
+            box.set_right(_os1x, bar_index+50)
+            if close>=_os1b and close<=_os1t then in_ob_s:=true
+    if not na(_os2t)
+        if high >= _os2b
+            box.delete(_os2x)  _os2x:=na  _os2t:=na  _os2b:=na
+        else
+            box.set_right(_os2x, bar_index+50)
+            if close>=_os2b and close<=_os2t then in_ob_s:=true
 
 // ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
