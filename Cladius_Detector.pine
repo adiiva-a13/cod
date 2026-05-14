@@ -246,9 +246,9 @@ shoot_star = use_candles and c_range > 0 and c_body > 0 and c_upper >= c_body * 
 bull_engulf = use_candles and close > open and close[1] < open[1] and open <= close[1] and close >= open[1]
 bear_engulf = use_candles and close < open and close[1] > open[1] and open >= close[1] and close <= open[1]
 
-// Patternul conteaza DOAR cand pretul e in zona relevanta
-candle_bull = (hammer or bull_engulf)
-candle_bear = (shoot_star or bear_engulf)
+// Patternul conteaza DOAR cand pretul e in context relevant (discount/premium)
+candle_bull = (hammer or bull_engulf) and in_discount
+candle_bear = (shoot_star or bear_engulf) and in_premium
 
 candle_lbl_b = hammer ? "HAMMER 🔨" : bull_engulf ? "ENGULF 🔥" : "─"
 candle_lbl_s = shoot_star ? "SHOOT ⭐" : bear_engulf ? "ENGULF 🔥" : "─"
@@ -282,8 +282,8 @@ if not na(ph)
     _rsi_last_ph  := rsi_val[piv_r]
     _price_last_ph := ph
 
-div_bull = use_div and not na(pl) and not na(_price_prev_pl) and not na(_rsi_prev_pl) and pl < _price_prev_pl and rsi_val[piv_r] > _rsi_prev_pl
-div_bear = use_div and not na(ph) and not na(_price_prev_ph) and not na(_rsi_prev_ph) and ph > _price_prev_ph and rsi_val[piv_r] < _rsi_prev_ph
+div_bull = use_div and not na(pl) and not na(_price_prev_pl) and not na(_rsi_prev_pl) and pl < _price_prev_pl and rsi_val[piv_r] > _rsi_prev_pl and in_discount
+div_bear = use_div and not na(ph) and not na(_price_prev_ph) and not na(_rsi_prev_ph) and ph > _price_prev_ph and rsi_val[piv_r] < _rsi_prev_ph and in_premium
 
 // ════════════════════════════════════════════════════════════════════
 // 5c. STOCHASTIC RSI (bonus +1)
@@ -295,8 +295,8 @@ rsi_high     = ta.highest(rsi_val, stoch_len)
 stoch_raw    = (rsi_high - rsi_low) != 0 ? (rsi_val - rsi_low) / (rsi_high - rsi_low) * 100 : 50.0
 stoch_k      = ta.sma(stoch_raw, stoch_sk)
 stoch_d_val  = ta.sma(stoch_k,   stoch_sd)
-stoch_bull   = use_stoch and stoch_k < stoch_os
-stoch_bear   = use_stoch and stoch_k > stoch_ob
+stoch_bull   = use_stoch and stoch_k < stoch_os and in_discount
+stoch_bear   = use_stoch and stoch_k > stoch_ob and in_premium
 
 // ════════════════════════════════════════════════════════════════════
 // 6. POC — Fixed Range Volume Profile (proxy)
@@ -465,9 +465,9 @@ sc_s = (bear          ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_s    ? 1 : 0) 
        (mtf_all_bear  ? 1 : 0) + (candle_bear  ? 1 : 0) + (div_bear     ? 1 : 0) + (stoch_bear ? 1 : 0)
 
 // CHOCH activ blocheaza semnalul pana la urmatorul BOS
-setup_l = bull and strong_imp and hi_rvol and cvd_ok_b and
+setup_l = bull and strong_imp and in_discount and hi_rvol and cvd_ok_b and
           in_sess and not choch_bear_active
-setup_s = bear and strong_imp and hi_rvol and cvd_ok_s and
+setup_s = bear and strong_imp and in_premium and hi_rvol and cvd_ok_s and
           in_sess and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
@@ -491,8 +491,8 @@ warn_s = bear and core_s >= warn_min and not setup_s
 // ════════════════════════════════════════════════════════════════════
 sb_zone_ok_b = use_manual ? in_zone_b : in_discount
 sb_zone_ok_s = use_manual ? in_zone_s : in_premium
-setup_b_l = use_setup_b and bull and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and not setup_l and not choch_bear_active
-setup_b_s = use_setup_b and bear and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and not setup_s and not choch_bull_active
+setup_b_l = use_setup_b and bull and in_discount and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and not setup_l and not choch_bear_active
+setup_b_s = use_setup_b and bear and in_premium  and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and not setup_s and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
 // PLOTS
