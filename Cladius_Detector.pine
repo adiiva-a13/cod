@@ -389,32 +389,34 @@ var bool in_fvg_s = false
 in_fvg_b := false
 in_fvg_s := false
 if show_fvg
-    for i = array.size(_fvg_b_boxes) - 1 to 0
-        t = array.get(_fvg_b_tops, i)
-        b = array.get(_fvg_b_bots, i)
-        if low <= t
-            box.delete(array.get(_fvg_b_boxes, i))
-            array.remove(_fvg_b_boxes, i)
-            array.remove(_fvg_b_tops, i)
-            array.remove(_fvg_b_bots, i)
-            array.remove(_fvg_b_idxs, i)
-        else
-            box.set_right(array.get(_fvg_b_boxes, i), bar_index + 50)
-            if close >= b and close <= t
-                in_fvg_b := true
-    for i = array.size(_fvg_s_boxes) - 1 to 0
-        t = array.get(_fvg_s_tops, i)
-        b = array.get(_fvg_s_bots, i)
-        if high >= b
-            box.delete(array.get(_fvg_s_boxes, i))
-            array.remove(_fvg_s_boxes, i)
-            array.remove(_fvg_s_tops, i)
-            array.remove(_fvg_s_bots, i)
-            array.remove(_fvg_s_idxs, i)
-        else
-            box.set_right(array.get(_fvg_s_boxes, i), bar_index + 50)
-            if close >= b and close <= t
-                in_fvg_s := true
+    if array.size(_fvg_b_boxes) > 0
+        for i = array.size(_fvg_b_boxes) - 1 to 0
+            t = array.get(_fvg_b_tops, i)
+            b = array.get(_fvg_b_bots, i)
+            if low <= t
+                box.delete(array.get(_fvg_b_boxes, i))
+                array.remove(_fvg_b_boxes, i)
+                array.remove(_fvg_b_tops, i)
+                array.remove(_fvg_b_bots, i)
+                array.remove(_fvg_b_idxs, i)
+            else
+                box.set_right(array.get(_fvg_b_boxes, i), bar_index + 50)
+                if close >= b and close <= t
+                    in_fvg_b := true
+    if array.size(_fvg_s_boxes) > 0
+        for i = array.size(_fvg_s_boxes) - 1 to 0
+            t = array.get(_fvg_s_tops, i)
+            b = array.get(_fvg_s_bots, i)
+            if high >= b
+                box.delete(array.get(_fvg_s_boxes, i))
+                array.remove(_fvg_s_boxes, i)
+                array.remove(_fvg_s_tops, i)
+                array.remove(_fvg_s_bots, i)
+                array.remove(_fvg_s_idxs, i)
+            else
+                box.set_right(array.get(_fvg_s_boxes, i), bar_index + 50)
+                if close >= b and close <= t
+                    in_fvg_s := true
 
 // ════════════════════════════════════════════════════════════════════
 // 9. ATR — Stop Loss Guide
@@ -508,30 +510,32 @@ var bool in_ob_s = false
 in_ob_b := false
 in_ob_s := false
 if show_ob
-    for i = array.size(_ob_b_boxes) - 1 to 0
-        t = array.get(_ob_b_tops, i)
-        b = array.get(_ob_b_bots, i)
-        if low <= t
-            box.delete(array.get(_ob_b_boxes, i))
-            array.remove(_ob_b_boxes, i)
-            array.remove(_ob_b_tops, i)
-            array.remove(_ob_b_bots, i)
-        else
-            box.set_right(array.get(_ob_b_boxes, i), bar_index + 50)
-            if close >= b and close <= t
-                in_ob_b := true
-    for i = array.size(_ob_s_boxes) - 1 to 0
-        t = array.get(_ob_s_tops, i)
-        b = array.get(_ob_s_bots, i)
-        if high >= b
-            box.delete(array.get(_ob_s_boxes, i))
-            array.remove(_ob_s_boxes, i)
-            array.remove(_ob_s_tops, i)
-            array.remove(_ob_s_bots, i)
-        else
-            box.set_right(array.get(_ob_s_boxes, i), bar_index + 50)
-            if close >= b and close <= t
-                in_ob_s := true
+    if array.size(_ob_b_boxes) > 0
+        for i = array.size(_ob_b_boxes) - 1 to 0
+            t = array.get(_ob_b_tops, i)
+            b = array.get(_ob_b_bots, i)
+            if low <= t
+                box.delete(array.get(_ob_b_boxes, i))
+                array.remove(_ob_b_boxes, i)
+                array.remove(_ob_b_tops, i)
+                array.remove(_ob_b_bots, i)
+            else
+                box.set_right(array.get(_ob_b_boxes, i), bar_index + 50)
+                if close >= b and close <= t
+                    in_ob_b := true
+    if array.size(_ob_s_boxes) > 0
+        for i = array.size(_ob_s_boxes) - 1 to 0
+            t = array.get(_ob_s_tops, i)
+            b = array.get(_ob_s_bots, i)
+            if high >= b
+                box.delete(array.get(_ob_s_boxes, i))
+                array.remove(_ob_s_boxes, i)
+                array.remove(_ob_s_tops, i)
+                array.remove(_ob_s_bots, i)
+            else
+                box.set_right(array.get(_ob_s_boxes, i), bar_index + 50)
+                if close >= b and close <= t
+                    in_ob_s := true
 
 // ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
