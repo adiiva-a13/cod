@@ -244,8 +244,8 @@ bull_engulf = use_candles and close > open and close[1] < open[1] and open <= cl
 bear_engulf = use_candles and close < open and close[1] > open[1] and open >= close[1] and close <= open[1]
 
 // Patternul conteaza DOAR cand pretul e in zona relevanta
-candle_bull = (hammer or bull_engulf) and in_zone_b
-candle_bear = (shoot_star or bear_engulf) and in_zone_s
+candle_bull = (hammer or bull_engulf)
+candle_bear = (shoot_star or bear_engulf)
 
 candle_lbl_b = hammer ? "HAMMER 🔨" : bull_engulf ? "ENGULF 🔥" : "─"
 candle_lbl_s = shoot_star ? "SHOOT ⭐" : bear_engulf ? "ENGULF 🔥" : "─"
@@ -279,8 +279,8 @@ if not na(ph)
     _rsi_last_ph  := rsi_val[piv_r]
     _price_last_ph := ph
 
-div_bull = use_div and not na(pl) and not na(_price_prev_pl) and not na(_rsi_prev_pl) and pl < _price_prev_pl and rsi_val[piv_r] > _rsi_prev_pl and in_zone_b
-div_bear = use_div and not na(ph) and not na(_price_prev_ph) and not na(_rsi_prev_ph) and ph > _price_prev_ph and rsi_val[piv_r] < _rsi_prev_ph and in_zone_s
+div_bull = use_div and not na(pl) and not na(_price_prev_pl) and not na(_rsi_prev_pl) and pl < _price_prev_pl and rsi_val[piv_r] > _rsi_prev_pl
+div_bear = use_div and not na(ph) and not na(_price_prev_ph) and not na(_rsi_prev_ph) and ph > _price_prev_ph and rsi_val[piv_r] < _rsi_prev_ph
 
 // ════════════════════════════════════════════════════════════════════
 // 5c. STOCHASTIC RSI (bonus +1)
@@ -292,8 +292,8 @@ rsi_high     = ta.highest(rsi_val, stoch_len)
 stoch_raw    = (rsi_high - rsi_low) != 0 ? (rsi_val - rsi_low) / (rsi_high - rsi_low) * 100 : 50.0
 stoch_k      = ta.sma(stoch_raw, stoch_sk)
 stoch_d_val  = ta.sma(stoch_k,   stoch_sd)
-stoch_bull   = use_stoch and stoch_k < stoch_os and in_zone_b
-stoch_bear   = use_stoch and stoch_k > stoch_ob and in_zone_s
+stoch_bull   = use_stoch and stoch_k < stoch_os
+stoch_bear   = use_stoch and stoch_k > stoch_ob
 
 // ════════════════════════════════════════════════════════════════════
 // 6. POC — Fixed Range Volume Profile (proxy)
@@ -462,9 +462,9 @@ sc_s = (bear          ? 1 : 0) + (strong_imp  ? 1 : 0) + (in_zone_s    ? 1 : 0) 
        (mtf_all_bear  ? 1 : 0) + (candle_bear  ? 1 : 0) + (div_bear     ? 1 : 0) + (stoch_bear ? 1 : 0)
 
 // CHOCH activ blocheaza semnalul pana la urmatorul BOS
-setup_l = bull and strong_imp and in_zone_b and hi_rvol and cvd_ok_b and
+setup_l = bull and strong_imp and hi_rvol and cvd_ok_b and
           in_sess and not choch_bear_active
-setup_s = bear and strong_imp and in_zone_s and hi_rvol and cvd_ok_s and
+setup_s = bear and strong_imp and hi_rvol and cvd_ok_s and
           in_sess and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
@@ -488,8 +488,8 @@ warn_s = bear and core_s >= warn_min and not setup_s
 // ════════════════════════════════════════════════════════════════════
 sb_zone_ok_b = use_manual ? in_zone_b : in_discount
 sb_zone_ok_s = use_manual ? in_zone_s : in_premium
-setup_b_l = use_setup_b and bull and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and sb_zone_ok_b and not setup_l and not choch_bear_active
-setup_b_s = use_setup_b and bear and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and sb_zone_ok_s and not setup_s and not choch_bull_active
+setup_b_l = use_setup_b and bull and core_b >= sb_htf_min and tf1_scb >= sb_ltf_min and in_sess and not setup_l and not choch_bear_active
+setup_b_s = use_setup_b and bear and core_s >= sb_htf_min and tf1_scs >= sb_ltf_min and in_sess and not setup_s and not choch_bull_active
 
 // ════════════════════════════════════════════════════════════════════
 // PLOTS
@@ -591,10 +591,10 @@ plotchar(abs_bull and bull, "Absorb Bull", "⚡", location.belowbar, color.new(c
 plotchar(abs_bear and bear, "Absorb Bear", "⚡", location.abovebar, color.new(color.fuchsia, 10), size=size.tiny)
 
 // Candlestick pattern markers (apar doar in zona relevanta)
-plotshape(show_candles and hammer      and in_zone_b, "Hammer",       shape.triangleup,   location.belowbar, color.new(color.lime,   10), text="H", textcolor=color.lime,   size=size.small)
-plotshape(show_candles and bull_engulf and in_zone_b, "Bull Engulf",  shape.triangleup,   location.belowbar, color.new(color.green,  10), text="E", textcolor=color.green,  size=size.small)
-plotshape(show_candles and shoot_star  and in_zone_s, "Shoot Star",   shape.triangledown, location.abovebar, color.new(color.orange, 10), text="S", textcolor=color.orange, size=size.small)
-plotshape(show_candles and bear_engulf and in_zone_s, "Bear Engulf",  shape.triangledown, location.abovebar, color.new(color.red,    10), text="E", textcolor=color.red,    size=size.small)
+plotshape(show_candles and hammer,      "Hammer",       shape.triangleup,   location.belowbar, color.new(color.lime,   10), text="H", textcolor=color.lime,   size=size.small)
+plotshape(show_candles and bull_engulf, "Bull Engulf",  shape.triangleup,   location.belowbar, color.new(color.green,  10), text="E", textcolor=color.green,  size=size.small)
+plotshape(show_candles and shoot_star,  "Shoot Star",   shape.triangledown, location.abovebar, color.new(color.orange, 10), text="S", textcolor=color.orange, size=size.small)
+plotshape(show_candles and bear_engulf, "Bear Engulf",  shape.triangledown, location.abovebar, color.new(color.red,    10), text="E", textcolor=color.red,    size=size.small)
 plotshape(show_div   and div_bull,   "RSI Div Bull",   shape.circle,       location.belowbar, color.new(color.yellow, 10), text="D",  textcolor=color.yellow, size=size.small, offset=-piv_r)
 plotshape(show_div   and div_bear,   "RSI Div Bear",   shape.circle,       location.abovebar, color.new(color.yellow, 10), text="D",  textcolor=color.yellow, size=size.small, offset=-piv_r)
 plotshape(show_stoch and stoch_bull, "Stoch OS Bull",  shape.diamond,      location.belowbar, color.new(color.aqua,   10), text="St", textcolor=color.aqua,   size=size.small)
@@ -813,11 +813,11 @@ if warn_s
     alert("👀 PRE-SEMNAL SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_s) + "/5 | RVOL: " + str.tostring(math.round(rvol_now,2)) + "x\nTrend: " + (bear ? "✅" : "❌") + " | Zona: " + (in_zone_s ? "✅" : "❌") + " | RVOL: " + (hi_rvol ? "✅" : "❌") + " | CVD: " + (cvd_ok_s ? "✅" : "❌"), alert.freq_once_per_bar_close)
 
 // ── Semnale entry (confirmare) ────────────────────────────────────────
-if candle_bull and (in_zone_b or setup_b_l)
-    alert("🔨 CANDLE BULL in zona — " + syminfo.ticker + " [" + timeframe.period + "]\n" + candle_lbl_b + " detectat in Demand Zone!\nRVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Stoch K: " + str.tostring(math.round(stoch_k,1)), alert.freq_once_per_bar_close)
+if candle_bull
+    alert("🔨 CANDLE BULL — " + syminfo.ticker + " [" + timeframe.period + "]\n" + candle_lbl_b + " | RVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Stoch K: " + str.tostring(math.round(stoch_k,1)) + "\nVerifica daca esti in zona ta!", alert.freq_once_per_bar_close)
 
-if candle_bear and (in_zone_s or setup_b_s)
-    alert("⭐ CANDLE BEAR in zona — " + syminfo.ticker + " [" + timeframe.period + "]\n" + candle_lbl_s + " detectat in Supply Zone!\nRVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Stoch K: " + str.tostring(math.round(stoch_k,1)), alert.freq_once_per_bar_close)
+if candle_bear
+    alert("⭐ CANDLE BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\n" + candle_lbl_s + " | RVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Stoch K: " + str.tostring(math.round(stoch_k,1)) + "\nVerifica daca esti in zona ta!", alert.freq_once_per_bar_close)
 
 if div_bull
     alert("📉 DIVERGENTA RSI BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nPrice lower low + RSI higher low in Demand Zone!\nSemnal de epuizare vanzatori!", alert.freq_once_per_bar_close)
@@ -825,8 +825,8 @@ if div_bull
 if div_bear
     alert("📉 DIVERGENTA RSI BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nPrice higher high + RSI lower high in Supply Zone!\nSemnal de epuizare cumparatori!", alert.freq_once_per_bar_close)
 
-if stoch_bull and in_zone_b and hi_rvol
-    alert("〽 STOCH OVERSOLD + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (sub " + str.tostring(stoch_os) + ") in Demand Zone!\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x", alert.freq_once_per_bar_close)
+if stoch_bull and hi_rvol
+    alert("〽 STOCH OVERSOLD + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (sub " + str.tostring(stoch_os) + ")\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x | Verifica daca esti in zona ta!", alert.freq_once_per_bar_close)
 
-if stoch_bear and in_zone_s and hi_rvol
-    alert("〽 STOCH OVERBOUGHT + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (peste " + str.tostring(stoch_ob) + ") in Supply Zone!\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x", alert.freq_once_per_bar_close)
+if stoch_bear and hi_rvol
+    alert("〽 STOCH OVERBOUGHT + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (peste " + str.tostring(stoch_ob) + ")\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x | Verifica daca esti in zona ta!", alert.freq_once_per_bar_close)
