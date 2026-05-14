@@ -406,17 +406,33 @@ var box _fs3x=na
 if show_fvg and fvg_bull_now
     if not na(_fb3x)
         box.delete(_fb3x)
-    _fb3t:=_fb2t  _fb3b:=_fb2b  _fb3i:=_fb2i  _fb3x:=_fb2x
-    _fb2t:=_fb1t  _fb2b:=_fb1b  _fb2i:=_fb1i  _fb2x:=_fb1x
-    _fb1t:=low  _fb1b:=high[2]  _fb1i:=bar_index-1
+    _fb3t:=_fb2t
+    _fb3b:=_fb2b
+    _fb3i:=_fb2i
+    _fb3x:=_fb2x
+    _fb2t:=_fb1t
+    _fb2b:=_fb1b
+    _fb2i:=_fb1i
+    _fb2x:=_fb1x
+    _fb1t:=low
+    _fb1b:=high[2]
+    _fb1i:=bar_index-1
     _fb1x:=box.new(_fb1i,_fb1t,bar_index+50,_fb1b,bgcolor=color.new(color.teal,75),border_color=color.new(color.teal,30),border_width=1,text="FVG↑",text_color=color.teal,text_size=size.tiny,text_halign=text.align_left)
 
 if show_fvg and fvg_bear_now
     if not na(_fs3x)
         box.delete(_fs3x)
-    _fs3t:=_fs2t  _fs3b:=_fs2b  _fs3i:=_fs2i  _fs3x:=_fs2x
-    _fs2t:=_fs1t  _fs2b:=_fs1b  _fs2i:=_fs1i  _fs2x:=_fs1x
-    _fs1t:=low[2]  _fs1b:=high  _fs1i:=bar_index-1
+    _fs3t:=_fs2t
+    _fs3b:=_fs2b
+    _fs3i:=_fs2i
+    _fs3x:=_fs2x
+    _fs2t:=_fs1t
+    _fs2b:=_fs1b
+    _fs2i:=_fs1i
+    _fs2x:=_fs1x
+    _fs1t:=low[2]
+    _fs1b:=high
+    _fs1i:=bar_index-1
     _fs1x:=box.new(_fs1i,_fs1t,bar_index+50,_fs1b,bgcolor=color.new(color.orange,75),border_color=color.new(color.orange,30),border_width=1,text="FVG↓",text_color=color.orange,text_size=size.tiny,text_halign=text.align_left)
 
 // Mitigation + extend (fara loop)
@@ -426,7 +442,10 @@ if show_fvg
     // Bull FVG 1
     if not na(_fb1t)
         if low <= _fb1t
-            box.delete(_fb1x)  _fb1x:=na  _fb1t:=na  _fb1b:=na
+            box.delete(_fb1x)
+            _fb1x:=na
+            _fb1t:=na
+            _fb1b:=na
         else
             box.set_right(_fb1x, bar_index+50)
             if close>=_fb1b and close<=_fb1t
@@ -434,7 +453,10 @@ if show_fvg
     // Bull FVG 2
     if not na(_fb2t)
         if low <= _fb2t
-            box.delete(_fb2x)  _fb2x:=na  _fb2t:=na  _fb2b:=na
+            box.delete(_fb2x)
+            _fb2x:=na
+            _fb2t:=na
+            _fb2b:=na
         else
             box.set_right(_fb2x, bar_index+50)
             if close>=_fb2b and close<=_fb2t
@@ -442,7 +464,10 @@ if show_fvg
     // Bull FVG 3
     if not na(_fb3t)
         if low <= _fb3t
-            box.delete(_fb3x)  _fb3x:=na  _fb3t:=na  _fb3b:=na
+            box.delete(_fb3x)
+            _fb3x:=na
+            _fb3t:=na
+            _fb3b:=na
         else
             box.set_right(_fb3x, bar_index+50)
             if close>=_fb3b and close<=_fb3t
@@ -450,7 +475,10 @@ if show_fvg
     // Bear FVG 1
     if not na(_fs1t)
         if high >= _fs1b
-            box.delete(_fs1x)  _fs1x:=na  _fs1t:=na  _fs1b:=na
+            box.delete(_fs1x)
+            _fs1x:=na
+            _fs1t:=na
+            _fs1b:=na
         else
             box.set_right(_fs1x, bar_index+50)
             if close>=_fs1b and close<=_fs1t
@@ -458,7 +486,10 @@ if show_fvg
     // Bear FVG 2
     if not na(_fs2t)
         if high >= _fs2b
-            box.delete(_fs2x)  _fs2x:=na  _fs2t:=na  _fs2b:=na
+            box.delete(_fs2x)
+            _fs2x:=na
+            _fs2t:=na
+            _fs2b:=na
         else
             box.set_right(_fs2x, bar_index+50)
             if close>=_fs2b and close<=_fs2t
@@ -466,7 +497,10 @@ if show_fvg
     // Bear FVG 3
     if not na(_fs3t)
         if high >= _fs3b
-            box.delete(_fs3x)  _fs3x:=na  _fs3t:=na  _fs3b:=na
+            box.delete(_fs3x)
+            _fs3x:=na
+            _fs3t:=na
+            _fs3b:=na
         else
             box.set_right(_fs3x, bar_index+50)
             if close>=_fs3b and close<=_fs3t
@@ -547,8 +581,13 @@ if show_ob and bos_bull
         if close[i] < open[i]
             if not na(_ob2x)
                 box.delete(_ob2x)
-            _ob2t:=_ob1t  _ob2b:=_ob1b  _ob2i:=_ob1i  _ob2x:=_ob1x
-            _ob1t:=high[i]  _ob1b:=low[i]  _ob1i:=bar_index-i
+            _ob2t:=_ob1t
+            _ob2b:=_ob1b
+            _ob2i:=_ob1i
+            _ob2x:=_ob1x
+            _ob1t:=high[i]
+            _ob1b:=low[i]
+            _ob1i:=bar_index-i
             _ob1x:=box.new(_ob1i,_ob1t,bar_index+50,_ob1b,bgcolor=color.new(color.lime,82),border_color=color.new(color.lime,30),border_width=1,text="OB↑",text_color=color.lime,text_size=size.tiny,text_halign=text.align_left)
             break
 
@@ -557,8 +596,13 @@ if show_ob and bos_bear
         if close[i] > open[i]
             if not na(_os2x)
                 box.delete(_os2x)
-            _os2t:=_os1t  _os2b:=_os1b  _os2i:=_os1i  _os2x:=_os1x
-            _os1t:=high[i]  _os1b:=low[i]  _os1i:=bar_index-i
+            _os2t:=_os1t
+            _os2b:=_os1b
+            _os2i:=_os1i
+            _os2x:=_os1x
+            _os1t:=high[i]
+            _os1b:=low[i]
+            _os1i:=bar_index-i
             _os1x:=box.new(_os1i,_os1t,bar_index+50,_os1b,bgcolor=color.new(color.red,82),border_color=color.new(color.red,30),border_width=1,text="OB↓",text_color=color.red,text_size=size.tiny,text_halign=text.align_left)
             break
 
@@ -568,28 +612,40 @@ in_ob_s = false
 if show_ob
     if not na(_ob1t)
         if low <= _ob1t
-            box.delete(_ob1x)  _ob1x:=na  _ob1t:=na  _ob1b:=na
+            box.delete(_ob1x)
+            _ob1x:=na
+            _ob1t:=na
+            _ob1b:=na
         else
             box.set_right(_ob1x, bar_index+50)
             if close>=_ob1b and close<=_ob1t
                 in_ob_b:=true
     if not na(_ob2t)
         if low <= _ob2t
-            box.delete(_ob2x)  _ob2x:=na  _ob2t:=na  _ob2b:=na
+            box.delete(_ob2x)
+            _ob2x:=na
+            _ob2t:=na
+            _ob2b:=na
         else
             box.set_right(_ob2x, bar_index+50)
             if close>=_ob2b and close<=_ob2t
                 in_ob_b:=true
     if not na(_os1t)
         if high >= _os1b
-            box.delete(_os1x)  _os1x:=na  _os1t:=na  _os1b:=na
+            box.delete(_os1x)
+            _os1x:=na
+            _os1t:=na
+            _os1b:=na
         else
             box.set_right(_os1x, bar_index+50)
             if close>=_os1b and close<=_os1t
                 in_ob_s:=true
     if not na(_os2t)
         if high >= _os2b
-            box.delete(_os2x)  _os2x:=na  _os2t:=na  _os2b:=na
+            box.delete(_os2x)
+            _os2x:=na
+            _os2t:=na
+            _os2b:=na
         else
             box.set_right(_os2x, bar_index+50)
             if close>=_os2b and close<=_os2t
