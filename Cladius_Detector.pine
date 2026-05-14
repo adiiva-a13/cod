@@ -666,17 +666,11 @@ if show_ob
 
 // EQH: pivot high curent aproape de un pivot high anterior (din cele 4 stocate)
 _ph_tol_abs = not na(ph) ? ph * liq_tol / 100.0 : 0.0
-is_eqh = use_liq and not na(ph) and (
-    (not na(_rph2) and math.abs(ph - _rph2) <= _ph_tol_abs) or
-    (not na(_rph3) and math.abs(ph - _rph3) <= _ph_tol_abs) or
-    (not na(_rph4) and math.abs(ph - _rph4) <= _ph_tol_abs))
+is_eqh = use_liq and not na(ph) and ((not na(_rph2) and math.abs(ph - _rph2) <= _ph_tol_abs) or (not na(_rph3) and math.abs(ph - _rph3) <= _ph_tol_abs) or (not na(_rph4) and math.abs(ph - _rph4) <= _ph_tol_abs))
 
 // EQL: pivot low curent aproape de un pivot low anterior
 _pl_tol_abs = not na(pl) ? pl * liq_tol / 100.0 : 0.0
-is_eql = use_liq and not na(pl) and (
-    (not na(_rpl2) and math.abs(pl - _rpl2) <= _pl_tol_abs) or
-    (not na(_rpl3) and math.abs(pl - _rpl3) <= _pl_tol_abs) or
-    (not na(_rpl4) and math.abs(pl - _rpl4) <= _pl_tol_abs))
+is_eql = use_liq and not na(pl) and ((not na(_rpl2) and math.abs(pl - _rpl2) <= _pl_tol_abs) or (not na(_rpl3) and math.abs(pl - _rpl3) <= _pl_tol_abs) or (not na(_rpl4) and math.abs(pl - _rpl4) <= _pl_tol_abs))
 
 // Stocare max 3 niveluri EQH active (cu linii punctate rosii)
 var float _eqhv1=na
