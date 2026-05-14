@@ -104,6 +104,8 @@ var string GF = "═══ FVG & ORDER BLOCKS ═══"
 show_fvg    = input.bool(true, "Show FVG (Fair Value Gap)",  group=GF)
 show_ob     = input.bool(true, "Show Order Blocks (OB)",     group=GF)
 ob_lookback = input.int(20,    "OB Lookback (bare)",         minval=5, maxval=50, group=GF)
+fvg_max     = input.int(5,     "Max FVG vizibile",           minval=1, maxval=10, group=GF)
+ob_max      = input.int(3,     "Max OB vizibile",            minval=1, maxval=5,  group=GF)
 
 var string G10 = "═══ MULTI-TIMEFRAME ═══"
 show_mtf  = input.bool(true,        "Show MTF Panel",     group=G10)
@@ -345,29 +347,74 @@ in_sess = not use_sess or not na(time(timeframe.period, sess_utc, "UTC"))
 // 8b. FVG — Fair Value Gap
 //   Bull FVG: gap intre high[2] si low[0] → impuls bullish in mijloc
 //   Bear FVG: gap intre low[2] si high[0] → impuls bearish in mijloc
+//   Mitigation: pretul intra in gap → disparare automata
 // ════════════════════════════════════════════════════════════════════
 fvg_bull_now = low > high[2]
 fvg_bear_now = high < low[2]
 
-var float _fvg_b_top = na
-var float _fvg_b_bot = na
-var int   _fvg_b_idx = 0
-var float _fvg_s_top = na
-var float _fvg_s_bot = na
-var int   _fvg_s_idx = 0
+var box[]   _fvg_b_boxes = array.new<box>()
+var float[] _fvg_b_tops  = array.new<float>()
+var float[] _fvg_b_bots  = array.new<float>()
+var int[]   _fvg_b_idxs  = array.new<int>()
+var box[]   _fvg_s_boxes = array.new<box>()
+var float[] _fvg_s_tops  = array.new<float>()
+var float[] _fvg_s_bots  = array.new<float>()
+var int[]   _fvg_s_idxs  = array.new<int>()
 
-if fvg_bull_now
-    _fvg_b_top := low
-    _fvg_b_bot := high[2]
-    _fvg_b_idx := bar_index - 1
+if show_fvg and fvg_bull_now
+    array.push(_fvg_b_tops,  low)
+    array.push(_fvg_b_bots,  high[2])
+    array.push(_fvg_b_idxs,  bar_index - 1)
+    array.push(_fvg_b_boxes, box.new(bar_index - 1, low, bar_index + 50, high[2], bgcolor=color.new(color.teal, 75), border_color=color.new(color.teal, 30), border_width=1, text="FVG↑", text_color=color.teal, text_size=size.tiny, text_halign=text.align_left))
+    if array.size(_fvg_b_boxes) > fvg_max
+        box.delete(array.shift(_fvg_b_boxes))
+        array.shift(_fvg_b_tops)
+        array.shift(_fvg_b_bots)
+        array.shift(_fvg_b_idxs)
 
-if fvg_bear_now
-    _fvg_s_top := low[2]
-    _fvg_s_bot := high
-    _fvg_s_idx := bar_index - 1
+if show_fvg and fvg_bear_now
+    array.push(_fvg_s_tops,  low[2])
+    array.push(_fvg_s_bots,  high)
+    array.push(_fvg_s_idxs,  bar_index - 1)
+    array.push(_fvg_s_boxes, box.new(bar_index - 1, low[2], bar_index + 50, high, bgcolor=color.new(color.orange, 75), border_color=color.new(color.orange, 30), border_width=1, text="FVG↓", text_color=color.orange, text_size=size.tiny, text_halign=text.align_left))
+    if array.size(_fvg_s_boxes) > fvg_max
+        box.delete(array.shift(_fvg_s_boxes))
+        array.shift(_fvg_s_tops)
+        array.shift(_fvg_s_bots)
+        array.shift(_fvg_s_idxs)
 
-in_fvg_b = not na(_fvg_b_bot) and close >= _fvg_b_bot and close <= _fvg_b_top
-in_fvg_s = not na(_fvg_s_bot) and close >= _fvg_s_bot and close <= _fvg_s_top
+// Mitigation + extend FVG boxes
+var bool in_fvg_b = false
+var bool in_fvg_s = false
+in_fvg_b := false
+in_fvg_s := false
+if show_fvg
+    for i = array.size(_fvg_b_boxes) - 1 to 0
+        t = array.get(_fvg_b_tops, i)
+        b = array.get(_fvg_b_bots, i)
+        if low <= t
+            box.delete(array.get(_fvg_b_boxes, i))
+            array.remove(_fvg_b_boxes, i)
+            array.remove(_fvg_b_tops, i)
+            array.remove(_fvg_b_bots, i)
+            array.remove(_fvg_b_idxs, i)
+        else
+            box.set_right(array.get(_fvg_b_boxes, i), bar_index + 50)
+            if close >= b and close <= t
+                in_fvg_b := true
+    for i = array.size(_fvg_s_boxes) - 1 to 0
+        t = array.get(_fvg_s_tops, i)
+        b = array.get(_fvg_s_bots, i)
+        if high >= b
+            box.delete(array.get(_fvg_s_boxes, i))
+            array.remove(_fvg_s_boxes, i)
+            array.remove(_fvg_s_tops, i)
+            array.remove(_fvg_s_bots, i)
+            array.remove(_fvg_s_idxs, i)
+        else
+            box.set_right(array.get(_fvg_s_boxes, i), bar_index + 50)
+            if close >= b and close <= t
+                in_fvg_s := true
 
 // ════════════════════════════════════════════════════════════════════
 // 9. ATR — Stop Loss Guide
@@ -422,32 +469,69 @@ if mss_bear
 // 10c. ORDER BLOCKS (OB)
 //   Bull OB: ultima lumânare bearish inainte de BOS bullish
 //   Bear OB: ultima lumânare bullish inainte de BOS bearish
+//   Mitigation: pretul intra in OB → disparare automata
 // ════════════════════════════════════════════════════════════════════
-var float _ob_b_top = na
-var float _ob_b_bot = na
-var int   _ob_b_idx = 0
-var float _ob_s_top = na
-var float _ob_s_bot = na
-var int   _ob_s_idx = 0
+var box[]   _ob_b_boxes = array.new<box>()
+var float[] _ob_b_tops  = array.new<float>()
+var float[] _ob_b_bots  = array.new<float>()
+var box[]   _ob_s_boxes = array.new<box>()
+var float[] _ob_s_tops  = array.new<float>()
+var float[] _ob_s_bots  = array.new<float>()
 
-if bos_bull
+if show_ob and bos_bull
     for i = 1 to ob_lookback
         if close[i] < open[i]
-            _ob_b_top := high[i]
-            _ob_b_bot := low[i]
-            _ob_b_idx := bar_index - i
+            array.push(_ob_b_tops,  high[i])
+            array.push(_ob_b_bots,  low[i])
+            array.push(_ob_b_boxes, box.new(bar_index - i, high[i], bar_index + 50, low[i], bgcolor=color.new(color.lime, 82), border_color=color.new(color.lime, 30), border_width=1, text="OB↑", text_color=color.lime, text_size=size.tiny, text_halign=text.align_left))
+            if array.size(_ob_b_boxes) > ob_max
+                box.delete(array.shift(_ob_b_boxes))
+                array.shift(_ob_b_tops)
+                array.shift(_ob_b_bots)
             break
 
-if bos_bear
+if show_ob and bos_bear
     for i = 1 to ob_lookback
         if close[i] > open[i]
-            _ob_s_top := high[i]
-            _ob_s_bot := low[i]
-            _ob_s_idx := bar_index - i
+            array.push(_ob_s_tops,  high[i])
+            array.push(_ob_s_bots,  low[i])
+            array.push(_ob_s_boxes, box.new(bar_index - i, high[i], bar_index + 50, low[i], bgcolor=color.new(color.red, 82), border_color=color.new(color.red, 30), border_width=1, text="OB↓", text_color=color.red, text_size=size.tiny, text_halign=text.align_left))
+            if array.size(_ob_s_boxes) > ob_max
+                box.delete(array.shift(_ob_s_boxes))
+                array.shift(_ob_s_tops)
+                array.shift(_ob_s_bots)
             break
 
-in_ob_b = not na(_ob_b_bot) and close >= _ob_b_bot and close <= _ob_b_top
-in_ob_s = not na(_ob_s_bot) and close >= _ob_s_bot and close <= _ob_s_top
+// Mitigation + extend OB boxes
+var bool in_ob_b = false
+var bool in_ob_s = false
+in_ob_b := false
+in_ob_s := false
+if show_ob
+    for i = array.size(_ob_b_boxes) - 1 to 0
+        t = array.get(_ob_b_tops, i)
+        b = array.get(_ob_b_bots, i)
+        if low <= t
+            box.delete(array.get(_ob_b_boxes, i))
+            array.remove(_ob_b_boxes, i)
+            array.remove(_ob_b_tops, i)
+            array.remove(_ob_b_bots, i)
+        else
+            box.set_right(array.get(_ob_b_boxes, i), bar_index + 50)
+            if close >= b and close <= t
+                in_ob_b := true
+    for i = array.size(_ob_s_boxes) - 1 to 0
+        t = array.get(_ob_s_tops, i)
+        b = array.get(_ob_s_bots, i)
+        if high >= b
+            box.delete(array.get(_ob_s_boxes, i))
+            array.remove(_ob_s_boxes, i)
+            array.remove(_ob_s_tops, i)
+            array.remove(_ob_s_bots, i)
+        else
+            box.set_right(array.get(_ob_s_boxes, i), bar_index + 50)
+            if close >= b and close <= t
+                in_ob_s := true
 
 // ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
@@ -637,43 +721,6 @@ if use_manual and show_zones
 
 plot(poc_val, "POC (FRVP)", color=color.new(color.yellow, 20), linewidth=1, style=plot.style_linebr)
 
-// FVG & OB Boxes
-var box bx_fvg_b = na
-var box bx_fvg_s = na
-var box bx_ob_b  = na
-var box bx_ob_s  = na
-
-_ext = bar_index + 50
-
-if show_fvg
-    if fvg_bull_now
-        if not na(bx_fvg_b)
-            box.delete(bx_fvg_b)
-        bx_fvg_b := box.new(_fvg_b_idx, _fvg_b_top, _ext, _fvg_b_bot, bgcolor=color.new(color.teal, 75), border_color=color.new(color.teal, 30), border_width=1, text="FVG↑", text_color=color.teal, text_size=size.tiny, text_halign=text.align_left)
-    else if not na(bx_fvg_b)
-        box.set_right(bx_fvg_b, _ext)
-
-    if fvg_bear_now
-        if not na(bx_fvg_s)
-            box.delete(bx_fvg_s)
-        bx_fvg_s := box.new(_fvg_s_idx, _fvg_s_top, _ext, _fvg_s_bot, bgcolor=color.new(color.orange, 75), border_color=color.new(color.orange, 30), border_width=1, text="FVG↓", text_color=color.orange, text_size=size.tiny, text_halign=text.align_left)
-    else if not na(bx_fvg_s)
-        box.set_right(bx_fvg_s, _ext)
-
-if show_ob
-    if bos_bull and not na(_ob_b_bot)
-        if not na(bx_ob_b)
-            box.delete(bx_ob_b)
-        bx_ob_b := box.new(_ob_b_idx, _ob_b_top, _ext, _ob_b_bot, bgcolor=color.new(color.lime, 82), border_color=color.new(color.lime, 30), border_width=1, text="OB↑", text_color=color.lime, text_size=size.tiny, text_halign=text.align_left)
-    else if not na(bx_ob_b)
-        box.set_right(bx_ob_b, _ext)
-
-    if bos_bear and not na(_ob_s_bot)
-        if not na(bx_ob_s)
-            box.delete(bx_ob_s)
-        bx_ob_s := box.new(_ob_s_idx, _ob_s_top, _ext, _ob_s_bot, bgcolor=color.new(color.red, 82), border_color=color.new(color.red, 30), border_width=1, text="OB↓", text_color=color.red, text_size=size.tiny, text_halign=text.align_left)
-    else if not na(bx_ob_s)
-        box.set_right(bx_ob_s, _ext)
 
 plot(show_psych and use_psych ? psych_above : na, "Psych Above",
      color=color.new(color.fuchsia, 50), linewidth=1, style=plot.style_linebr)
