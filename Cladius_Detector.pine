@@ -176,9 +176,15 @@ if not na(pl)
 var float _rph1=na, _rph2=na, _rph3=na, _rph4=na
 var float _rpl1=na, _rpl2=na, _rpl3=na, _rpl4=na
 if not na(ph)
-    _rph4:=_rph3  _rph3:=_rph2  _rph2:=_rph1  _rph1:=ph
+    _rph4 := _rph3
+    _rph3 := _rph2
+    _rph2 := _rph1
+    _rph1 := ph
 if not na(pl)
-    _rpl4:=_rpl3  _rpl3:=_rpl2  _rpl2:=_rpl1  _rpl1:=pl
+    _rpl4 := _rpl3
+    _rpl3 := _rpl2
+    _rpl2 := _rpl1
+    _rpl1 := pl
 
 swing_range = (not na(_ph) and not na(_pl)) ? math.abs(_ph - _pl) : 0.0
 base_p      = (not na(_pl) and _pl > 0.0)   ? _pl : close
@@ -579,8 +585,10 @@ var line  _eqlln1=na, _eqlln2=na, _eqlln3=na
 if is_eqh
     if not na(_eqhln3)
         line.delete(_eqhln3)
-    _eqhv3:=_eqhv2  _eqhln3:=_eqhln2
-    _eqhv2:=_eqhv1  _eqhln2:=_eqhln1
+    _eqhv3 := _eqhv2
+    _eqhln3 := _eqhln2
+    _eqhv2 := _eqhv1
+    _eqhln2 := _eqhln1
     _eqhv1 := ph
     _eqhln1 := show_liq ? line.new(bar_index-piv_r, ph, bar_index+40, ph,
                  color=color.new(color.red, 20), style=line.style_dotted, width=2) : na
@@ -588,8 +596,10 @@ if is_eqh
 if is_eql
     if not na(_eqlln3)
         line.delete(_eqlln3)
-    _eqlv3:=_eqlv2  _eqlln3:=_eqlln2
-    _eqlv2:=_eqlv1  _eqlln2:=_eqlln1
+    _eqlv3 := _eqlv2
+    _eqlln3 := _eqlln2
+    _eqlv2 := _eqlv1
+    _eqlln2 := _eqlln1
     _eqlv1 := pl
     _eqlln1 := show_liq ? line.new(bar_index-piv_r, pl, bar_index+40, pl,
                  color=color.new(color.lime, 20), style=line.style_dotted, width=2) : na
