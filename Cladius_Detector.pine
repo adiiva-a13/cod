@@ -788,46 +788,45 @@ if barstate.islast and show_mtf
                bgcolor=tf4_ss ? C_no : C_lb, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
-// ALERTS
+// ALERTS — doar semnale de setup si entry (fara BOS/CHOCH/MSS)
 // ════════════════════════════════════════════════════════════════════
-
-// ── Alerta timpurie (scor partial) ──────────────────────────────────
-if warn_l
-    alert("👀 ATENTIE LONG — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_b) + "/5 conditii indeplinite\nTrend: " + (bull ? "DA" : "NU") + " | Impulse: " + (strong_imp ? "DA" : "NU") + " | Zona: " + (in_zone_b ? "DA" : "NU") + " | RVOL: " + (hi_rvol ? "DA" : "NU") + " | CVD: " + (cvd_ok_b ? "DA" : "NU") + "\n⏳ Asteapta confirmarea A+ completa!", alert.freq_once_per_bar_close)
-
-if warn_s
-    alert("👀 ATENTIE SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_s) + "/5 conditii indeplinite\nTrend: " + (bear ? "DA" : "NU") + " | Impulse: " + (strong_imp ? "DA" : "NU") + " | Zona: " + (in_zone_s ? "DA" : "NU") + " | RVOL: " + (hi_rvol ? "DA" : "NU") + " | CVD: " + (cvd_ok_s ? "DA" : "NU") + "\n⏳ Asteapta confirmarea A+ completa!", alert.freq_once_per_bar_close)
 
 // ── Setup A+ complet ─────────────────────────────────────────────────
 if setup_l
-    alert("🟢 SETUP A+ LONG Detectat!\n" + syminfo.ticker + " [" + timeframe.period + "]\n📐 Demand Zone 0.886 atins\n📈 RVOL ridicat — bani grei\n🌊 CVD Bullish / Absorbtie\n🏗 Structura bullish confirmata\n💎 Verifica POC si seteaza SL!", alert.freq_once_per_bar_close)
+    alert("🟢 SETUP A+ LONG!\n" + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(sc_b) + "/10\n📈 RVOL: " + str.tostring(math.round(rvol_now,2)) + "x | CVD: Bullish\n💎 Seteaza SL sub zona Demand!", alert.freq_once_per_bar_close)
 
 if setup_s
-    alert("🔴 SETUP A+ SHORT Detectat!\n" + syminfo.ticker + " [" + timeframe.period + "]\n📐 Supply Zone 0.886 atins\n📈 RVOL ridicat — bani grei\n🌊 CVD Bearish / Absorbtie\n🏗 Structura bearish confirmata\n💎 Verifica POC si seteaza SL!", alert.freq_once_per_bar_close)
+    alert("🔴 SETUP A+ SHORT!\n" + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(sc_s) + "/10\n📈 RVOL: " + str.tostring(math.round(rvol_now,2)) + "x | CVD: Bearish\n💎 Seteaza SL deasupra zona Supply!", alert.freq_once_per_bar_close)
 
-if bos_bull
-    alert("📈 Break of Structure BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nTrendul ascendent confirmat!", alert.freq_once_per_bar_close)
-
-if bos_bear
-    alert("📉 Break of Structure BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nTrendul descendent confirmat!", alert.freq_once_per_bar_close)
-
-if choch_to_bear
-    alert("⚠ CHOCH BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nSwing low rupt in uptrend — posibil reversal!", alert.freq_once_per_bar_close)
-
-if choch_to_bull
-    alert("⚠ CHOCH BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nSwing high rupt in downtrend — posibil reversal!", alert.freq_once_per_bar_close)
-
-if near_psych and hi_rvol
-    alert("🔵 Nivel psihologic + RVOL ridicat!\n" + syminfo.ticker + " [" + timeframe.period + "]\nAtentie la reactie institutionala!", alert.freq_once_per_bar_close)
-
-if mss_bull
-    alert("📐 MSS BULLISH — " + syminfo.ticker + " [" + timeframe.period + "]\nMarket Structure Shift — structura bearish rupta!\nCauta entry LONG pe TF mic cu confirmare!", alert.freq_once_per_bar_close)
-
-if mss_bear
-    alert("📐 MSS BEARISH — " + syminfo.ticker + " [" + timeframe.period + "]\nMarket Structure Shift — structura bullish rupta!\nCauta entry SHORT pe TF mic cu confirmare!", alert.freq_once_per_bar_close)
-
+// ── Setup B ──────────────────────────────────────────────────────────
 if setup_b_l
-    alert("🔵 SETUP B LONG — " + syminfo.ticker + " [" + timeframe.period + "]\nHTF Scor: " + str.tostring(core_b) + "/5 | LTF Scor: " + str.tostring(tf1_scb) + "/5\nProfil: " + p_name + " | Cauta entry pe " + p_mtf_tf1 + " cu SL sub demand!", alert.freq_once_per_bar_close)
+    alert("🔵 SETUP B LONG — " + syminfo.ticker + " [" + timeframe.period + "]\nHTF: " + str.tostring(core_b) + "/5 | LTF (" + p_mtf_tf1 + "): " + str.tostring(tf1_scb) + "/5\nCauta entry pe " + p_mtf_tf1 + " cu confirmare candle!", alert.freq_once_per_bar_close)
 
 if setup_b_s
-    alert("🔵 SETUP B SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nHTF Scor: " + str.tostring(core_s) + "/5 | LTF Scor: " + str.tostring(tf1_scs) + "/5\nProfil: " + p_name + " | Cauta entry pe " + p_mtf_tf1 + " cu SL deasupra supply!", alert.freq_once_per_bar_close)
+    alert("🔵 SETUP B SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nHTF: " + str.tostring(core_s) + "/5 | LTF (" + p_mtf_tf1 + "): " + str.tostring(tf1_scs) + "/5\nCauta entry pe " + p_mtf_tf1 + " cu confirmare candle!", alert.freq_once_per_bar_close)
+
+// ── Alerta timpurie (pre-semnal) ─────────────────────────────────────
+if warn_l
+    alert("👀 PRE-SEMNAL LONG — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_b) + "/5 | RVOL: " + str.tostring(math.round(rvol_now,2)) + "x\nTrend: " + (bull ? "✅" : "❌") + " | Zona: " + (in_zone_b ? "✅" : "❌") + " | RVOL: " + (hi_rvol ? "✅" : "❌") + " | CVD: " + (cvd_ok_b ? "✅" : "❌"), alert.freq_once_per_bar_close)
+
+if warn_s
+    alert("👀 PRE-SEMNAL SHORT — " + syminfo.ticker + " [" + timeframe.period + "]\nScor: " + str.tostring(core_s) + "/5 | RVOL: " + str.tostring(math.round(rvol_now,2)) + "x\nTrend: " + (bear ? "✅" : "❌") + " | Zona: " + (in_zone_s ? "✅" : "❌") + " | RVOL: " + (hi_rvol ? "✅" : "❌") + " | CVD: " + (cvd_ok_s ? "✅" : "❌"), alert.freq_once_per_bar_close)
+
+// ── Semnale entry (confirmare) ────────────────────────────────────────
+if candle_bull and (in_zone_b or setup_b_l)
+    alert("🔨 CANDLE BULL in zona — " + syminfo.ticker + " [" + timeframe.period + "]\n" + candle_lbl_b + " detectat in Demand Zone!\nRVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Stoch K: " + str.tostring(math.round(stoch_k,1)), alert.freq_once_per_bar_close)
+
+if candle_bear and (in_zone_s or setup_b_s)
+    alert("⭐ CANDLE BEAR in zona — " + syminfo.ticker + " [" + timeframe.period + "]\n" + candle_lbl_s + " detectat in Supply Zone!\nRVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Stoch K: " + str.tostring(math.round(stoch_k,1)), alert.freq_once_per_bar_close)
+
+if div_bull
+    alert("📉 DIVERGENTA RSI BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nPrice lower low + RSI higher low in Demand Zone!\nSemnal de epuizare vanzatori!", alert.freq_once_per_bar_close)
+
+if div_bear
+    alert("📉 DIVERGENTA RSI BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nPrice higher high + RSI lower high in Supply Zone!\nSemnal de epuizare cumparatori!", alert.freq_once_per_bar_close)
+
+if stoch_bull and in_zone_b and hi_rvol
+    alert("〽 STOCH OVERSOLD + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (sub " + str.tostring(stoch_os) + ") in Demand Zone!\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x", alert.freq_once_per_bar_close)
+
+if stoch_bear and in_zone_s and hi_rvol
+    alert("〽 STOCH OVERBOUGHT + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (peste " + str.tostring(stoch_ob) + ") in Supply Zone!\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x", alert.freq_once_per_bar_close)
