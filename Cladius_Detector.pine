@@ -107,6 +107,13 @@ ob_lookback = input.int(20,    "OB Lookback (bare)",         minval=5, maxval=50
 fvg_max     = input.int(5,     "Max FVG vizibile",           minval=1, maxval=10, group=GF)
 ob_max      = input.int(3,     "Max OB vizibile",            minval=1, maxval=5,  group=GF)
 
+var string GL = "═══ LIQUIDITY SWEEPS ═══"
+use_liq    = input.bool(true,  "Activare Liquidity Sweeps",           group=GL)
+liq_tol    = input.float(0.1,  "Toleranta EQH/EQL %", step=0.01, minval=0.01, maxval=1.0, group=GL,
+             tooltip="0.1% = niveluri aproape identice | 0.3% = toleranta moderata")
+show_liq   = input.bool(true,  "Show EQH/EQL Lines",                  group=GL)
+show_sweep = input.bool(true,  "Show Sweep Labels",                   group=GL)
+
 var string G10 = "═══ MULTI-TIMEFRAME ═══"
 show_mtf  = input.bool(true,        "Show MTF Panel",     group=G10)
 mtf_tf1   = input.timeframe("15",   "TF 1",               group=G10)
@@ -164,6 +171,14 @@ if not na(ph)
 if not na(pl)
     _pl     := pl
     _pl_bar := bar_index - piv_r
+
+// Rolling pivot history pentru EQH/EQL detection (ultimele 4 confirmate)
+var float _rph1=na  var float _rph2=na  var float _rph3=na  var float _rph4=na
+var float _rpl1=na  var float _rpl2=na  var float _rpl3=na  var float _rpl4=na
+if not na(ph)
+    _rph4:=_rph3  _rph3:=_rph2  _rph2:=_rph1  _rph1:=ph
+if not na(pl)
+    _rpl4:=_rpl3  _rpl3:=_rpl2  _rpl2:=_rpl1  _rpl1:=pl
 
 swing_range = (not na(_ph) and not na(_pl)) ? math.abs(_ph - _pl) : 0.0
 base_p      = (not na(_pl) and _pl > 0.0)   ? _pl : close
@@ -527,6 +542,119 @@ if show_ob
             if close>=_os2b and close<=_os2t then in_ob_s:=true
 
 // ════════════════════════════════════════════════════════════════════
+// 10d. LIQUIDITY SWEEPS — Equal Highs / Equal Lows + Sweep Reversal
+//
+//   EQH (Equal Highs)  : 2 pivot highs apropiati = lichiditate buy-side
+//                         (stop-uri de cumparatori agregati acolo)
+//   EQL (Equal Lows)   : 2 pivot lows apropiati  = lichiditate sell-side
+//                         (stop-uri de vanzatori agregati acolo)
+//   Sweep Bull : fitil sub EQL + close deasupra EQL
+//                → Smart Money a luat sell-side liq, probabil urca
+//   Sweep Bear : fitil peste EQH + close sub EQH
+//                → Smart Money a luat buy-side liq, probabil coboara
+// ════════════════════════════════════════════════════════════════════
+
+// EQH: pivot high curent aproape de un pivot high anterior (din cele 4 stocate)
+_ph_tol_abs = not na(ph) ? ph * liq_tol / 100.0 : 0.0
+is_eqh = use_liq and not na(ph) and (
+    (not na(_rph2) and math.abs(ph - _rph2) <= _ph_tol_abs) or
+    (not na(_rph3) and math.abs(ph - _rph3) <= _ph_tol_abs) or
+    (not na(_rph4) and math.abs(ph - _rph4) <= _ph_tol_abs))
+
+// EQL: pivot low curent aproape de un pivot low anterior
+_pl_tol_abs = not na(pl) ? pl * liq_tol / 100.0 : 0.0
+is_eql = use_liq and not na(pl) and (
+    (not na(_rpl2) and math.abs(pl - _rpl2) <= _pl_tol_abs) or
+    (not na(_rpl3) and math.abs(pl - _rpl3) <= _pl_tol_abs) or
+    (not na(_rpl4) and math.abs(pl - _rpl4) <= _pl_tol_abs))
+
+// Stocare max 3 niveluri EQH active (cu linii punctate rosii)
+var float _eqhv1=na  var line _eqhln1=na
+var float _eqhv2=na  var line _eqhln2=na
+var float _eqhv3=na  var line _eqhln3=na
+
+// Stocare max 3 niveluri EQL active (cu linii punctate verzi)
+var float _eqlv1=na  var line _eqlln1=na
+var float _eqlv2=na  var line _eqlln2=na
+var float _eqlv3=na  var line _eqlln3=na
+
+if is_eqh
+    if not na(_eqhln3)
+        line.delete(_eqhln3)
+    _eqhv3:=_eqhv2  _eqhln3:=_eqhln2
+    _eqhv2:=_eqhv1  _eqhln2:=_eqhln1
+    _eqhv1 := ph
+    _eqhln1 := show_liq ? line.new(bar_index-piv_r, ph, bar_index+40, ph,
+                 color=color.new(color.red, 20), style=line.style_dotted, width=2) : na
+
+if is_eql
+    if not na(_eqlln3)
+        line.delete(_eqlln3)
+    _eqlv3:=_eqlv2  _eqlln3:=_eqlln2
+    _eqlv2:=_eqlv1  _eqlln2:=_eqlln1
+    _eqlv1 := pl
+    _eqlln1 := show_liq ? line.new(bar_index-piv_r, pl, bar_index+40, pl,
+                 color=color.new(color.lime, 20), style=line.style_dotted, width=2) : na
+
+// Extinde liniile active la bara curenta
+if show_liq
+    if not na(_eqhv1) and not na(_eqhln1)
+        line.set_x2(_eqhln1, bar_index+40)
+    if not na(_eqhv2) and not na(_eqhln2)
+        line.set_x2(_eqhln2, bar_index+40)
+    if not na(_eqhv3) and not na(_eqhln3)
+        line.set_x2(_eqhln3, bar_index+40)
+    if not na(_eqlv1) and not na(_eqlln1)
+        line.set_x2(_eqlln1, bar_index+40)
+    if not na(_eqlv2) and not na(_eqlln2)
+        line.set_x2(_eqlln2, bar_index+40)
+    if not na(_eqlv3) and not na(_eqlln3)
+        line.set_x2(_eqlln3, bar_index+40)
+
+// Detectie sweep: fitil trece nivelul dar close revine de cealalta parte
+_sw_b1 = use_liq and not na(_eqlv1) and low < _eqlv1 and close > _eqlv1
+_sw_b2 = use_liq and not na(_eqlv2) and low < _eqlv2 and close > _eqlv2
+_sw_b3 = use_liq and not na(_eqlv3) and low < _eqlv3 and close > _eqlv3
+_sw_s1 = use_liq and not na(_eqhv1) and high > _eqhv1 and close < _eqhv1
+_sw_s2 = use_liq and not na(_eqhv2) and high > _eqhv2 and close < _eqhv2
+_sw_s3 = use_liq and not na(_eqhv3) and high > _eqhv3 and close < _eqhv3
+
+sweep_bull = _sw_b1 or _sw_b2 or _sw_b3
+sweep_bear = _sw_s1 or _sw_s2 or _sw_s3
+
+// Sterge liniile sweep-uite si reseteaza nivelurile
+if _sw_b1
+    if not na(_eqlln1)
+        line.delete(_eqlln1)
+    _eqlv1 := na
+    _eqlln1 := na
+if _sw_b2
+    if not na(_eqlln2)
+        line.delete(_eqlln2)
+    _eqlv2 := na
+    _eqlln2 := na
+if _sw_b3
+    if not na(_eqlln3)
+        line.delete(_eqlln3)
+    _eqlv3 := na
+    _eqlln3 := na
+if _sw_s1
+    if not na(_eqhln1)
+        line.delete(_eqhln1)
+    _eqhv1 := na
+    _eqhln1 := na
+if _sw_s2
+    if not na(_eqhln2)
+        line.delete(_eqhln2)
+    _eqhv2 := na
+    _eqhln2 := na
+if _sw_s3
+    if not na(_eqhln3)
+        line.delete(_eqhln3)
+    _eqhv3 := na
+    _eqhln3 := na
+
+// ════════════════════════════════════════════════════════════════════
 // 11. MULTI-TIMEFRAME SCORE FUNCTION
 //     Calculeaza scorul A+ pe orice timeframe via request.security
 // ════════════════════════════════════════════════════════════════════
@@ -743,6 +871,12 @@ plotshape(show_div   and div_bear,   "RSI Div Bear",   shape.circle,       locat
 plotshape(show_stoch and stoch_bull, "Stoch OS Bull",  shape.diamond,      location.belowbar, color.new(color.aqua,   10), text="St", textcolor=color.aqua,   size=size.small)
 plotshape(show_stoch and stoch_bear, "Stoch OB Bear",  shape.diamond,      location.abovebar, color.new(color.fuchsia,10), text="St", textcolor=color.fuchsia,size=size.small)
 
+// Liquidity Sweep markers
+plotshape(show_sweep and sweep_bull, "Sweep Bull", shape.labelup,   location.belowbar,
+          color.new(color.yellow, 10), text="SWEEP↑", textcolor=color.black, size=size.small)
+plotshape(show_sweep and sweep_bear, "Sweep Bear", shape.labeldown, location.abovebar,
+          color.new(color.yellow, 10), text="SWEEP↓", textcolor=color.black, size=size.small)
+
 plotchar(near_psych, "Psych Level", "🔵", location.abovebar, color.new(color.purple, 20), size=size.tiny)
 bgcolor(hi_rvol ? color.new(color.yellow, 92) : na, title="High RVOL")
 
@@ -764,7 +898,7 @@ if show_mss and mss_bear
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Principal (top_right)
 // ════════════════════════════════════════════════════════════════════
-var table T = table.new(position.top_right, 2, 19,
+var table T = table.new(position.top_right, 2, 20,
      bgcolor=color.new(color.black, 55),
      border_color=color.new(color.gray, 60), border_width=1,
      frame_color=color.new(color.blue, 40), frame_width=2)
@@ -869,9 +1003,17 @@ if barstate.islast
     ob_col = in_ob_b ? C_ok : in_ob_s ? C_no : C_mid
     table.cell(T, 1, 17, ob_lbl, text_color=CW, bgcolor=ob_col, text_size=SZ)
 
-    table.cell(T, 0, 18, "🗂 Profil", text_color=CW, bgcolor=C_hd, text_size=SZ)
+    table.cell(T, 0, 18, "💧 Liq Sweep", text_color=CW, bgcolor=C_lb, text_size=SZ)
+    sw_lbl = sweep_bull ? "SWEEP BULL ↑ ✓" : sweep_bear ? "SWEEP BEAR ↓ ✓" : "─ NU ─"
+    sw_col = sweep_bull ? C_ok : sweep_bear ? C_no : C_mid
+    _eq_active = (not na(_eqhv1) or not na(_eqhv2) or not na(_eqhv3)) or
+                 (not na(_eqlv1) or not na(_eqlv2) or not na(_eqlv3))
+    sw_detail  = _eq_active ? " [EQ activ]" : ""
+    table.cell(T, 1, 18, sw_lbl + sw_detail, text_color=CW, bgcolor=sw_col, text_size=SZ)
+
+    table.cell(T, 0, 19, "🗂 Profil", text_color=CW, bgcolor=C_hd, text_size=SZ)
     p_rec_txt = profile == "CUSTOM" ? "Pivot: manual | Trend TF: manual" : "Pivot rec: " + p_piv_rec + " | Trend: " + p_tf_trend
-    table.cell(T, 1, 18, p_name + " — " + p_rec_txt, text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
+    table.cell(T, 1, 19, p_name + " — " + p_rec_txt, text_color=color.yellow, bgcolor=C_hd, text_size=SZ)
 
 // ════════════════════════════════════════════════════════════════════
 // DASHBOARD — Multi-Timeframe Panel (bottom_right)
@@ -983,3 +1125,10 @@ if stoch_bull and hi_rvol
 
 if stoch_bear and hi_rvol
     alert("〽 STOCH OVERBOUGHT + RVOL — " + syminfo.ticker + " [" + timeframe.period + "]\nStoch K: " + str.tostring(math.round(stoch_k,1)) + " (peste " + str.tostring(stoch_ob) + ")\nVolum: " + str.tostring(math.round(rvol_now,2)) + "x | Verifica daca esti in zona ta!", alert.freq_once_per_bar_close)
+
+// ── Liquidity Sweeps ─────────────────────────────────────────────────
+if sweep_bull
+    alert("💧 LIQUIDITY SWEEP BULL — " + syminfo.ticker + " [" + timeframe.period + "]\nSell-side lichiditate luata (EQL swept)!\nSmart Money probabil pozitioneaza LONG.\nRVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Confirma cu zona Demand + candle!", alert.freq_once_per_bar_close)
+
+if sweep_bear
+    alert("💧 LIQUIDITY SWEEP BEAR — " + syminfo.ticker + " [" + timeframe.period + "]\nBuy-side lichiditate luata (EQH swept)!\nSmart Money probabil pozitioneaza SHORT.\nRVOL: " + str.tostring(math.round(rvol_now,2)) + "x | Confirma cu zona Supply + candle!", alert.freq_once_per_bar_close)
