@@ -8,8 +8,8 @@ indicator("⚡ CLADIUS — Swing Setup Detector [PRO]", overlay=true,
 
 var string GP = "═══ PROFIL TRADING ═══"
 profile = input.string("CUSTOM", "Profil activ",
-          options=["CUSTOM", "SWING (W+D)", "DAY TRADING (D+4H)", "SWING-ENTRY (D+4H→1H)", "INTRADAY (4H+15m)"],
-          tooltip="SWING: analiza Weekly, executie Daily — Pivot rec. 15/15\nDAY TRADING: analiza Daily, executie 4H — Pivot rec. 10/10\nSWING-ENTRY: zone pe D+4H, confirmare si entry pe 1H — Pivot rec. 8/8\nINTRADAY: analiza 4H, executie 15min — Pivot rec. 5/5\nCUSTOM: foloseste setarile tale manuale",
+          options=["CUSTOM", "SWING (W+D)", "DAY TRADING (D+4H)", "SWING-ENTRY (D+4H→1H)", "INTRADAY (4H+15m)", "SCALPING (15m+5m)"],
+          tooltip="SWING: analiza Weekly, executie Daily — Pivot rec. 15/15\nDAY TRADING: analiza Daily, executie 4H — Pivot rec. 10/10\nSWING-ENTRY: zone pe D+4H, confirmare si entry pe 1H — Pivot rec. 8/8\nINTRADAY: analiza 4H, executie 15min — Pivot rec. 5/5\nSCALPING: analiza 15min, executie 5min — Pivot rec. 3/3\nCUSTOM: foloseste setarile tale manuale",
           group=GP)
 
 var string G1 = "═══ TREND FILTER ═══"
@@ -116,17 +116,18 @@ _is_swing  = profile == "SWING (W+D)"
 _is_day    = profile == "DAY TRADING (D+4H)"
 _is_se     = profile == "SWING-ENTRY (D+4H→1H)"
 _is_intra  = profile == "INTRADAY (4H+15m)"
+_is_scalp  = profile == "SCALPING (15m+5m)"
 
-p_tf_trend = _is_swing ? "W"   : _is_day ? "D"   : _is_se ? "D"   : _is_intra ? "240" : tf_trend
-p_imp_pct  = _is_swing ? 1.0   : _is_day ? 0.3   : _is_se ? 0.2   : _is_intra ? 0.1   : imp_pct
-p_mss_len  = _is_swing ? 25    : _is_day ? 15    : _is_se ? 12    : _is_intra ? 10    : mss_len
-p_mtf_tf1  = _is_swing ? "D"   : _is_day ? "60"  : _is_se ? "15"  : _is_intra ? "5"   : mtf_tf1
-p_mtf_tf2  = _is_swing ? "240" : _is_day ? "240" : _is_se ? "60"  : _is_intra ? "15"  : mtf_tf2
-p_mtf_tf3  = _is_swing ? "D"   : _is_day ? "D"   : _is_se ? "240" : _is_intra ? "60"  : mtf_tf3
-p_mtf_tf4  = _is_swing ? "60"  : _is_day ? "W"   : _is_se ? "D"   : _is_intra ? "240" : mtf_tf4
+p_tf_trend = _is_swing ? "W"   : _is_day ? "D"   : _is_se ? "D"   : _is_intra ? "240" : _is_scalp ? "15"  : tf_trend
+p_imp_pct  = _is_swing ? 1.0   : _is_day ? 0.3   : _is_se ? 0.2   : _is_intra ? 0.1   : _is_scalp ? 0.05  : imp_pct
+p_mss_len  = _is_swing ? 25    : _is_day ? 15    : _is_se ? 12    : _is_intra ? 10    : _is_scalp ? 8     : mss_len
+p_mtf_tf1  = _is_swing ? "D"   : _is_day ? "60"  : _is_se ? "15"  : _is_intra ? "5"   : _is_scalp ? "1"   : mtf_tf1
+p_mtf_tf2  = _is_swing ? "240" : _is_day ? "240" : _is_se ? "60"  : _is_intra ? "15"  : _is_scalp ? "5"   : mtf_tf2
+p_mtf_tf3  = _is_swing ? "D"   : _is_day ? "D"   : _is_se ? "240" : _is_intra ? "60"  : _is_scalp ? "15"  : mtf_tf3
+p_mtf_tf4  = _is_swing ? "60"  : _is_day ? "W"   : _is_se ? "D"   : _is_intra ? "240" : _is_scalp ? "60"  : mtf_tf4
 
-p_piv_rec  = _is_swing ? "15/15" : _is_day ? "10/10" : _is_se ? "8/8" : _is_intra ? "5/5" : "─"
-p_name     = _is_swing ? "SWING" : _is_day ? "DAY TRADING" : _is_se ? "SWING-ENTRY" : _is_intra ? "INTRADAY" : "CUSTOM"
+p_piv_rec  = _is_swing ? "15/15" : _is_day ? "10/10" : _is_se ? "8/8" : _is_intra ? "5/5" : _is_scalp ? "3/3" : "─"
+p_name     = _is_swing ? "SWING" : _is_day ? "DAY TRADING" : _is_se ? "SWING-ENTRY" : _is_intra ? "INTRADAY" : _is_scalp ? "SCALPING" : "CUSTOM"
 
 // ════════════════════════════════════════════════════════════════════
 // 1. TREND — EMA 200
