@@ -649,18 +649,14 @@ if show_fvg
     if fvg_bull_now
         if not na(bx_fvg_b)
             box.delete(bx_fvg_b)
-        bx_fvg_b := box.new(_fvg_b_idx, _fvg_b_top, _ext, _fvg_b_bot,
-            bgcolor=color.new(color.teal, 75), border_color=color.new(color.teal, 30),
-            border_width=1, text="FVG↑", text_color=color.teal, text_size=size.tiny, text_halign=text.align_left)
+        bx_fvg_b := box.new(_fvg_b_idx, _fvg_b_top, _ext, _fvg_b_bot, bgcolor=color.new(color.teal, 75), border_color=color.new(color.teal, 30), border_width=1, text="FVG↑", text_color=color.teal, text_size=size.tiny, text_halign=text.align_left)
     else if not na(bx_fvg_b)
         box.set_right(bx_fvg_b, _ext)
 
     if fvg_bear_now
         if not na(bx_fvg_s)
             box.delete(bx_fvg_s)
-        bx_fvg_s := box.new(_fvg_s_idx, _fvg_s_top, _ext, _fvg_s_bot,
-            bgcolor=color.new(color.orange, 75), border_color=color.new(color.orange, 30),
-            border_width=1, text="FVG↓", text_color=color.orange, text_size=size.tiny, text_halign=text.align_left)
+        bx_fvg_s := box.new(_fvg_s_idx, _fvg_s_top, _ext, _fvg_s_bot, bgcolor=color.new(color.orange, 75), border_color=color.new(color.orange, 30), border_width=1, text="FVG↓", text_color=color.orange, text_size=size.tiny, text_halign=text.align_left)
     else if not na(bx_fvg_s)
         box.set_right(bx_fvg_s, _ext)
 
@@ -668,18 +664,14 @@ if show_ob
     if bos_bull and not na(_ob_b_bot)
         if not na(bx_ob_b)
             box.delete(bx_ob_b)
-        bx_ob_b := box.new(_ob_b_idx, _ob_b_top, _ext, _ob_b_bot,
-            bgcolor=color.new(color.lime, 82), border_color=color.new(color.lime, 30),
-            border_width=1, text="OB↑", text_color=color.lime, text_size=size.tiny, text_halign=text.align_left)
+        bx_ob_b := box.new(_ob_b_idx, _ob_b_top, _ext, _ob_b_bot, bgcolor=color.new(color.lime, 82), border_color=color.new(color.lime, 30), border_width=1, text="OB↑", text_color=color.lime, text_size=size.tiny, text_halign=text.align_left)
     else if not na(bx_ob_b)
         box.set_right(bx_ob_b, _ext)
 
     if bos_bear and not na(_ob_s_bot)
         if not na(bx_ob_s)
             box.delete(bx_ob_s)
-        bx_ob_s := box.new(_ob_s_idx, _ob_s_top, _ext, _ob_s_bot,
-            bgcolor=color.new(color.red, 82), border_color=color.new(color.red, 30),
-            border_width=1, text="OB↓", text_color=color.red, text_size=size.tiny, text_halign=text.align_left)
+        bx_ob_s := box.new(_ob_s_idx, _ob_s_top, _ext, _ob_s_bot, bgcolor=color.new(color.red, 82), border_color=color.new(color.red, 30), border_width=1, text="OB↓", text_color=color.red, text_size=size.tiny, text_halign=text.align_left)
     else if not na(bx_ob_s)
         box.set_right(bx_ob_s, _ext)
 
