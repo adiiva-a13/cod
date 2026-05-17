@@ -26,6 +26,8 @@ i_pmtEnabled = input.bool(false,   "Activeaza PMT Alerts",        group="Pick My
 i_pmtToken   = input.string("",    "PMT Token",                   group="Pick My Trade")
 i_pmtSymbol  = input.string("M6E", "Simbol Tradovate",            group="Pick My Trade")
 
+i_debug      = input.bool(false,   "Debug Labels (faze)",         group="Debug")
+
 // ═══════════════════════════════════════════════════════════
 //  TIMEFRAME GUARD
 // ═══════════════════════════════════════════════════════════
@@ -67,6 +69,9 @@ var float curTP      = na
 var float calcQty    = 1.0
 var float actualRisk = na
 
+var line  lBuyStop   = na
+var line  lSellStop  = na
+
 var float t1BuyStop  = na
 var float t1SellStop = na
 var float t1LSL      = na
@@ -90,6 +95,10 @@ if newDay
     t1LTP       := na
     t1SSL       := na
     t1STP       := na
+    line.delete(lBuyStop)
+    line.delete(lSellStop)
+    lBuyStop  := na
+    lSellStop := na
     strategy.cancel_all()
 
 // ═══════════════════════════════════════════════════════════
@@ -130,8 +139,14 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
     strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-    label.new(bar_index, t1BuyStop,  "▲ BUY " + str.tostring(t1BuyStop,  "#.#####") + "\nTP " + str.tostring(t1LTP, "#.#####"), color=color.lime,          textcolor=color.black, style=label.style_label_left, size=size.tiny)
-    label.new(bar_index, t1SellStop, "▼ SELL " + str.tostring(t1SellStop, "#.#####") + "\nTP " + str.tostring(t1STP, "#.#####"), color=color.red,           textcolor=color.white, style=label.style_label_left, size=size.tiny)
+    label.new(bar_index, t1BuyStop,  "▲ BUY "  + str.tostring(t1BuyStop,  "#.#####") + "\nTP " + str.tostring(t1LTP, "#.#####"), color=color.lime, textcolor=color.black, style=label.style_label_left, size=size.tiny)
+    label.new(bar_index, t1SellStop, "▼ SELL " + str.tostring(t1SellStop, "#.#####") + "\nTP " + str.tostring(t1STP, "#.#####"), color=color.red,  textcolor=color.white, style=label.style_label_left, size=size.tiny)
+    line.delete(lBuyStop)
+    line.delete(lSellStop)
+    lBuyStop  := line.new(bar_index, t1BuyStop,  bar_index + 200, t1BuyStop,  color=color.lime,         width=1, style=line.style_dashed, extend=extend.none)
+    lSellStop := line.new(bar_index, t1SellStop, bar_index + 200, t1SellStop, color=color.red,           width=1, style=line.style_dashed, extend=extend.none)
+    if i_debug
+        label.new(bar_index, low, "RANGE OK\nH=" + str.tostring(rngH,"#.#####") + "\nL=" + str.tostring(rngL,"#.#####") + "\nRisk=" + str.tostring(_t1RiskPips,"#.#") + "pip\nQty=" + str.tostring(int(calcQty)), color=color.blue, textcolor=color.white, style=label.style_label_up, size=size.tiny)
     phase := 1
 
 // ═══════════════════════════════════════════════════════════
@@ -148,6 +163,10 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
+            line.delete(lSellStop)
+            lSellStop  := na
+            if i_debug
+                label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
             dir        := -1
             curEntryPx := strategy.opentrades.entry_price(_i)
@@ -156,12 +175,24 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
+            line.delete(lBuyStop)
+            lBuyStop   := na
+            if i_debug
+                label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+    // Compara pretul de exit cu midpoint-ul range-ului — mai robust decat profit()
+    // T1 Long SL e sub midpoint, TP e deasupra → exit sub midpoint = pierdere
+    // T1 Short SL e deasupra midpoint, TP e sub → exit deasupra midpoint = pierdere
+    _ct      = strategy.closedtrades
+    _exitPx  = _ct > 0 ? strategy.closedtrades.exit_price(_ct - 1) : na
+    _midPt   = (t1BuyStop + t1SellStop) / 2.0
+    wasLoss  = not na(_exitPx) and (dir == 1 ? _exitPx < _midPt : _exitPx > _midPt)
+    if i_debug
+        label.new(bar_index, high, "P2 T1 closed\nwasLoss=" + str.tostring(wasLoss) + "\nexitPx=" + str.tostring(_exitPx,"#.#####") + "\nmid=" + str.tostring(_midPt,"#.#####"), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
@@ -171,6 +202,8 @@ if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
 //  PHASE 3: T1 SL → T2 in directie opusa
 // ═══════════════════════════════════════════════════════════
 if phase == 3 and not tradeOpen and not eod
+    if i_debug
+        label.new(bar_index, high, "P3: T2 placed\ndir=" + str.tostring(dir) + " qty=" + str.tostring(int(calcQty)), color=color.yellow, textcolor=color.black, style=label.style_label_down, size=size.tiny)
     if dir == 1
         strategy.entry("T2 Short", strategy.short, qty=calcQty, comment="6E T2 S")
         strategy.exit("T2S X", "T2 Short", stop=t1SSL, limit=t1STP)
@@ -193,7 +226,15 @@ if phase == 3 and not tradeOpen and not eod
 //  PHASE 4: T2 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+    // T2 e in directie OPUSA lui T1 → formula wasLoss e inversata
+    // T2 Short (dir=1): SL la t1BuyStop (deasupra mid) → exit deasupra = pierdere
+    // T2 Long  (dir=-1): SL la t1SellStop (sub mid)   → exit sub mid = pierdere
+    _ct      = strategy.closedtrades
+    _exitPx  = _ct > 0 ? strategy.closedtrades.exit_price(_ct - 1) : na
+    _midPt   = (t1BuyStop + t1SellStop) / 2.0
+    wasLoss  = not na(_exitPx) and (dir == 1 ? _exitPx > _midPt : _exitPx < _midPt)
+    if i_debug
+        label.new(bar_index, high, "P4 T2 closed\nwasLoss=" + str.tostring(wasLoss) + "\nexitPx=" + str.tostring(_exitPx,"#.#####"), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
@@ -237,10 +278,11 @@ var bool eodFired = false
 if newDay
     eodFired := false
 
-if eod and not eodFired and (tradeOpen or phase == 1)
+if eod and not eodFired and (tradeOpen or (phase >= 1 and phase <= 6))
     strategy.close_all(comment="EOD")
     strategy.cancel_all()
-    label.new(bar_index, high, "EOD CLOSE", color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
+    _eodTxt = tradeOpen ? "EOD CLOSE\n(pozitie inchisa\n+ alerta Tradovate)" : "EOD CANCEL\n(ordine anulate)"
+    label.new(bar_index, high, _eodTxt, color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
@@ -259,8 +301,7 @@ bgcolor(slHitBar                                ? color.new(color.red,   85) : n
 plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 0), 2, plot.style_linebr)
 plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 0), 2, plot.style_linebr)
 
-plot(phase == 1 and not na(t1BuyStop)  ? t1BuyStop  : na, "T1 Buy Stop",  color.new(color.lime, 0), 1, plot.style_linebr)
-plot(phase == 1 and not na(t1SellStop) ? t1SellStop : na, "T1 Sell Stop", color.new(color.red,  0), 1, plot.style_linebr)
+// T1 entry lines sunt afisate cu line.new() in blocul lastRangeBar (lBuyStop / lSellStop)
 
 plot(phase >= 2 and phase <= 6 and not na(curSL) ? curSL : na, "SL Activ", color.new(color.red,  0), 1, plot.style_linebr)
 plot(phase >= 2 and phase <= 6 and not na(curTP) ? curTP : na, "TP Activ", color.new(color.lime, 0), 1, plot.style_linebr)
