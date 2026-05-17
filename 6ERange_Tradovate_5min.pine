@@ -19,7 +19,7 @@ i_eodMin     = input.int  (0,     "EOD minut (RO)",               minval=0, maxv
 i_autoSize   = input.bool  (true,  "Calcul automat din $ risc",                          group="Sizing")
 i_riskUSD    = input.float (100.0, "Risc $ per trade",            minval=1, step=10,     group="Sizing")
 i_riskMargin = input.float (30.0,  "Marja rotunjire $ (max +)",   minval=0, step=5,      group="Sizing")
-i_contract   = input.string("M6E", "Contract Tradovate",          options=["6E ($12.50/pip)", "M6E ($1.25/pip)"], group="Sizing")
+i_contract   = input.string("M6E ($1.25/pip)", "Contract Tradovate", options=["6E ($12.50/pip)", "M6E ($1.25/pip)"], group="Sizing")
 i_qty        = input.int   (1,     "Contracte fixe (AUTO = off)", minval=1,               group="Sizing")
 
 i_pmtEnabled = input.bool(false,   "Activeaza PMT Alerts",        group="Pick My Trade")
@@ -36,7 +36,7 @@ if timeframe.period != "5"
 //  CONSTANTE
 // ═══════════════════════════════════════════════════════════
 PIP      = 0.0001
-pipValue = str.startswith(i_contract, "6E") ? 12.50 : 1.25
+pipValue = i_contract == "6E ($12.50/pip)" ? 12.50 : 1.25
 
 // ═══════════════════════════════════════════════════════════
 //  TIME – ora Romania
@@ -266,7 +266,7 @@ var table infoT = table.new(position.top_right, 2, 9,
      frame_color=color.gray, frame_width=1)
 
 if barstate.islast
-    _ctype = str.startswith(i_contract, "6E") ? "6E" : "M6E"
+    _ctype = i_contract == "6E ($12.50/pip)" ? "6E" : "M6E"
     table.cell(infoT, 0, 0, "6E Range",         text_color=color.white,  text_size=size.small, bgcolor=color.new(color.teal, 40))
     table.cell(infoT, 1, 0, "5min · Tradovate", text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.teal, 40))
     table.cell(infoT, 0, 1, "Range H",          text_color=color.gray,   text_size=size.small)
