@@ -16,6 +16,7 @@ i_eodMin     = input.int  (0,       "EOD minut (RO)",              minval=0, max
 
 i_autoSize   = input.bool  (true,   "Calcul automat din $ risc",                          group="Sizing")
 i_riskUSD    = input.float (100.0,  "Risc $ per trade",           minval=1,   step=10,   group="Sizing")
+i_riskMargin = input.float (30.0,   "Marja rotunjire $ (max +)",  minval=0,   step=5,    group="Sizing")
 i_pointValue = input.float (1.2,    "Valoare punct EUR/lot",      minval=0.01, step=0.1, group="Sizing")
 i_qty        = input.int   (1,      "Loturi fixe (AUTO = off)",   minval=1,              group="Sizing")
 
@@ -110,7 +111,10 @@ if rangeActive and na(rngH) and phase == 0 and not eod
     t1LTP       := t1BuyStop + _t1Risk * i_tpR
     t1SSL       := t1BuyStop
     t1STP       := t1SellStop - _t1Risk * i_tpR
-    calcQty     := i_autoSize ? math.max(1.0, math.round(i_riskUSD / (_t1Risk * i_pointValue))) : float(i_qty)
+    _exact       = i_riskUSD / (_t1Risk * i_pointValue)
+    _qtyUp       = math.ceil(_exact / 0.01) * 0.01
+    _qtyDown     = math.floor(_exact / 0.01) * 0.01
+    calcQty     := i_autoSize ? math.max(0.01, _qtyUp * _t1Risk * i_pointValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown) : float(i_qty)
     strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="DAX T1 L")
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="DAX T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
