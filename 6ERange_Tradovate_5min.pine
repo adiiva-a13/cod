@@ -9,7 +9,7 @@ strategy("6E Range – Tradovate [5min]", overlay=true,
 // ═══════════════════════════════════════════════════════════
 //  INPUTS
 // ═══════════════════════════════════════════════════════════
-i_offset     = input.float(5.0,   "Offset stop (pips)",           minval=0.5, step=0.5,  group="Strategie")
+i_offset     = input.float(2.0,   "Offset stop (pips)",           minval=0.5, step=0.5,  group="Strategie")
 i_tpR        = input.float(3.0,   "TP Ratio (R)",                 minval=0.5, step=0.5,  group="Strategie")
 i_rangeH     = input.int  (9,     "Ora start range (RO)",         minval=0, maxval=23,   group="Strategie")
 i_rangeMin   = input.int  (0,     "Minut start range (RO)",       minval=0, maxval=55, step=5, group="Strategie")
