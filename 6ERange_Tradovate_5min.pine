@@ -130,6 +130,8 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
     strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
+    label.new(bar_index, t1BuyStop,  "▲ BUY " + str.tostring(t1BuyStop,  "#.#####") + "\nTP " + str.tostring(t1LTP, "#.#####"), color=color.lime,          textcolor=color.black, style=label.style_label_left, size=size.tiny)
+    label.new(bar_index, t1SellStop, "▼ SELL " + str.tostring(t1SellStop, "#.#####") + "\nTP " + str.tostring(t1STP, "#.#####"), color=color.red,           textcolor=color.white, style=label.style_label_left, size=size.tiny)
     phase := 1
 
 // ═══════════════════════════════════════════════════════════
