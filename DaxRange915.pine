@@ -89,16 +89,15 @@ for _i = 0 to strategy.opentrades - 1
         tradeOpen := true
 
 // ═══════════════════════════════════════════════════════════
-//  RANGE CAPTURE + T1 PENDING ORDERS  (bara 9:30 RO)
+//  RANGE CAPTURE + T1 PENDING ORDERS  (bara 9:15 RO)
 // ═══════════════════════════════════════════════════════════
-// `time` = bar open time; bara de 9:15 RO are time cu roH=9, roM=15
-// Bara urmatoare (9:30) are high[1]/low[1] = bara 9:15
-rangeActive     = roH == 9 and roM == 15
-rangeJustClosed = roH == 9 and roM == 30
+// Plasam ordinele la INCHIDEREA barei de 9:15 (= 9:30 deschidere)
+// → ordinele sunt active de la prima bara de 9:30
+rangeActive = roH == 9 and roM == 15
 
-if rangeJustClosed and na(rngH) and phase == 0 and not eod
-    rngH        := high[1]
-    rngL        := low[1]
+if rangeActive and na(rngH) and phase == 0 and not eod
+    rngH        := high
+    rngL        := low
     t1BuyStop   := rngH + i_offset
     t1SellStop  := rngL - i_offset
     _t1Risk      = t1BuyStop - t1SellStop

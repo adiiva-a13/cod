@@ -90,18 +90,18 @@ for _i = 0 to strategy.opentrades - 1
 
 // ═══════════════════════════════════════════════════════════
 //  RANGE CAPTURE – acumuleaza H/L pe 3 bare de 5 min (9:15, 9:20, 9:25)
-//  Ordinele T1 se plaseaza cand se deschide bara de 9:30 RO
+//  Ordinele T1 se plaseaza la INCHIDEREA barei de 9:25 (= 9:30 deschidere)
 // ═══════════════════════════════════════════════════════════
-inRange915      = roH == 9 and (roM == 15 or roM == 20 or roM == 25)
-rangeJustClosed = roH == 9 and roM == 30
+inRange915   = roH == 9 and (roM == 15 or roM == 20 or roM == 25)
+lastRangeBar = roH == 9 and roM == 25   // ultima bara de range
 
-// Acumuleaza H/L in fereastra de range
+// Acumuleaza H/L in fereastra de range (inclusiv bara curenta 9:25)
 if inRange915 and phase == 0 and not eod
     rngH := na(rngH) ? high : math.max(rngH, high)
     rngL := na(rngL) ? low  : math.min(rngL, low)
 
-// Bara 9:30: rangeul e complet, plasam ordinele T1
-if rangeJustClosed and not na(rngH) and phase == 0 and not eod
+// Bara 9:25 (close = 9:30 open): rangeul e complet, plasam ordinele T1
+if lastRangeBar and not na(rngH) and phase == 0 and not eod
     t1BuyStop   := rngH + i_offset
     t1SellStop  := rngL - i_offset
     _t1Risk      = t1BuyStop - t1SellStop
