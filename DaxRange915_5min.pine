@@ -16,7 +16,7 @@ i_eodMin     = input.int  (0,       "EOD minut (RO)",              minval=0, max
 
 i_autoSize   = input.bool  (true,   "Calcul automat din $ risc",                          group="Sizing")
 i_riskUSD    = input.float (100.0,  "Risc $ per trade",           minval=1,   step=10,   group="Sizing")
-i_pointValue = input.float (25.0,   "Valoare punct USD/lot",      minval=0.01, step=0.5, group="Sizing")
+i_pointValue = input.float (1.0,    "Valoare punct USD/lot",      minval=0.01, step=0.1, group="Sizing")
 i_qty        = input.int   (1,      "Loturi fixe (AUTO = off)",   minval=1,              group="Sizing")
 
 i_pmtEnabled = input.bool(false,    "Activeaza PMT Alerts",       group="Pick My Trade")
