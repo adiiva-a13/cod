@@ -123,9 +123,8 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     _exact       = i_riskUSD / (_t1RiskPips * pipValue)
     _qtyUp       = math.max(1.0, math.ceil(_exact))
     _qtyDown     = math.max(1.0, math.floor(_exact))
-    calcQty     := i_autoSize
-        ? (_qtyUp * _t1RiskPips * pipValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown)
-        : float(i_qty)
+    _qtyAuto     = _qtyUp * _t1RiskPips * pipValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown
+    calcQty     := i_autoSize ? _qtyAuto : float(i_qty)
     actualRisk  := calcQty * _t1RiskPips * pipValue
     strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="6E T1 L")
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
