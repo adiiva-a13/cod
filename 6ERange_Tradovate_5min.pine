@@ -231,13 +231,19 @@ if phase == 6 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
 // ═══════════════════════════════════════════════════════════
 //  EOD CLOSE
 // ═══════════════════════════════════════════════════════════
-if eod and (tradeOpen or phase == 1)
+var bool eodFired = false
+if newDay
+    eodFired := false
+
+if eod and not eodFired and (tradeOpen or phase == 1)
     strategy.close_all(comment="EOD")
     strategy.cancel_all()
+    label.new(bar_index, high, "EOD CLOSE", color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-    phase := 9
+    eodFired := true
+    phase    := 9
 
 // ═══════════════════════════════════════════════════════════
 //  VISUALS
