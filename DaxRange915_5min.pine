@@ -11,13 +11,17 @@ strategy("DAX Range 915 (5min)", overlay=true,
 // ═══════════════════════════════════════════════════════════
 i_offset     = input.float(5.0,     "Offset stop (puncte)",      minval=0.5, step=0.5,  group="Strategie")
 i_tpR        = input.float(3.0,     "TP Ratio T1 (R)",            minval=0.5, step=0.5,  group="Strategie")
-i_qty        = input.int  (1,       "Contracte",                   minval=1,              group="Strategie")
 i_eodH       = input.int  (22,      "EOD ora (RO)",                minval=9, maxval=23,   group="Strategie")
 i_eodMin     = input.int  (0,       "EOD minut (RO)",              minval=0, maxval=59,   group="Strategie")
 
+i_autoSize   = input.bool  (true,   "Calcul automat din $ risc",                          group="Sizing")
+i_riskUSD    = input.float (100.0,  "Risc $ per trade",           minval=1,   step=10,   group="Sizing")
+i_pointValue = input.float (25.0,   "Valoare punct USD/lot",      minval=0.01, step=0.5, group="Sizing")
+i_qty        = input.int   (1,      "Loturi fixe (AUTO = off)",   minval=1,              group="Sizing")
+
 i_pmtEnabled = input.bool(false,    "Activeaza PMT Alerts",       group="Pick My Trade")
 i_pmtToken   = input.string("",     "PMT Token",                   group="Pick My Trade")
-i_pmtSymbol  = input.string("DE40!", "Simbol Tradovate",          group="Pick My Trade")
+i_pmtSymbol  = input.string("DE40!", "Simbol",                    group="Pick My Trade")
 
 // ═══════════════════════════════════════════════════════════
 //  TIMEFRAME GUARD
@@ -52,6 +56,7 @@ var int   entryBar   = na
 var float curEntryPx = na
 var float curSL      = na
 var float curTP      = na
+var float calcQty    = 1.0
 
 // T1 stop levels
 var float t1BuyStop  = na
@@ -109,8 +114,9 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     t1LTP       := t1BuyStop + _t1Risk * i_tpR
     t1SSL       := t1BuyStop
     t1STP       := t1SellStop - _t1Risk * i_tpR
-    strategy.entry("T1 Long",  strategy.long,  qty=i_qty, stop=t1BuyStop,  comment="DAX T1 L")
-    strategy.entry("T1 Short", strategy.short, qty=i_qty, stop=t1SellStop, comment="DAX T1 S")
+    calcQty     := i_autoSize ? math.max(1.0, math.round(i_riskUSD / (_t1Risk * i_pointValue))) : float(i_qty)
+    strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="DAX T1 L")
+    strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="DAX T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
     strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
     phase := 1
@@ -153,17 +159,17 @@ if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
 // ═══════════════════════════════════════════════════════════
 if phase == 3 and not tradeOpen and not eod
     if dir == 1  // T1 Long → T2 Short (oglinda: SL = t1SSL, TP = t1STP)
-        strategy.entry("T2 Short", strategy.short, qty=i_qty, comment="DAX T2 S")
+        strategy.entry("T2 Short", strategy.short, qty=calcQty, comment="DAX T2 S")
         strategy.exit("T2S X", "T2 Short", stop=t1SSL, limit=t1STP)
         if i_pmtEnabled and i_pmtToken != ""
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(i_qty) + ',"sl":' + str.tostring(t1SSL) + ',"tp":' + str.tostring(t1STP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(calcQty, "#.##") + ',"sl":' + str.tostring(t1SSL) + ',"tp":' + str.tostring(t1STP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         curSL := t1SSL
         curTP := t1STP
     else if dir == -1  // T1 Short → T2 Long (oglinda: SL = t1LSL, TP = t1LTP)
-        strategy.entry("T2 Long", strategy.long,  qty=i_qty, comment="DAX T2 L")
+        strategy.entry("T2 Long", strategy.long,  qty=calcQty, comment="DAX T2 L")
         strategy.exit("T2L X", "T2 Long",  stop=t1LSL, limit=t1LTP)
         if i_pmtEnabled and i_pmtToken != ""
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(i_qty) + ',"sl":' + str.tostring(t1LSL) + ',"tp":' + str.tostring(t1LTP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(calcQty, "#.##") + ',"sl":' + str.tostring(t1LSL) + ',"tp":' + str.tostring(t1LTP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         curSL := t1LSL
         curTP := t1LTP
     curEntryPx := close
@@ -185,17 +191,17 @@ if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
 // ═══════════════════════════════════════════════════════════
 if phase == 5 and not tradeOpen and not eod
     if dir == 1  // T1 Long, T2 Short → T3 Long (= exact ca T1 Long)
-        strategy.entry("T3 Long", strategy.long,  qty=i_qty, comment="DAX T3 L")
+        strategy.entry("T3 Long", strategy.long,  qty=calcQty, comment="DAX T3 L")
         strategy.exit("T3L X", "T3 Long",  stop=t1LSL, limit=t1LTP)
         if i_pmtEnabled and i_pmtToken != ""
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(i_qty) + ',"sl":' + str.tostring(t1LSL) + ',"tp":' + str.tostring(t1LTP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(calcQty, "#.##") + ',"sl":' + str.tostring(t1LSL) + ',"tp":' + str.tostring(t1LTP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         curSL := t1LSL
         curTP := t1LTP
     else if dir == -1  // T1 Short, T2 Long → T3 Short (= exact ca T1 Short)
-        strategy.entry("T3 Short", strategy.short, qty=i_qty, comment="DAX T3 S")
+        strategy.entry("T3 Short", strategy.short, qty=calcQty, comment="DAX T3 S")
         strategy.exit("T3S X", "T3 Short", stop=t1SSL, limit=t1STP)
         if i_pmtEnabled and i_pmtToken != ""
-            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(i_qty) + ',"sl":' + str.tostring(t1SSL) + ',"tp":' + str.tostring(t1STP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+            alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(calcQty, "#.##") + ',"sl":' + str.tostring(t1SSL) + ',"tp":' + str.tostring(t1STP) + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         curSL := t1SSL
         curTP := t1STP
     curEntryPx := close
@@ -246,7 +252,7 @@ plot(phase >= 2 and phase <= 6 and not na(curTP) ? curTP : na, "TP Activ", color
 // ═══════════════════════════════════════════════════════════
 //  INFO TABLE
 // ═══════════════════════════════════════════════════════════
-var table infoT = table.new(position.top_right, 2, 7,
+var table infoT = table.new(position.top_right, 2, 8,
      bgcolor=color.new(color.black, 70),
      border_color=color.gray, border_width=1,
      frame_color=color.gray, frame_width=1)
@@ -266,8 +272,12 @@ if barstate.islast
     table.cell(infoT, 1, 4, _dl,               text_color=dir == 1 ? color.lime : dir == -1 ? color.red : color.gray, text_size=size.small)
     table.cell(infoT, 0, 5, "Offset / RR",    text_color=color.gray,   text_size=size.small)
     table.cell(infoT, 1, 5, str.tostring(i_offset, "#.#") + " pts  |  1:" + str.tostring(i_tpR, "#.#"), text_color=color.yellow, text_size=size.small)
+    _qtyStr = i_autoSize ? str.tostring(calcQty, "#.##") + " lot(uri)  [auto]" : str.tostring(i_qty) + " lot(uri)  [fix]"
     table.cell(infoT, 0, 6, "Qty",             text_color=color.gray,   text_size=size.small)
-    table.cell(infoT, 1, 6, str.tostring(i_qty) + " contract(e)",       text_color=color.white, text_size=size.small)
+    table.cell(infoT, 1, 6, _qtyStr,           text_color=color.white,  text_size=size.small)
+    _riskStr = i_autoSize ? "$" + str.tostring(i_riskUSD, "#") + " risc / " + str.tostring(i_pointValue, "#.##") + " USD/pt" : "—"
+    table.cell(infoT, 0, 7, "Miza",            text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 7, _riskStr,          text_color=color.yellow, text_size=size.small)
 
 // ═══════════════════════════════════════════════════════════
 //  ALERTS
