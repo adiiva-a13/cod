@@ -139,12 +139,10 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
     strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-    label.new(bar_index, t1BuyStop,  "▲ BUY "  + str.tostring(t1BuyStop,  "#.#####") + "\nTP " + str.tostring(t1LTP, "#.#####"), color=color.lime, textcolor=color.black, style=label.style_label_left, size=size.tiny)
-    label.new(bar_index, t1SellStop, "▼ SELL " + str.tostring(t1SellStop, "#.#####") + "\nTP " + str.tostring(t1STP, "#.#####"), color=color.red,  textcolor=color.white, style=label.style_label_left, size=size.tiny)
     line.delete(lBuyStop)
     line.delete(lSellStop)
-    lBuyStop  := line.new(bar_index, t1BuyStop,  bar_index + 200, t1BuyStop,  color=color.lime,         width=1, style=line.style_dashed, extend=extend.none)
-    lSellStop := line.new(bar_index, t1SellStop, bar_index + 200, t1SellStop, color=color.red,           width=1, style=line.style_dashed, extend=extend.none)
+    lBuyStop  := line.new(bar_index, t1BuyStop,  bar_index + 200, t1BuyStop,  color=color.lime, width=2, style=line.style_solid, extend=extend.none)
+    lSellStop := line.new(bar_index, t1SellStop, bar_index + 200, t1SellStop, color=color.red,  width=2, style=line.style_solid, extend=extend.none)
     if i_debug
         label.new(bar_index, low, "RANGE OK\nH=" + str.tostring(rngH,"#.#####") + "\nL=" + str.tostring(rngL,"#.#####") + "\nRisk=" + str.tostring(_t1RiskPips,"#.#") + "pip\nQty=" + str.tostring(int(calcQty)), color=color.blue, textcolor=color.white, style=label.style_label_up, size=size.tiny)
     phase := 1
@@ -293,13 +291,13 @@ if eod and not eodFired and (tradeOpen or (phase >= 1 and phase <= 6))
 //  VISUALS
 // ═══════════════════════════════════════════════════════════
 bgcolor(inRange                                 ? color.new(color.blue,  88) : na, title="Range Period")
-bgcolor(tradeOpen                               ? color.new(color.green, 88) : na, title="Trade Activ")
+bgcolor(tradeOpen                               ? color.new(color.green, 75) : na, title="Trade Activ")
 
 slHitBar = tradeOpen[1] and not tradeOpen and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
 bgcolor(slHitBar                                ? color.new(color.red,   85) : na, title="SL Hit")
 
-plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 0), 2, plot.style_linebr)
-plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 30), 1, plot.style_linebr)
+plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 30), 1, plot.style_linebr)
 
 // T1 entry lines sunt afisate cu line.new() in blocul lastRangeBar (lBuyStop / lSellStop)
 
