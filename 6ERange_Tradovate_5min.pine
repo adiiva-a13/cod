@@ -215,13 +215,6 @@ if phase == 1
                           style=label.style_label_up, size=size.normal)
                 _t1Labeled := true
 
-// Re-asert exit O SINGURA DATA la tranzitia phase 1→2
-if phase == 2 and phase[1] == 1 and not na(t1LSL) and not na(t1SSL)
-    if dir == 1
-        strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
-    else if dir == -1
-        strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
