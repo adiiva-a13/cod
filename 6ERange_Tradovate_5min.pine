@@ -139,7 +139,7 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
 // ═══════════════════════════════════════════════════════════
 //  PHASE 1: detecteaza umplere T1
 // ═══════════════════════════════════════════════════════════
-if phase == 1 and tradeOpen
+if phase == 1
     for _i = 0 to strategy.opentrades - 1
         _id = strategy.opentrades.entry_id(_i)
         if _id == "T1 Long"
