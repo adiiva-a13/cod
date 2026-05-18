@@ -69,9 +69,6 @@ var float curTP      = na
 var float calcQty    = 1.0
 var float actualRisk = na
 
-var line  lBuyStop   = na
-var line  lSellStop  = na
-
 var float t1BuyStop  = na
 var float t1SellStop = na
 var float t1LSL      = na
@@ -95,10 +92,6 @@ if newDay
     t1LTP       := na
     t1SSL       := na
     t1STP       := na
-    line.delete(lBuyStop)
-    line.delete(lSellStop)
-    lBuyStop  := na
-    lSellStop := na
     strategy.cancel_all()
 
 // ═══════════════════════════════════════════════════════════
@@ -139,10 +132,6 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
     strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-    line.delete(lBuyStop)
-    line.delete(lSellStop)
-    lBuyStop  := line.new(bar_index, t1BuyStop,  bar_index + 200, t1BuyStop,  color=color.lime, width=2, style=line.style_solid, extend=extend.none)
-    lSellStop := line.new(bar_index, t1SellStop, bar_index + 200, t1SellStop, color=color.red,  width=2, style=line.style_solid, extend=extend.none)
     if i_debug
         label.new(bar_index, low, "RANGE OK\nH=" + str.tostring(rngH,"#.#####") + "\nL=" + str.tostring(rngL,"#.#####") + "\nRisk=" + str.tostring(_t1RiskPips,"#.#") + "pip\nQty=" + str.tostring(int(calcQty)), color=color.blue, textcolor=color.white, style=label.style_label_up, size=size.tiny)
     phase := 1
@@ -161,8 +150,6 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
-            line.delete(lSellStop)
-            lSellStop  := na
             if i_debug
                 label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
@@ -173,8 +160,6 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
-            line.delete(lBuyStop)
-            lBuyStop   := na
             if i_debug
                 label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
@@ -299,7 +284,10 @@ bgcolor(slHitBar                                ? color.new(color.red,   85) : n
 plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 30), 1, plot.style_linebr)
 plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 30), 1, plot.style_linebr)
 
-// T1 entry lines sunt afisate cu line.new() in blocul lastRangeBar (lBuyStop / lSellStop)
+_showBuy  = phase >= 1 and phase < 9 and not na(t1BuyStop)  and (phase == 1 or dir == 1)
+_showSell = phase >= 1 and phase < 9 and not na(t1SellStop) and (phase == 1 or dir == -1)
+plot(_showBuy  ? t1BuyStop  : na, "T1 Buy Stop",  color.new(color.lime, 0), 2, plot.style_linebr)
+plot(_showSell ? t1SellStop : na, "T1 Sell Stop", color.new(color.red,  0), 2, plot.style_linebr)
 
 plot(phase >= 2 and phase <= 6 and not na(curSL) ? curSL : na, "SL Activ", color.new(color.red,  0), 1, plot.style_linebr)
 plot(phase >= 2 and phase <= 6 and not na(curTP) ? curTP : na, "TP Activ", color.new(color.lime, 0), 1, plot.style_linebr)
