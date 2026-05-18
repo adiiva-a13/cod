@@ -142,8 +142,7 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
         strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
         strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
         strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-        if i_debug
-            label.new(bar_index, low, "RANGE OK\nH=" + str.tostring(rngH,"#.#####") + "\nL=" + str.tostring(rngL,"#.#####") + "\nRisk=" + str.tostring(_t1RiskPips,"#.#") + "pip\nQty=" + str.tostring(int(calcQty)), color=color.blue, textcolor=color.white, style=label.style_label_up, size=size.tiny)
+        label.new(bar_index, low, "T1↑ " + str.tostring(t1BuyStop,"#.#####") + "\nT1↓ " + str.tostring(t1SellStop,"#.#####") + "\n" + str.tostring(_t1RiskPips,"#.#") + "pip", color=color.new(color.blue, 30), textcolor=color.white, style=label.style_label_up, size=size.tiny)
         phase := 1
 
 // ═══════════════════════════════════════════════════════════
@@ -161,8 +160,6 @@ if phase == 1
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
-            if i_debug
-                label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
             dir        := -1
             curEntryPx := strategy.opentrades.entry_price(_i)
@@ -171,8 +168,16 @@ if phase == 1
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
-            if i_debug
-                label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
+    // Fallback: daca opentrades loop nu a detectat, verifica position_size
+    if phase == 1 and strategy.position_size != 0
+        _d         = strategy.position_size > 0 ? 1 : -1
+        dir        := _d
+        curEntryPx := strategy.position_avg_price
+        curSL      := _d == 1 ? t1LSL : t1SSL
+        curTP      := _d == 1 ? t1LTP : t1STP
+        entryBar   := bar_index
+        strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
+        phase      := 2
     // Caz spike: T1 a umplut SI inchis (TP) pe acelasi bar → nu apare in opentrades
     if phase == 1 and strategy.closedtrades > 0
         _ct  = strategy.closedtrades
@@ -186,8 +191,6 @@ if phase == 1
             curTP      := _d == 1 ? t1LTP : t1STP
             strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
             phase      := 2
-            if i_debug
-                label.new(bar_index, close, "P1→2\nT1 SPIKE fill+close\n" + _cId, color=color.orange, textcolor=color.black, style=label.style_label_down, size=size.tiny)
 
 // Label T1 entry — creat DUPA bucla, la tranzitia phase 1→2
 if phase == 2 and phase[1] == 1 and dir != 0 and not na(curEntryPx)
