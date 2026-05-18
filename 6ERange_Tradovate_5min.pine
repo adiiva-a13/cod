@@ -148,27 +148,34 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
 // ═══════════════════════════════════════════════════════════
 //  PHASE 1: detecteaza umplere T1
 // ═══════════════════════════════════════════════════════════
+var bool _t1Labeled = false
+if newDay
+    _t1Labeled := false
+
+_t1MidPt = not na(t1BuyStop) and not na(t1SellStop) ? (t1BuyStop + t1SellStop) / 2.0 : na
+
 if phase == 1
-    // Caz normal: T1 este deschis in opentrades
+    // Caz normal: T1 este deschis in opentrades (detectie prin entry_id)
     for _i = 0 to strategy.opentrades - 1
         _id = strategy.opentrades.entry_id(_i)
-        if _id == "T1 Long"
-            dir        := 1
+        if _id == "T1 Long" or _id == "T1 Short"
+            _d         = _id == "T1 Long" ? 1 : -1
+            dir        := _d
             curEntryPx := strategy.opentrades.entry_price(_i)
-            curSL      := t1LSL
-            curTP      := t1LTP
+            curSL      := _d == 1 ? t1LSL : t1SSL
+            curTP      := _d == 1 ? t1LTP : t1STP
             entryBar   := bar_index
             phase      := 2
-            strategy.cancel("T1 Short")
-        if _id == "T1 Short"
-            dir        := -1
-            curEntryPx := strategy.opentrades.entry_price(_i)
-            curSL      := t1SSL
-            curTP      := t1STP
-            entryBar   := bar_index
-            phase      := 2
-            strategy.cancel("T1 Long")
-    // Fallback: daca opentrades loop nu a detectat, verifica position_size
+            strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
+            if not _t1Labeled and not na(_t1MidPt)
+                label.new(bar_index,
+                          _d == 1 ? t1BuyStop : _t1MidPt,
+                          (_d == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
+                          color=_d == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
+                          textcolor=_d == 1 ? color.black : color.white,
+                          style=label.style_label_up, size=size.normal)
+                _t1Labeled := true
+    // Fallback: detectie prin position_size (daca entry_id nu a functionat)
     if phase == 1 and strategy.position_size != 0
         _d         = strategy.position_size > 0 ? 1 : -1
         dir        := _d
@@ -178,7 +185,15 @@ if phase == 1
         entryBar   := bar_index
         strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
         phase      := 2
-    // Caz spike: T1 a umplut SI inchis (TP) pe acelasi bar → nu apare in opentrades
+        if not _t1Labeled and not na(_t1MidPt)
+            label.new(bar_index,
+                      _d == 1 ? t1BuyStop : _t1MidPt,
+                      (_d == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
+                      color=_d == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
+                      textcolor=_d == 1 ? color.black : color.white,
+                      style=label.style_label_up, size=size.normal)
+            _t1Labeled := true
+    // Caz spike: T1 umplut SI inchis pe acelasi bar (TP rapid)
     if phase == 1 and strategy.closedtrades > 0
         _ct  = strategy.closedtrades
         _cId = strategy.closedtrades.entry_id(_ct - 1)
@@ -191,17 +206,14 @@ if phase == 1
             curTP      := _d == 1 ? t1LTP : t1STP
             strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
             phase      := 2
-
-// Label T1 entry — creat DUPA bucla, la tranzitia phase 1→2
-if phase == 2 and phase[1] == 1 and dir != 0 and not na(curEntryPx)
-    _midPt = (t1BuyStop + t1SellStop) / 2.0
-    label.new(bar_index,
-              dir == 1 ? t1BuyStop : _midPt,
-              (dir == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
-              color     = dir == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
-              textcolor = dir == 1 ? color.black : color.white,
-              style     = label.style_label_up,
-              size      = size.normal)
+            if not _t1Labeled and not na(_t1MidPt)
+                label.new(bar_index,
+                          _d == 1 ? t1BuyStop : _t1MidPt,
+                          (_d == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
+                          color=_d == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
+                          textcolor=_d == 1 ? color.black : color.white,
+                          style=label.style_label_up, size=size.normal)
+                _t1Labeled := true
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
