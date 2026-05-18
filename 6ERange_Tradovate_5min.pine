@@ -167,6 +167,11 @@ if phase == 1
             entryBar   := bar_index
             phase      := 2
             strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
+            // Re-asert exit explicit — cu process_orders_on_close exit-ul poate fi pierdut
+            if _d == 1
+                strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
+            else
+                strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
             if not _t1Labeled and not na(_t1MidPt)
                 label.new(bar_index,
                           _d == 1 ? t1BuyStop : _t1MidPt,
@@ -184,6 +189,10 @@ if phase == 1
         curTP      := _d == 1 ? t1LTP : t1STP
         entryBar   := bar_index
         strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
+        if _d == 1
+            strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
+        else
+            strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
         phase      := 2
         if not _t1Labeled and not na(_t1MidPt)
             label.new(bar_index,
@@ -216,8 +225,15 @@ if phase == 1
                 _t1Labeled := true
 
 // ═══════════════════════════════════════════════════════════
-//  PHASE 2: T1 activ → detecteaza inchidere
+//  PHASE 2: mentine exit T1 activ + detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
+// Re-asert exit in FIECARE bar cat timp T1 e deschis (fix: exit pierdut cu POC=true)
+if phase == 2 and tradeOpen
+    if dir == 1
+        strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
+    else if dir == -1
+        strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
+
 if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
     // Compara pretul de exit cu midpoint-ul range-ului — mai robust decat profit()
     // T1 Long SL e sub midpoint, TP e deasupra → exit sub midpoint = pierdere
