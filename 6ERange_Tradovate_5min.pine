@@ -150,6 +150,7 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
+            label.new(bar_index, low, "▲ T1 L\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.lime, 20), textcolor=color.black, style=label.style_label_up, size=size.tiny)
             if i_debug
                 label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
@@ -160,6 +161,7 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
+            label.new(bar_index, high, "▼ T1 S\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_down, size=size.tiny)
             if i_debug
                 label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
@@ -185,6 +187,7 @@ if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
 //  PHASE 3: T1 SL → T2 in directie opusa
 // ═══════════════════════════════════════════════════════════
 if phase == 3 and not tradeOpen and not eod
+    label.new(bar_index, dir == 1 ? high : low, dir == 1 ? "▼ T2 S\n@ mkt" : "▲ T2 L\n@ mkt", color=dir == 1 ? color.new(color.red, 20) : color.new(color.lime, 20), textcolor=dir == 1 ? color.white : color.black, style=dir == 1 ? label.style_label_down : label.style_label_up, size=size.tiny)
     if i_debug
         label.new(bar_index, high, "P3: T2 placed\ndir=" + str.tostring(dir) + " qty=" + str.tostring(int(calcQty)), color=color.yellow, textcolor=color.black, style=label.style_label_down, size=size.tiny)
     if dir == 1
@@ -227,6 +230,7 @@ if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
 //  PHASE 5: T2 SL → T3 in directie opusa (= ca T1)
 // ═══════════════════════════════════════════════════════════
 if phase == 5 and not tradeOpen and not eod
+    label.new(bar_index, dir == 1 ? low : high, dir == 1 ? "▲ T3 L\n@ mkt" : "▼ T3 S\n@ mkt", color=dir == 1 ? color.new(color.lime, 20) : color.new(color.red, 20), textcolor=dir == 1 ? color.black : color.white, style=dir == 1 ? label.style_label_up : label.style_label_down, size=size.tiny)
     if dir == 1
         strategy.entry("T3 Long", strategy.long,  qty=calcQty, comment="6E T3 L")
         strategy.exit("T3L X", "T3 Long",  stop=t1LSL, limit=t1LTP)
@@ -276,7 +280,7 @@ if eod and not eodFired and (tradeOpen or (phase >= 1 and phase <= 6))
 //  VISUALS
 // ═══════════════════════════════════════════════════════════
 bgcolor(inRange                                 ? color.new(color.blue,  88) : na, title="Range Period")
-bgcolor(tradeOpen                               ? color.new(color.green, 75) : na, title="Trade Activ")
+bgcolor(tradeOpen                               ? color.new(color.green, 55) : na, title="Trade Activ")
 
 slHitBar = tradeOpen[1] and not tradeOpen and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
 bgcolor(slHitBar                                ? color.new(color.red,   85) : na, title="SL Hit")
