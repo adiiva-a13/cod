@@ -150,7 +150,7 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
-            label.new(bar_index, curEntryPx, "▲ T1 L\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.lime, 20), textcolor=color.black, style=label.style_label_down, size=size.small)
+            label.new(bar_index, t1BuyStop, "▲ T1 L\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.lime, 20), textcolor=color.black, style=label.style_label_up, size=size.small)
             if i_debug
                 label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
@@ -161,7 +161,7 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
-            label.new(bar_index, curEntryPx, "▼ T1 S\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
+            label.new(bar_index, t1SellStop, "▼ T1 S\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
             if i_debug
                 label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
