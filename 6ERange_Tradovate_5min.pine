@@ -116,11 +116,7 @@ if inRange and phase == 0 and not eod
 if lastRangeBar and not na(rngH) and phase == 0 and not eod
     _rangePips = (rngH - rngL) / PIP
     if i_maxRange > 0 and _rangePips > i_maxRange
-        // Range prea larg (spike in fereastra) — zi sarita
-        label.new(bar_index, high,
-                  "⚠ RANGE LARG\n" + str.tostring(_rangePips, "#.#") + " pip > " + str.tostring(i_maxRange, "#.#") + " pip\nzi sarita",
-                  color=color.new(color.gray, 20), textcolor=color.white,
-                  style=label.style_label_down, size=size.small)
+        label.new(bar_index, high, "⚠ RANGE LARG\n" + str.tostring(_rangePips, "#.#") + " pip\nzi sarita", color=color.new(color.gray, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
         phase := 9
     else
         _offsetPx    = i_offset * PIP
@@ -142,78 +138,38 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
         strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
         strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
         strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-        label.new(bar_index, low, "T1↑ " + str.tostring(t1BuyStop,"#.#####") + "\nT1↓ " + str.tostring(t1SellStop,"#.#####") + "\n" + str.tostring(_t1RiskPips,"#.#") + "pip", color=color.new(color.blue, 30), textcolor=color.white, style=label.style_label_up, size=size.tiny)
+        if i_debug
+            label.new(bar_index, low, "RANGE OK\nH=" + str.tostring(rngH,"#.#####") + "\nL=" + str.tostring(rngL,"#.#####") + "\nRisk=" + str.tostring(_t1RiskPips,"#.#") + "pip\nQty=" + str.tostring(int(calcQty)), color=color.blue, textcolor=color.white, style=label.style_label_up, size=size.tiny)
         phase := 1
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 1: detecteaza umplere T1
 // ═══════════════════════════════════════════════════════════
-var bool _t1Labeled = false
-if newDay
-    _t1Labeled := false
-
-_t1MidPt = not na(t1BuyStop) and not na(t1SellStop) ? (t1BuyStop + t1SellStop) / 2.0 : na
-
-if phase == 1
-    // Caz normal: T1 este deschis in opentrades (detectie prin entry_id)
+if phase == 1 and tradeOpen
     for _i = 0 to strategy.opentrades - 1
         _id = strategy.opentrades.entry_id(_i)
-        if _id == "T1 Long" or _id == "T1 Short"
-            _d         = _id == "T1 Long" ? 1 : -1
-            dir        := _d
+        if _id == "T1 Long"
+            dir        := 1
             curEntryPx := strategy.opentrades.entry_price(_i)
-            curSL      := _d == 1 ? t1LSL : t1SSL
-            curTP      := _d == 1 ? t1LTP : t1STP
+            curSL      := t1LSL
+            curTP      := t1LTP
             entryBar   := bar_index
             phase      := 2
-            strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
-            if not _t1Labeled and not na(_t1MidPt)
-                label.new(bar_index,
-                          _d == 1 ? t1BuyStop : _t1MidPt,
-                          (_d == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
-                          color=_d == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
-                          textcolor=_d == 1 ? color.black : color.white,
-                          style=label.style_label_up, size=size.normal)
-                _t1Labeled := true
-    // Fallback: detectie prin position_size (daca entry_id nu a functionat)
-    if phase == 1 and strategy.position_size != 0
-        _d         = strategy.position_size > 0 ? 1 : -1
-        dir        := _d
-        curEntryPx := strategy.position_avg_price
-        curSL      := _d == 1 ? t1LSL : t1SSL
-        curTP      := _d == 1 ? t1LTP : t1STP
-        entryBar   := bar_index
-        strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
-        phase      := 2
-        if not _t1Labeled and not na(_t1MidPt)
-            label.new(bar_index,
-                      _d == 1 ? t1BuyStop : _t1MidPt,
-                      (_d == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
-                      color=_d == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
-                      textcolor=_d == 1 ? color.black : color.white,
-                      style=label.style_label_up, size=size.normal)
-            _t1Labeled := true
-    // Caz spike: T1 umplut SI inchis pe acelasi bar (TP rapid)
-    if phase == 1 and strategy.closedtrades > 0
-        _ct  = strategy.closedtrades
-        _cId = strategy.closedtrades.entry_id(_ct - 1)
-        if (_cId == "T1 Long" or _cId == "T1 Short") and strategy.closedtrades.exit_bar_index(_ct - 1) >= bar_index - 1
-            _d         = _cId == "T1 Long" ? 1 : -1
-            dir        := _d
-            curEntryPx := strategy.closedtrades.entry_price(_ct - 1)
-            entryBar   := strategy.closedtrades.exit_bar_index(_ct - 1)
-            curSL      := _d == 1 ? t1LSL : t1SSL
-            curTP      := _d == 1 ? t1LTP : t1STP
-            strategy.cancel(_d == 1 ? "T1 Short" : "T1 Long")
+            strategy.cancel("T1 Short")
+            label.new(bar_index, curEntryPx, "▲ T1 L\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.lime, 20), textcolor=color.black, style=label.style_label_down, size=size.small)
+            if i_debug
+                label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+        if _id == "T1 Short"
+            dir        := -1
+            curEntryPx := strategy.opentrades.entry_price(_i)
+            curSL      := t1SSL
+            curTP      := t1STP
+            entryBar   := bar_index
             phase      := 2
-            if not _t1Labeled and not na(_t1MidPt)
-                label.new(bar_index,
-                          _d == 1 ? t1BuyStop : _t1MidPt,
-                          (_d == 1 ? "▲ T1 L\n" : "▼ T1 S\n") + str.tostring(curEntryPx, "#.#####"),
-                          color=_d == 1 ? color.new(color.lime, 10) : color.new(color.red, 10),
-                          textcolor=_d == 1 ? color.black : color.white,
-                          style=label.style_label_up, size=size.normal)
-                _t1Labeled := true
+            strategy.cancel("T1 Long")
+            label.new(bar_index, curEntryPx, "▼ T1 S\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
+            if i_debug
+                label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
@@ -342,9 +298,6 @@ _showBuy  = phase >= 1 and phase < 9 and not na(t1BuyStop)  and (phase == 1 or d
 _showSell = phase >= 1 and phase < 9 and not na(t1SellStop) and (phase == 1 or dir == -1)
 plot(_showBuy  ? t1BuyStop  : na, "T1 Buy Stop",  color.new(color.lime, 0), 2, plot.style_linebr)
 plot(_showSell ? t1SellStop : na, "T1 Sell Stop", color.new(color.red,  0), 2, plot.style_linebr)
-
-plotshape(phase == 2 and phase[1] == 1 and dir == 1,  "T1 Long  ▲", shape.arrowup,   location.belowbar, color.lime,  size=size.small)
-plotshape(phase == 2 and phase[1] == 1 and dir == -1, "T1 Short ▼", shape.arrowdown, location.abovebar, color.red,   size=size.small)
 
 plot(phase >= 2 and phase <= 6 and not na(curSL) ? curSL : na, "SL Activ", color.new(color.red,  0), 1, plot.style_linebr)
 plot(phase >= 2 and phase <= 6 and not na(curTP) ? curTP : na, "TP Activ", color.new(color.lime, 0), 1, plot.style_linebr)
