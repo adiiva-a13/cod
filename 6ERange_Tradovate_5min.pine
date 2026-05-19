@@ -156,7 +156,6 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
-            label.new(bar_index, curEntryPx, "▲ T1 L\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.lime, 20), textcolor=color.black, style=label.style_label_down, size=size.small)
             if i_debug
                 label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
@@ -167,7 +166,6 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
-            label.new(bar_index, curEntryPx, "▼ T1 S\n" + str.tostring(curEntryPx,"#.#####"), color=color.new(color.red, 20), textcolor=color.white, style=label.style_label_up, size=size.small)
             if i_debug
                 label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
@@ -175,15 +173,9 @@ if phase == 1 and tradeOpen
 //  PHASE 2: T1 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    // Compara pretul de exit cu midpoint-ul range-ului — mai robust decat profit()
-    // T1 Long SL e sub midpoint, TP e deasupra → exit sub midpoint = pierdere
-    // T1 Short SL e deasupra midpoint, TP e sub → exit deasupra midpoint = pierdere
-    _ct      = strategy.closedtrades
-    _exitPx  = _ct > 0 ? strategy.closedtrades.exit_price(_ct - 1) : na
-    _midPt   = (t1BuyStop + t1SellStop) / 2.0
-    wasLoss  = not na(_exitPx) and (dir == 1 ? _exitPx < _midPt : _exitPx > _midPt)
+    wasLoss  = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_debug
-        label.new(bar_index, high, "P2 T1 closed\nwasLoss=" + str.tostring(wasLoss) + "\nexitPx=" + str.tostring(_exitPx,"#.#####") + "\nmid=" + str.tostring(_midPt,"#.#####"), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+        label.new(bar_index, high, "P2 T1 closed\nwasLoss=" + str.tostring(wasLoss), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
@@ -218,15 +210,9 @@ if phase == 3 and not tradeOpen and not eod
 //  PHASE 4: T2 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    // T2 e in directie OPUSA lui T1 → formula wasLoss e inversata
-    // T2 Short (dir=1): SL la t1BuyStop (deasupra mid) → exit deasupra = pierdere
-    // T2 Long  (dir=-1): SL la t1SellStop (sub mid)   → exit sub mid = pierdere
-    _ct      = strategy.closedtrades
-    _exitPx  = _ct > 0 ? strategy.closedtrades.exit_price(_ct - 1) : na
-    _midPt   = (t1BuyStop + t1SellStop) / 2.0
-    wasLoss  = not na(_exitPx) and (dir == 1 ? _exitPx > _midPt : _exitPx < _midPt)
+    wasLoss  = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_debug
-        label.new(bar_index, high, "P4 T2 closed\nwasLoss=" + str.tostring(wasLoss) + "\nexitPx=" + str.tostring(_exitPx,"#.#####"), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+        label.new(bar_index, high, "P4 T2 closed\nwasLoss=" + str.tostring(wasLoss), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
@@ -271,7 +257,7 @@ var bool eodFired = false
 if newDay
     eodFired := false
 
-if eod and not eodFired and (tradeOpen or (phase >= 1 and phase <= 6))
+if eod and not eodFired and (tradeOpen or phase == 1)
     strategy.close_all(comment="EOD")
     strategy.cancel_all()
     _eodTxt = tradeOpen ? "EOD CLOSE\n(pozitie inchisa\n+ alerta Tradovate)" : "EOD CANCEL\n(ordine anulate)"
