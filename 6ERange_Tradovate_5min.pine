@@ -161,7 +161,8 @@ if phase == 1 and tradeOpen
 //  PHASE 2: T1 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+    _ep     = strategy.closedtrades > 0 ? strategy.closedtrades.exit_price(strategy.closedtrades - 1) : na
+    wasLoss = not na(_ep) and (dir == 1 ? _ep <= t1LSL : _ep >= t1SSL)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
@@ -193,7 +194,8 @@ if phase == 3 and not tradeOpen and not eod
 //  PHASE 4: T2 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+    _ep     = strategy.closedtrades > 0 ? strategy.closedtrades.exit_price(strategy.closedtrades - 1) : na
+    wasLoss = not na(_ep) and (dir == 1 ? _ep >= t1SSL : _ep <= t1LSL)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
@@ -257,8 +259,8 @@ slHitBar = tradeOpen[1] and not tradeOpen and strategy.closedtrades > 0 and stra
 bgcolor(slHitBar                                ? color.new(color.red,   85) : na, title="SL Hit")
 
 // Range lines
-plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 0), 2, plot.style_linebr)
-plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(phase >= 1 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(phase >= 1 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 0), 2, plot.style_linebr)
 
 // T1 pending entry levels
 plot(phase == 1 and not na(t1BuyStop)  ? t1BuyStop  : na, "T1 Buy Stop",  color.new(color.lime, 0), 1, plot.style_linebr)
