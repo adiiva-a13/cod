@@ -9,25 +9,23 @@ strategy("6E Range – Tradovate [5min]", overlay=true,
 // ═══════════════════════════════════════════════════════════
 //  INPUTS
 // ═══════════════════════════════════════════════════════════
-i_offset     = input.float(2.0,   "Offset stop (pips)",           minval=0.5, step=0.5,  group="Strategie")
-i_tpR        = input.float(3.0,   "TP Ratio (R)",                 minval=0.5, step=0.5,  group="Strategie")
-i_maxRange   = input.float(0.0,   "Max range (pips, 0=off)",      minval=0,   step=1.0,  group="Strategie")
-i_rangeH     = input.int  (9,     "Ora start range (RO)",         minval=0, maxval=23,   group="Strategie")
-i_rangeMin   = input.int  (0,     "Minut start range (RO)",       minval=0, maxval=55, step=5, group="Strategie")
-i_eodH       = input.int  (22,    "EOD ora (RO)",                 minval=9, maxval=23,   group="Strategie")
-i_eodMin     = input.int  (0,     "EOD minut (RO)",               minval=0, maxval=59,   group="Strategie")
+i_offset     = input.float(2.0,     "Offset stop (pips)",          minval=0.5, step=0.5,  group="Strategie")
+i_tpR        = input.float(3.0,     "TP Ratio T1 (R)",             minval=0.5, step=0.5,  group="Strategie")
+i_maxRange   = input.float(0.0,     "Max range (pips, 0=off)",     minval=0,   step=1.0,  group="Strategie")
+i_rangeH     = input.int  (9,       "Ora start range (RO)",        minval=0, maxval=23,   group="Strategie")
+i_rangeMin   = input.int  (0,       "Minut start range (RO)",      minval=0, maxval=55, step=5, group="Strategie")
+i_eodH       = input.int  (22,      "EOD ora (RO)",                minval=9, maxval=23,   group="Strategie")
+i_eodMin     = input.int  (0,       "EOD minut (RO)",              minval=0, maxval=59,   group="Strategie")
 
-i_autoSize   = input.bool  (true,  "Calcul automat din $ risc",                          group="Sizing")
-i_riskUSD    = input.float (100.0, "Risc $ per trade",            minval=1, step=10,     group="Sizing")
-i_riskMargin = input.float (30.0,  "Marja rotunjire $ (max +)",   minval=0, step=5,      group="Sizing")
+i_autoSize   = input.bool  (true,   "Calcul automat din $ risc",                          group="Sizing")
+i_riskUSD    = input.float (100.0,  "Risc $ per trade",            minval=1,   step=10,   group="Sizing")
+i_riskMargin = input.float (30.0,   "Marja rotunjire $ (max +)",   minval=0,   step=5,    group="Sizing")
 i_contract   = input.string("M6E ($1.25/pip)", "Contract Tradovate", options=["6E ($12.50/pip)", "M6E ($1.25/pip)"], group="Sizing")
-i_qty        = input.int   (1,     "Contracte fixe (AUTO = off)", minval=1,               group="Sizing")
+i_qty        = input.int   (1,      "Contracte fixe (AUTO = off)", minval=1,               group="Sizing")
 
-i_pmtEnabled = input.bool(false,   "Activeaza PMT Alerts",        group="Pick My Trade")
-i_pmtToken   = input.string("",    "PMT Token",                   group="Pick My Trade")
-i_pmtSymbol  = input.string("M6E", "Simbol Tradovate",            group="Pick My Trade")
-
-i_debug      = input.bool(false,   "Debug Labels (faze)",         group="Debug")
+i_pmtEnabled = input.bool(false,    "Activeaza PMT Alerts",        group="Pick My Trade")
+i_pmtToken   = input.string("",     "PMT Token",                   group="Pick My Trade")
+i_pmtSymbol  = input.string("M6E",  "Simbol Tradovate",            group="Pick My Trade")
 
 // ═══════════════════════════════════════════════════════════
 //  TIMEFRAME GUARD
@@ -59,17 +57,21 @@ lastRangeBar = roMins == rangeMins + 10
 // ═══════════════════════════════════════════════════════════
 //  SESSION STATE
 // ═══════════════════════════════════════════════════════════
+// phase: 0=astept range, 1=T1 pending, 2=T1 activ,
+//        3=T1 SL→T2,    4=T2 activ,   5=T2 SL→T3,
+//        6=T3 activ,    9=done
+
 var int   phase      = 0
 var float rngH       = na
 var float rngL       = na
-var int   dir        = 0
+var int   dir        = 0      // 1=long, -1=short
 var int   entryBar   = na
 var float curEntryPx = na
 var float curSL      = na
 var float curTP      = na
 var float calcQty    = 1.0
-var float actualRisk = na
 
+// T1 stop levels
 var float t1BuyStop  = na
 var float t1SellStop = na
 var float t1LSL      = na
@@ -86,7 +88,6 @@ if newDay
     curEntryPx  := na
     curSL       := na
     curTP       := na
-    actualRisk  := na
     t1BuyStop   := na
     t1SellStop  := na
     t1LSL       := na
@@ -107,39 +108,35 @@ for _i = 0 to strategy.opentrades - 1
 
 // ═══════════════════════════════════════════════════════════
 //  RANGE CAPTURE – 3 bare de 5 min
+//  Ordinele T1 se plaseaza la inchiderea ultimei bare de range
 // ═══════════════════════════════════════════════════════════
 if inRange and phase == 0 and not eod
     rngH := na(rngH) ? high : math.max(rngH, high)
     rngL := na(rngL) ? low  : math.min(rngL, low)
 
-// Ultima bara de range: rangeul e complet, plasam ordinele T1
 if lastRangeBar and not na(rngH) and phase == 0 and not eod
     _rangePips = (rngH - rngL) / PIP
     if i_maxRange > 0 and _rangePips > i_maxRange
         label.new(bar_index, high, "⚠ RANGE LARG\n" + str.tostring(_rangePips, "#.#") + " pip\nzi sarita", color=color.new(color.gray, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
         phase := 9
     else
-        _offsetPx    = i_offset * PIP
-        t1BuyStop   := rngH + _offsetPx
-        t1SellStop  := rngL - _offsetPx
-        _t1Risk      = t1BuyStop - t1SellStop
-        _t1RiskPips  = _t1Risk / PIP
-        t1LSL       := t1SellStop
-        t1LTP       := t1BuyStop + _t1Risk * i_tpR
-        t1SSL       := t1BuyStop
-        t1STP       := t1SellStop - _t1Risk * i_tpR
-        _exact       = i_riskUSD / (_t1RiskPips * pipValue)
-        _qtyUp       = math.max(1.0, math.ceil(_exact))
-        _qtyDown     = math.max(1.0, math.floor(_exact))
-        _qtyAuto     = _qtyUp * _t1RiskPips * pipValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown
-        calcQty     := i_autoSize ? _qtyAuto : float(i_qty)
-        actualRisk  := calcQty * _t1RiskPips * pipValue
+        _offsetPx   = i_offset * PIP
+        t1BuyStop  := rngH + _offsetPx
+        t1SellStop := rngL - _offsetPx
+        _t1Risk     = t1BuyStop - t1SellStop
+        _t1RiskPips = _t1Risk / PIP
+        t1LSL      := t1SellStop
+        t1LTP      := t1BuyStop + _t1Risk * i_tpR
+        t1SSL      := t1BuyStop
+        t1STP      := t1SellStop - _t1Risk * i_tpR
+        _exact      = i_riskUSD / (_t1RiskPips * pipValue)
+        _qtyUp      = math.max(1.0, math.ceil(_exact))
+        _qtyDown    = math.max(1.0, math.floor(_exact))
+        calcQty    := i_autoSize ? (_qtyUp * _t1RiskPips * pipValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown) : float(i_qty)
         strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="6E T1 L")
         strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
         strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
         strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-        if i_debug
-            label.new(bar_index, low, "RANGE OK\nH=" + str.tostring(rngH,"#.#####") + "\nL=" + str.tostring(rngL,"#.#####") + "\nRisk=" + str.tostring(_t1RiskPips,"#.#") + "pip\nQty=" + str.tostring(int(calcQty)), color=color.blue, textcolor=color.white, style=label.style_label_up, size=size.tiny)
         phase := 1
 
 // ═══════════════════════════════════════════════════════════
@@ -156,8 +153,6 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
-            if i_debug
-                label.new(bar_index, high, "P1→2\nT1 LONG fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_down, size=size.tiny)
         if _id == "T1 Short"
             dir        := -1
             curEntryPx := strategy.opentrades.entry_price(_i)
@@ -166,28 +161,21 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
-            if i_debug
-                label.new(bar_index, low, "P1→2\nT1 SHORT fill\n@ " + str.tostring(curEntryPx,"#.#####"), color=color.teal, textcolor=color.white, style=label.style_label_up, size=size.tiny)
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    wasLoss  = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
-    if i_debug
-        label.new(bar_index, high, "P2 T1 closed\nwasLoss=" + str.tostring(wasLoss), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
     phase      := wasLoss ? 3 : 9
 
 // ═══════════════════════════════════════════════════════════
-//  PHASE 3: T1 SL → T2 in directie opusa
+//  PHASE 3: T1 SL hit → plaseaza T2 in DIRECTIE OPUSA T1
 // ═══════════════════════════════════════════════════════════
 if phase == 3 and not tradeOpen and not eod
-    label.new(bar_index, close, dir == 1 ? "▼ T2 S\n@ mkt" : "▲ T2 L\n@ mkt", color=dir == 1 ? color.new(color.red, 20) : color.new(color.lime, 20), textcolor=dir == 1 ? color.white : color.black, style=dir == 1 ? label.style_label_up : label.style_label_down, size=size.small)
-    if i_debug
-        label.new(bar_index, high, "P3: T2 placed\ndir=" + str.tostring(dir) + " qty=" + str.tostring(int(calcQty)), color=color.yellow, textcolor=color.black, style=label.style_label_down, size=size.tiny)
     if dir == 1
         strategy.entry("T2 Short", strategy.short, qty=calcQty, comment="6E T2 S")
         strategy.exit("T2S X", "T2 Short", stop=t1SSL, limit=t1STP)
@@ -210,19 +198,16 @@ if phase == 3 and not tradeOpen and not eod
 //  PHASE 4: T2 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    wasLoss  = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
-    if i_debug
-        label.new(bar_index, high, "P4 T2 closed\nwasLoss=" + str.tostring(wasLoss), color=wasLoss ? color.orange : color.purple, textcolor=color.white, style=label.style_label_down, size=size.tiny)
+    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
     phase      := wasLoss ? 5 : 9
 
 // ═══════════════════════════════════════════════════════════
-//  PHASE 5: T2 SL → T3 in directie opusa (= ca T1)
+//  PHASE 5: T2 SL hit → plaseaza T3 in DIRECTIE OPUSA T2 (= ca T1)
 // ═══════════════════════════════════════════════════════════
 if phase == 5 and not tradeOpen and not eod
-    label.new(bar_index, close, dir == 1 ? "▲ T3 L\n@ mkt" : "▼ T3 S\n@ mkt", color=dir == 1 ? color.new(color.lime, 20) : color.new(color.red, 20), textcolor=dir == 1 ? color.black : color.white, style=dir == 1 ? label.style_label_down : label.style_label_up, size=size.small)
     if dir == 1
         strategy.entry("T3 Long", strategy.long,  qty=calcQty, comment="6E T3 L")
         strategy.exit("T3L X", "T3 Long",  stop=t1LSL, limit=t1LTP)
@@ -242,7 +227,7 @@ if phase == 5 and not tradeOpen and not eod
     phase      := 6
 
 // ═══════════════════════════════════════════════════════════
-//  PHASE 6: T3 activ → done
+//  PHASE 6: T3 activ → sesiune done dupa inchidere
 // ═══════════════════════════════════════════════════════════
 if phase == 6 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
     if i_pmtEnabled and i_pmtToken != ""
@@ -260,8 +245,7 @@ if newDay
 if eod and not eodFired and (tradeOpen or phase == 1)
     strategy.close_all(comment="EOD")
     strategy.cancel_all()
-    _eodTxt = tradeOpen ? "EOD CLOSE\n(pozitie inchisa\n+ alerta Tradovate)" : "EOD CANCEL\n(ordine anulate)"
-    label.new(bar_index, high, _eodTxt, color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
+    label.new(bar_index, high, "EOD CLOSE", color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
@@ -272,26 +256,27 @@ if eod and not eodFired and (tradeOpen or phase == 1)
 //  VISUALS
 // ═══════════════════════════════════════════════════════════
 bgcolor(inRange                                 ? color.new(color.blue,  88) : na, title="Range Period")
-bgcolor(tradeOpen                               ? color.new(color.green, 55) : na, title="Trade Activ")
+bgcolor(tradeOpen                               ? color.new(color.green, 88) : na, title="Trade Activ")
 
 slHitBar = tradeOpen[1] and not tradeOpen and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
 bgcolor(slHitBar                                ? color.new(color.red,   85) : na, title="SL Hit")
 
-plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 30), 1, plot.style_linebr)
-plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 30), 1, plot.style_linebr)
+// Range lines
+plot(phase >= 1 and phase < 9 and not na(rngH) ? rngH : na, "Range H", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(phase >= 1 and phase < 9 and not na(rngL) ? rngL : na, "Range L", color.new(color.blue, 0), 2, plot.style_linebr)
 
-_showBuy  = phase >= 1 and phase < 9 and not na(t1BuyStop)  and (phase == 1 or dir == 1)
-_showSell = phase >= 1 and phase < 9 and not na(t1SellStop) and (phase == 1 or dir == -1)
-plot(_showBuy  ? t1BuyStop  : na, "T1 Buy Stop",  color.new(color.lime, 0), 2, plot.style_linebr)
-plot(_showSell ? t1SellStop : na, "T1 Sell Stop", color.new(color.red,  0), 2, plot.style_linebr)
+// T1 pending entry levels
+plot(phase == 1 and not na(t1BuyStop)  ? t1BuyStop  : na, "T1 Buy Stop",  color.new(color.lime, 0), 1, plot.style_linebr)
+plot(phase == 1 and not na(t1SellStop) ? t1SellStop : na, "T1 Sell Stop", color.new(color.red,  0), 1, plot.style_linebr)
 
+// Active SL / TP
 plot(phase >= 2 and phase <= 6 and not na(curSL) ? curSL : na, "SL Activ", color.new(color.red,  0), 1, plot.style_linebr)
 plot(phase >= 2 and phase <= 6 and not na(curTP) ? curTP : na, "TP Activ", color.new(color.lime, 0), 1, plot.style_linebr)
 
 // ═══════════════════════════════════════════════════════════
 //  INFO TABLE
 // ═══════════════════════════════════════════════════════════
-var table infoT = table.new(position.top_right, 2, 9,
+var table infoT = table.new(position.top_right, 2, 8,
      bgcolor=color.new(color.black, 70),
      border_color=color.gray, border_width=1,
      frame_color=color.gray, frame_width=1)
@@ -307,25 +292,22 @@ if barstate.islast
     _pl = phase == 0 ? "astept range" : phase == 1 ? "T1 pending" : phase == 2 ? "T1 activ" : phase == 3 ? "T1 SL → T2" : phase == 4 ? "T2 activ" : phase == 5 ? "T2 SL → T3" : phase == 6 ? "T3 activ" : "done"
     table.cell(infoT, 0, 3, "Faza",             text_color=color.gray,   text_size=size.small)
     table.cell(infoT, 1, 3, _pl,                text_color=color.white,  text_size=size.small)
-    _curDir = (phase == 3 or phase == 4) ? dir * -1 : dir
-    _dl = _curDir == 1 ? "Long ↑" : _curDir == -1 ? "Short ↓" : "—"
+    _dl = dir == 1 ? "Long ↑" : dir == -1 ? "Short ↓" : "—"
     table.cell(infoT, 0, 4, "Directie",         text_color=color.gray,   text_size=size.small)
-    table.cell(infoT, 1, 4, _dl,                text_color=_curDir == 1 ? color.lime : _curDir == -1 ? color.red : color.gray, text_size=size.small)
+    table.cell(infoT, 1, 4, _dl,                text_color=dir == 1 ? color.lime : dir == -1 ? color.red : color.gray, text_size=size.small)
     table.cell(infoT, 0, 5, "Offset / RR",      text_color=color.gray,   text_size=size.small)
     table.cell(infoT, 1, 5, str.tostring(i_offset, "#.#") + " pips  |  1:" + str.tostring(i_tpR, "#.#"), text_color=color.yellow, text_size=size.small)
     _qtyStr = i_autoSize ? str.tostring(int(calcQty)) + " " + _ctype + "  [auto]" : str.tostring(i_qty) + " " + _ctype + "  [fix]"
     table.cell(infoT, 0, 6, "Qty",              text_color=color.gray,   text_size=size.small)
     table.cell(infoT, 1, 6, _qtyStr,            text_color=color.white,  text_size=size.small)
-    _riskReal = not na(actualRisk) ? "$" + str.tostring(actualRisk, "#.#") + " real" : "—"
-    table.cell(infoT, 0, 7, "Risc real",        text_color=color.gray,   text_size=size.small)
-    table.cell(infoT, 1, 7, _riskReal,          text_color=not na(actualRisk) and actualRisk > i_riskUSD + i_riskMargin ? color.red : color.lime, text_size=size.small)
-    table.cell(infoT, 0, 8, "Pip value",        text_color=color.gray,   text_size=size.small)
-    table.cell(infoT, 1, 8, "$" + str.tostring(pipValue, "#.##") + "/pip · " + _ctype, text_color=color.yellow, text_size=size.small)
+    _riskStr = i_autoSize ? "$" + str.tostring(i_riskUSD, "#") + " risc / " + str.tostring(pipValue, "#.##") + " USD/pip" : "—"
+    table.cell(infoT, 0, 7, "Miza",             text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 7, _riskStr,           text_color=color.yellow, text_size=size.small)
 
 // ═══════════════════════════════════════════════════════════
 //  ALERTS
 // ═══════════════════════════════════════════════════════════
-alertcondition(phase[1] == 1 and phase == 2 and dir ==  1, "T1 Long Entry",  "6E ↑ T1 Long @ {{close}}")
-alertcondition(phase[1] == 1 and phase == 2 and dir == -1, "T1 Short Entry", "6E ↓ T1 Short @ {{close}}")
-alertcondition(phase[1] == 3 and phase == 4,               "T2 Entry",       "6E T2 Entry @ {{close}}")
-alertcondition(phase[1] == 5 and phase == 6,               "T3 Entry",       "6E T3 Entry @ {{close}}")
+alertcondition(phase[1] == 1 and phase == 2 and dir ==  1, "T1 Long Entry",  "6E 5m ↑ T1 Long @ {{close}}")
+alertcondition(phase[1] == 1 and phase == 2 and dir == -1, "T1 Short Entry", "6E 5m ↓ T1 Short @ {{close}}")
+alertcondition(phase[1] == 3 and phase == 4,               "T2 Entry",       "6E 5m T2 Entry @ {{close}}")
+alertcondition(phase[1] == 5 and phase == 6,               "T3 Entry",       "6E 5m T3 Entry @ {{close}}")
