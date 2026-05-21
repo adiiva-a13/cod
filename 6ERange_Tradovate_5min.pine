@@ -11,7 +11,6 @@ strategy("6E Range – Tradovate [5min]", overlay=true,
 // ═══════════════════════════════════════════════════════════
 i_offset     = input.float(2.0,     "Offset stop (pips)",          minval=0.5, step=0.5,  group="Strategie")
 i_tpR        = input.float(3.0,     "TP Ratio T1 (R)",             minval=0.5, step=0.5,  group="Strategie")
-i_maxRange   = input.float(0.0,     "Max range (pips, 0=off)",     minval=0,   step=1.0,  group="Strategie")
 i_rangeH     = input.int  (9,       "Ora start range (RO)",        minval=0, maxval=23,   group="Strategie")
 i_rangeMin   = input.int  (0,       "Minut start range (RO)",      minval=0, maxval=55, step=5, group="Strategie")
 i_eodH       = input.int  (22,      "EOD ora (RO)",                minval=9, maxval=23,   group="Strategie")
@@ -115,29 +114,24 @@ if inRange and phase == 0 and not eod
     rngL := na(rngL) ? low  : math.min(rngL, low)
 
 if lastRangeBar and not na(rngH) and phase == 0 and not eod
-    _rangePips = (rngH - rngL) / PIP
-    if i_maxRange > 0 and _rangePips > i_maxRange
-        label.new(bar_index, high, "⚠ RANGE LARG\n" + str.tostring(_rangePips, "#.#") + " pip\nzi sarita", color=color.new(color.gray, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
-        phase := 9
-    else
-        _offsetPx   = i_offset * PIP
-        t1BuyStop  := rngH + _offsetPx
-        t1SellStop := rngL - _offsetPx
-        _t1Risk     = t1BuyStop - t1SellStop
-        _t1RiskPips = _t1Risk / PIP
-        t1LSL      := t1SellStop
-        t1LTP      := t1BuyStop + _t1Risk * i_tpR
-        t1SSL      := t1BuyStop
-        t1STP      := t1SellStop - _t1Risk * i_tpR
-        _exact      = i_riskUSD / (_t1RiskPips * pipValue)
-        _qtyUp      = math.max(1.0, math.ceil(_exact))
-        _qtyDown    = math.max(1.0, math.floor(_exact))
-        calcQty    := i_autoSize ? (_qtyUp * _t1RiskPips * pipValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown) : float(i_qty)
-        strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="6E T1 L")
-        strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
-        strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
-        strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
-        phase := 1
+    _offsetPx   = i_offset * PIP
+    t1BuyStop  := rngH + _offsetPx
+    t1SellStop := rngL - _offsetPx
+    _t1Risk     = t1BuyStop - t1SellStop
+    _t1RiskPips = _t1Risk / PIP
+    t1LSL      := t1SellStop
+    t1LTP      := t1BuyStop + _t1Risk * i_tpR
+    t1SSL      := t1BuyStop
+    t1STP      := t1SellStop - _t1Risk * i_tpR
+    _exact      = i_riskUSD / (_t1RiskPips * pipValue)
+    _qtyUp      = math.max(1.0, math.ceil(_exact))
+    _qtyDown    = math.max(1.0, math.floor(_exact))
+    calcQty    := i_autoSize ? (_qtyUp * _t1RiskPips * pipValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown) : float(i_qty)
+    strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="6E T1 L")
+    strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="6E T1 S")
+    strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
+    strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
+    phase := 1
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 1: detecteaza umplere T1
