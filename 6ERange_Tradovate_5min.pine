@@ -4,7 +4,7 @@ strategy("6E Range – Tradovate [5min]", overlay=true,
          max_bars_back=500, calc_on_every_tick=false,
          process_orders_on_close=true, max_labels_count=500,
          pyramiding=1,
-         commission_type=strategy.commission.cash_per_contract, commission_value=2.5)
+         commission_type=strategy.commission.cash_per_contract, commission_value=0)
 
 // ═══════════════════════════════════════════════════════════
 //  INPUTS
