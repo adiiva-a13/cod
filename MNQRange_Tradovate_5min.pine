@@ -162,6 +162,25 @@ if phase == 1 and tradeOpen
             strategy.cancel("T1 Long")
             if i_pmtEnabled and i_pmtToken != ""
                 alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    // Reversal pe aceeasi bara: un T1 a fost SL-uit iar celalalt s-a deschis ca reversal.
+    // Tratam trade-ul deschis ca T2 in directia corecta (opusa T1-ului SL-uit).
+    if phase == 2 and strategy.closedtrades > 0
+        _revId      = strategy.closedtrades.entry_id(strategy.closedtrades - 1)
+        _revExit    = strategy.closedtrades.exit_price(strategy.closedtrades - 1)
+        _revExitBar = strategy.closedtrades.exit_bar_index(strategy.closedtrades - 1)
+        if _revExitBar == bar_index
+            if dir == 1 and _revId == "T1 Short" and not na(_revExit) and _revExit >= t1SSL
+                // T1 Short SL-uit; T1 Long deschis = T2 Long (dir=-1)
+                dir   := -1
+                curSL := t1LSL
+                curTP := t1LTP
+                phase := 4
+            else if dir == -1 and _revId == "T1 Long" and not na(_revExit) and _revExit <= t1LSL
+                // T1 Long SL-uit; T1 Short deschis = T2 Short (dir=1)
+                dir   := 1
+                curSL := t1SSL
+                curTP := t1STP
+                phase := 4
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
@@ -173,24 +192,6 @@ if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     curEntryPx := na
     phase      := wasLoss ? 3 : 9
-
-// Reversal detectat: T1 a fost inchis de directia opusa (T1 Long dupa T1 Short)
-// Tratam trade-ul deschis direct ca T2 → sarim la phase 4
-if phase == 2 and tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
-    for _i = 0 to strategy.opentrades - 1
-        _id = strategy.opentrades.entry_id(_i)
-        if (dir == -1 and _id == "T1 Long") or (dir == 1 and _id == "T1 Short")
-            if i_pmtEnabled and i_pmtToken != ""
-                alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-                if dir == -1
-                    alert('{"symbol":"' + i_pmtSymbol + '","data":"buy","quantity":' + str.tostring(int(calcQty)) + ',"sl":' + str.tostring(t1LSL, "#.##") + ',"tp":' + str.tostring(t1LTP, "#.##") + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-                else
-                    alert('{"symbol":"' + i_pmtSymbol + '","data":"sell","quantity":' + str.tostring(int(calcQty)) + ',"sl":' + str.tostring(t1SSL, "#.##") + ',"tp":' + str.tostring(t1STP, "#.##") + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-            curEntryPx := strategy.opentrades.entry_price(_i)
-            entryBar   := bar_index
-            curSL      := dir == -1 ? t1LSL : t1SSL
-            curTP      := dir == -1 ? t1LTP : t1STP
-            phase      := 4
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 3: T1 SL hit → plaseaza T2 in DIRECTIE OPUSA T1
