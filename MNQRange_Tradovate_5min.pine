@@ -9,7 +9,7 @@ strategy("MNQ Range – Tradovate [5min]", overlay=true,
 // ═══════════════════════════════════════════════════════════
 //  INPUTS
 // ═══════════════════════════════════════════════════════════
-i_offset     = input.float(5.0,    "Offset stop (puncte)",        minval=0.25, step=0.25, group="Strategie")
+i_offset     = input.float(15.0,   "Offset stop (puncte)",        minval=0.25, step=0.25, group="Strategie")
 i_tpR        = input.float(3.0,    "TP Ratio T1 (R)",              minval=0.5,  step=0.5,  group="Strategie")
 i_rangeH     = input.int  (9,      "Ora start range (ET)",         minval=0,    maxval=23, group="Strategie")
 i_rangeMin   = input.int  (30,     "Minut start range (ET)",       minval=0,    maxval=55, step=5, group="Strategie")
