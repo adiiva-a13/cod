@@ -162,21 +162,43 @@ if phase == 1 and tradeOpen
             strategy.cancel("T1 Long")
             if i_pmtEnabled and i_pmtToken != ""
                 alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
-    // Reversal pe aceeasi bara: un T1 a fost SL-uit iar celalalt s-a deschis ca reversal.
-    // Tratam trade-ul deschis ca T2 in directia corecta (opusa T1-ului SL-uit).
+        // "T1S X" in opentrades: exit-ul T1 Short s-a transformat in reversal long fara SL/TP
+        // Inchidem pozitia si re-entram ca T2 Long proper
+        if _id == "T1S X"
+            strategy.cancel_all()
+            strategy.close_all()
+            strategy.entry("T2 Long", strategy.long,  qty=calcQty, comment="MNQ T2 L")
+            strategy.exit("T2L X", "T2 Long", stop=t1LSL, limit=t1LTP)
+            dir        := -1
+            curEntryPx := close
+            curSL      := t1LSL
+            curTP      := t1LTP
+            entryBar   := bar_index
+            phase      := 4
+        // "T1L X" in opentrades: exit-ul T1 Long s-a transformat in reversal short fara SL/TP
+        if _id == "T1L X"
+            strategy.cancel_all()
+            strategy.close_all()
+            strategy.entry("T2 Short", strategy.short, qty=calcQty, comment="MNQ T2 S")
+            strategy.exit("T2S X", "T2 Short", stop=t1SSL, limit=t1STP)
+            dir        := 1
+            curEntryPx := close
+            curSL      := t1SSL
+            curTP      := t1STP
+            entryBar   := bar_index
+            phase      := 4
+    // Fallback: T1 Long/Short in opentrades dar celalalt T1 deja SL-uit pe aceeasi bara
     if phase == 2 and strategy.closedtrades > 0
         _revId      = strategy.closedtrades.entry_id(strategy.closedtrades - 1)
         _revExit    = strategy.closedtrades.exit_price(strategy.closedtrades - 1)
         _revExitBar = strategy.closedtrades.exit_bar_index(strategy.closedtrades - 1)
         if _revExitBar == bar_index
             if dir == 1 and _revId == "T1 Short" and not na(_revExit) and _revExit >= t1SSL
-                // T1 Short SL-uit; T1 Long deschis = T2 Long (dir=-1)
                 dir   := -1
                 curSL := t1LSL
                 curTP := t1LTP
                 phase := 4
             else if dir == -1 and _revId == "T1 Long" and not na(_revExit) and _revExit <= t1LSL
-                // T1 Long SL-uit; T1 Short deschis = T2 Short (dir=1)
                 dir   := 1
                 curSL := t1SSL
                 curTP := t1STP
