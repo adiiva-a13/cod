@@ -19,6 +19,7 @@ i_riskUSD    = input.float (100.0,  "Risc $ per trade",           minval=1,   st
 i_riskMargin = input.float (30.0,   "Marja rotunjire $ (max +)",  minval=0,   step=5,    group="Sizing")
 i_pointValue = input.float (1.2,    "Valoare punct EUR/lot",      minval=0.01, step=0.1, group="Sizing")
 i_qty        = input.int   (1,      "Loturi fixe (AUTO = off)",   minval=1,              group="Sizing")
+i_maxLots    = input.float (2.0,    "Loturi maxime (cap)",         minval=0.01, step=0.01, group="Sizing")
 
 i_pmtEnabled = input.bool(false,    "Activeaza PMT Alerts",       group="Pick My Trade")
 i_pmtToken   = input.string("",     "PMT Token",                   group="Pick My Trade")
@@ -118,7 +119,7 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     _exact       = i_riskUSD / (_t1Risk * i_pointValue)
     _qtyUp       = math.ceil(_exact / 0.01) * 0.01
     _qtyDown     = math.floor(_exact / 0.01) * 0.01
-    calcQty     := i_autoSize ? math.max(0.01, _qtyUp * _t1Risk * i_pointValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown) : float(i_qty)
+    calcQty     := math.min(i_autoSize ? math.max(0.01, _qtyUp * _t1Risk * i_pointValue <= i_riskUSD + i_riskMargin ? _qtyUp : _qtyDown) : float(i_qty), i_maxLots)
     strategy.entry("T1 Long",  strategy.long,  qty=calcQty, stop=t1BuyStop,  comment="DAX T1 L")
     strategy.entry("T1 Short", strategy.short, qty=calcQty, stop=t1SellStop, comment="DAX T1 S")
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
