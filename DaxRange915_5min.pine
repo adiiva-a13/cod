@@ -230,8 +230,8 @@ if newDay
     eodFired := false
 
 if eod and not eodFired and (tradeOpen or phase == 1)
-    strategy.close_all(comment="EOD")
     strategy.cancel_all()
+    strategy.close_all(comment="EOD")
     label.new(bar_index, high, "EOD CLOSE", color=color.red, textcolor=color.white, style=label.style_label_down, size=size.small)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
