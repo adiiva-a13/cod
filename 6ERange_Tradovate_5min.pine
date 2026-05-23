@@ -133,6 +133,9 @@ if lastRangeBar and not na(rngH) and phase == 0 and not eod
     strategy.exit("T1L X", "T1 Long",  stop=t1LSL, limit=t1LTP)
     strategy.exit("T1S X", "T1 Short", stop=t1SSL, limit=t1STP)
     phase := 1
+    if i_pmtEnabled and i_pmtToken != ""
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"buystop","quantity":' + str.tostring(int(calcQty)) + ',"entry":' + str.tostring(t1BuyStop, "#.#####") + ',"sl":' + str.tostring(t1LSL, "#.#####") + ',"tp":' + str.tostring(t1LTP, "#.#####") + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+        alert('{"symbol":"' + i_pmtSymbol + '","data":"sellstop","quantity":' + str.tostring(int(calcQty)) + ',"entry":' + str.tostring(t1SellStop, "#.#####") + ',"sl":' + str.tostring(t1SSL, "#.#####") + ',"tp":' + str.tostring(t1STP, "#.#####") + ',"token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 1: detecteaza umplere T1
@@ -148,6 +151,8 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Short")
+            if i_pmtEnabled and i_pmtToken != ""
+                alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
         if _id == "T1 Short"
             dir        := -1
             curEntryPx := strategy.opentrades.entry_price(_i)
@@ -156,6 +161,8 @@ if phase == 1 and tradeOpen
             entryBar   := bar_index
             phase      := 2
             strategy.cancel("T1 Long")
+            if i_pmtEnabled and i_pmtToken != ""
+                alert('{"symbol":"' + i_pmtSymbol + '","data":"cancelall","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
