@@ -257,14 +257,14 @@ if not na(ltHi.p2) and close > ltHi.p2 and not ltHicross
         if na(lo_v)
             lo_v := low
         rng_ok = (ltHi.p2 - lo_v) / lo_v >= min_sw_pct / 100.0
-        n = array.size(s_dir)
-        if n > 0
-            for i = n - 1 to 0
-                if array.get(s_dir, i) == 1
-                    rem_setup(i)
-        purge_bull()
-        purge_bear()
         if rng_ok
+            n = array.size(s_dir)
+            if n > 0
+                for i = n - 1 to 0
+                    if array.get(s_dir, i) == 1
+                        rem_setup(i)
+            purge_bull()
+            purge_bear()
             add_setup(ltHi.p2, lo_v, 1, ltHi.i2, lo_b)
             draw_fib(1, ltHi.p2, lo_v, ltHi.i2, lo_b)
         array.push(choch_ln, line.new(ltHi.i2, ltHi.p2, bar_index, ltHi.p2,
@@ -295,14 +295,14 @@ if not na(ltLo.p2) and close < ltLo.p2 and not ltLocross
         if na(hi_v)
             hi_v := high
         rng_ok = (hi_v - ltLo.p2) / ltLo.p2 >= min_sw_pct / 100.0
-        n = array.size(s_dir)
-        if n > 0
-            for i = n - 1 to 0
-                if array.get(s_dir, i) == -1
-                    rem_setup(i)
-        purge_bear()
-        purge_bull()
         if rng_ok
+            n = array.size(s_dir)
+            if n > 0
+                for i = n - 1 to 0
+                    if array.get(s_dir, i) == -1
+                        rem_setup(i)
+            purge_bear()
+            purge_bull()
             add_setup(hi_v, ltLo.p2, -1, hi_b, ltLo.i2)
             draw_fib(-1, hi_v, ltLo.p2, hi_b, ltLo.i2)
         array.push(choch_ln, line.new(ltLo.i2, ltLo.p2, bar_index, ltLo.p2,
