@@ -19,15 +19,16 @@ G_FIB  = "Fibonacci"
 G_SES  = "Sesiune"
 G_VIZ  = "Vizualizare"
 
-rr_ratio   = input.float(2.0,  "RR Ratio",         group=G_RISK, minval=0.5, step=0.5)
-fib_e1     = input.float(0.75, "Entry 1 (0.75)",    group=G_FIB,  step=0.001)
-fib_e2     = input.float(0.886,"Entry 2 (0.886)",   group=G_FIB,  step=0.001)
-sl_buf_tck = input.int(20,     "Buffer SL (ticks)", group=G_FIB,  minval=1)
-min_sw_pct = input.float(0.2,  "Range minim (%)",   group=G_FIB,  minval=0.05, step=0.05)
-sess_h_s   = input.int(8,  "Start ora Londra",      group=G_SES,  minval=0, maxval=23)
-sess_m_s   = input.int(0,  "Start minut",           group=G_SES,  minval=0, maxval=59)
-sess_h_e   = input.int(21, "Sfarsit ora NY",         group=G_SES,  minval=0, maxval=23)
-sess_m_e   = input.int(0,  "Sfarsit minut",          group=G_SES,  minval=0, maxval=59)
+rr_ratio   = input.float(2.0,  "RR Ratio",              group=G_RISK, minval=0.5, step=0.5)
+sw_len     = input.int(5,      "Swing Length (LuxAlgo)", group=G_FIB,  minval=2, maxval=50)
+fib_e1     = input.float(0.75, "Entry 1 (0.75)",         group=G_FIB,  step=0.001)
+fib_e2     = input.float(0.886,"Entry 2 (0.886)",        group=G_FIB,  step=0.001)
+sl_buf_tck = input.int(20,     "Buffer SL (ticks)",      group=G_FIB,  minval=1)
+min_sw_pct = input.float(0.3,  "Range minim (%)",        group=G_FIB,  minval=0.05, step=0.05)
+sess_h_s   = input.int(8,  "Start ora Londra",           group=G_SES,  minval=0, maxval=23)
+sess_m_s   = input.int(0,  "Start minut",                group=G_SES,  minval=0, maxval=59)
+sess_h_e   = input.int(21, "Sfarsit ora NY",              group=G_SES,  minval=0, maxval=23)
+sess_m_e   = input.int(0,  "Sfarsit minut",               group=G_SES,  minval=0, maxval=59)
 C_BULL     = input.color(#089981, "Bull",  group=G_VIZ)
 C_BEAR     = input.color(#f23645, "Bear",  group=G_VIZ)
 show_05    = input.bool(true, "Nivel 0.5", group=G_VIZ)
@@ -54,31 +55,20 @@ if is_new_day
     last_date  := cur_date
 buf_p = sl_buf_tck * syminfo.mintick
 
-// ── SWING TYPE ───────────────────────────────────────────────
-type SW
-    float p0 = na
-    float p1 = na
-    float p2 = na
-    int   i0 = na
-    int   i1 = na
-    int   i2 = na
+// ── PIVOT TRACKING ───────────────────────────────────────────
+var float lastPH  = na
+var int   lastPHi = na
+var float prevPH  = na
+var int   prevPHi = na
+var float lastPL  = na
+var int   lastPLi = na
+var float prevPL  = na
+var int   prevPLi = na
 
-var SW stL = SW.new()
-var SW stH = SW.new()
-var SW itL = SW.new()
-var SW itH = SW.new()
-
-sw_up(SW s, float p, int idx) =>
-    s.p0:=s.p1, s.p1:=s.p2, s.p2:=p
-    s.i0:=s.i1, s.i1:=s.i2, s.i2:=idx
-
-sw_h(SW s) => not na(s.p0) and s.p0 < s.p1 and s.p1 >= s.p2
-sw_l(SW s) => not na(s.p0) and s.p0 > s.p1 and s.p1 <= s.p2
-
-// ── MARKET STRUCTURE ────────────────────────────────────────
+// ── MARKET STRUCTURE ─────────────────────────────────────────
 var int  msDir     = 0
-var bool itHicross = false
-var bool itLocross = false
+var bool bullCross = false
+var bool bearCross = false
 
 // ── PENDING FIB ──────────────────────────────────────────────
 var float pending_bull_lo   = na
@@ -107,22 +97,11 @@ var line[]  vl_bear = array.new_line(0)
 var label[] vb_bear = array.new_label(0)
 var box[]   vx_bear = array.new_box(0)
 
-// ── HIT DETECTION ARRAYS ─────────────────────────────────────
-var line[]  ht_ln_bull = array.new_line(0)
-var float[] ht_pr_bull = array.new_float(0)
-var bool[]  ht_ok_bull = array.new_bool(0)
-var line[]  ht_ln_bear = array.new_line(0)
-var float[] ht_pr_bear = array.new_float(0)
-var bool[]  ht_ok_bear = array.new_bool(0)
-
 // ── CHOCH TRACKING ───────────────────────────────────────────
 var line[] choch_ln = array.new_line(0)
 var box[]  choch_bx = array.new_box(0)
 
 purge_bull() =>
-    array.clear(ht_ln_bull)
-    array.clear(ht_pr_bull)
-    array.clear(ht_ok_bull)
     while array.size(vl_bull) > 0
         line.delete(array.pop(vl_bull))
     while array.size(vb_bull) > 0
@@ -131,9 +110,6 @@ purge_bull() =>
         box.delete(array.pop(vx_bull))
 
 purge_bear() =>
-    array.clear(ht_ln_bear)
-    array.clear(ht_pr_bear)
-    array.clear(ht_ok_bear)
     while array.size(vl_bear) > 0
         line.delete(array.pop(vl_bear))
     while array.size(vb_bear) > 0
@@ -146,11 +122,15 @@ if is_new_day
     array.clear(s_pb),  array.clear(s_ab),  array.clear(s_e1)
     array.clear(s_e2),  array.clear(s_id),  array.clear(s_del)
     day_trades   := 0
-    itHicross    := false
-    itLocross    := false
+    bullCross    := false
+    bearCross    := false
     msDir        := 0
     pending_bull := false
     pending_bear := false
+    lastPH  := na,  lastPHi := na
+    prevPH  := na,  prevPHi := na
+    lastPL  := na,  lastPLi := na
+    prevPL  := na,  prevPLi := na
     purge_bull()
     purge_bear()
     while array.size(choch_ln) > 0
@@ -181,142 +161,122 @@ draw_fib(dir, hi, lo, pb, ab) =>
     vl   = dir == 1 ? vl_bull : vl_bear
     vb   = dir == 1 ? vb_bull : vb_bear
     vx   = dir == 1 ? vx_bull : vx_bear
-    ht_l = dir == 1 ? ht_ln_bull : ht_ln_bear
-    ht_p = dir == 1 ? ht_pr_bull : ht_pr_bear
-    ht_o = dir == 1 ? ht_ok_bull : ht_ok_bear
     if show_aoi
         zt = dir == 1 ? f0  : f75
         zb = dir == 1 ? f75 : f0
         array.push(vx, box.new(pb, zt, bar_index + 1, zb,
              bgcolor=color.new(c, 89), border_color=color(na)))
-    _l0 = line.new(pb, f0, pb + 1, f0,
-         color=color.new(c,40), style=line.style_solid, width=1, extend=extend.right)
-    array.push(vl, _l0)
-    array.push(ht_l, _l0), array.push(ht_p, f0), array.push(ht_o, false)
+    array.push(vl, line.new(pb, f0, pb + 1, f0,
+         color=color.new(c,40), style=line.style_solid, width=1, extend=extend.right))
     array.push(vb, label.new(bar_index + 1, f0,
          "0  " + str.tostring(f0, format.mintick),
          color=color(na), textcolor=color.new(c,40),
          style=label.style_label_left, size=size.tiny))
     if show_05
-        _l05 = line.new(pb, f05, pb + 1, f05,
-             color=color.new(c,65), style=line.style_dotted, width=1, extend=extend.right)
-        array.push(vl, _l05)
-        array.push(ht_l, _l05), array.push(ht_p, f05), array.push(ht_o, false)
+        array.push(vl, line.new(pb, f05, pb + 1, f05,
+             color=color.new(c,65), style=line.style_dotted, width=1, extend=extend.right))
         array.push(vb, label.new(bar_index + 1, f05,
              "0.5  " + str.tostring(f05, format.mintick),
              color=color(na), textcolor=color.new(c,60),
              style=label.style_label_left, size=size.tiny))
-    _l75 = line.new(pb, f75, pb + 1, f75,
-         color=color.orange, style=line.style_solid, width=2, extend=extend.right)
-    array.push(vl, _l75)
-    array.push(ht_l, _l75), array.push(ht_p, f75), array.push(ht_o, false)
+    array.push(vl, line.new(pb, f75, pb + 1, f75,
+         color=color.orange, style=line.style_solid, width=2, extend=extend.right))
     array.push(vb, label.new(bar_index + 1, f75,
          str.tostring(f75, format.mintick),
          color=color.orange, textcolor=color.white,
          style=dir==1 ? label.style_arrowup : label.style_arrowdown,
          size=size.small))
-    _l886 = line.new(pb, f886, pb + 1, f886,
-         color=color.new(color.orange,55), style=line.style_dashed, width=1, extend=extend.right)
-    array.push(vl, _l886)
-    array.push(ht_l, _l886), array.push(ht_p, f886), array.push(ht_o, false)
+    array.push(vl, line.new(pb, f886, pb + 1, f886,
+         color=color.new(color.orange,55), style=line.style_dashed, width=1, extend=extend.right))
     array.push(vb, label.new(bar_index + 1, f886,
          "E2 " + str.tostring(f886, format.mintick),
          color=color(na), textcolor=color.new(color.orange,40),
          style=label.style_label_left, size=size.tiny))
-    _l1 = line.new(ab, f1, ab + 1, f1,
-         color=color.new(c,40), style=line.style_solid, width=1, extend=extend.right)
-    array.push(vl, _l1)
-    array.push(ht_l, _l1), array.push(ht_p, f1), array.push(ht_o, false)
+    array.push(vl, line.new(ab, f1, ab + 1, f1,
+         color=color.new(c,40), style=line.style_solid, width=1, extend=extend.right))
     array.push(vb, label.new(bar_index + 1, f1,
          "1  " + str.tostring(f1, format.mintick),
          color=color(na), textcolor=color.new(c,40),
          style=label.style_label_left, size=size.tiny))
-    _lsl = line.new(pb, _sl, pb + 1, _sl,
-         color=C_BEAR, style=line.style_solid, width=2, extend=extend.right)
-    array.push(vl, _lsl)
-    array.push(ht_l, _lsl), array.push(ht_p, _sl), array.push(ht_o, false)
+    array.push(vl, line.new(pb, _sl, pb + 1, _sl,
+         color=C_BEAR, style=line.style_solid, width=2, extend=extend.right))
     array.push(vb, label.new(bar_index + 1, _sl,
          str.tostring(_sl, format.mintick),
          color=C_BEAR, textcolor=color.white,
          style=dir==1 ? label.style_arrowdown : label.style_arrowup,
          size=size.small))
-    _ltp = line.new(pb, _tp, pb + 1, _tp,
-         color=C_BULL, style=line.style_solid, width=2, extend=extend.right)
-    array.push(vl, _ltp)
-    array.push(ht_l, _ltp), array.push(ht_p, _tp), array.push(ht_o, false)
+    array.push(vl, line.new(pb, _tp, pb + 1, _tp,
+         color=C_BULL, style=line.style_solid, width=2, extend=extend.right))
     array.push(vb, label.new(bar_index + 1, _tp,
          str.tostring(_tp, format.mintick),
          color=C_BULL, textcolor=color.white,
          style=dir==1 ? label.style_arrowup : label.style_arrowdown,
          size=size.small))
 
-// ── ST PIVOTS (3-bar local H/L) ──────────────────────────────
-if not na(low[2])
-    if low[2] > low[1] and low[1] <= low[0]
-        sw_up(stL, low[1], bar_index[1])
-if not na(high[2])
-    if high[2] < high[1] and high[1] >= high[0]
-        sw_up(stH, high[1], bar_index[1])
+// ── PIVOT DETECTION (ta.pivothigh/low — exact ca LuxAlgo) ────
+ph = ta.pivothigh(high, sw_len, sw_len)
+pl = ta.pivotlow(low,  sw_len, sw_len)
 
-// ── IT SWINGS  +  FIBONACCI (pe primul IT swing dupa CHoCH) ──
-cITL = sw_l(stL)
-if cITL and not cITL[1]
-    itLocross := false
-    sw_up(itL, stL.p1, stL.i1)
-    if pending_bear and not na(pending_bear_hi)
-        new_lo = stL.p1
-        rng_ok = (pending_bear_hi - new_lo) / new_lo >= min_sw_pct / 100.0
-        n = array.size(s_dir)
-        if n > 0
-            for i = n - 1 to 0
-                if array.get(s_dir, i) == -1
-                    rem_setup(i)
-        purge_bear()
-        if rng_ok
-            add_setup(pending_bear_hi, new_lo, -1, pending_bear_hi_b, stL.i1)
-            draw_fib(-1, pending_bear_hi, new_lo, pending_bear_hi_b, stL.i1)
-        pending_bear := false
+// ── FIBONACCI PE PRIMUL PIVOT DUPA CHoCH ─────────────────────
+if not na(ph) and pending_bull and not na(pending_bull_lo)
+    new_hi  = ph
+    new_hi_b = bar_index - sw_len
+    rng_ok  = (new_hi - pending_bull_lo) / pending_bull_lo >= min_sw_pct / 100.0
+    n = array.size(s_dir)
+    if n > 0
+        for i = n - 1 to 0
+            if array.get(s_dir, i) == 1
+                rem_setup(i)
+    purge_bull()
+    if rng_ok
+        add_setup(new_hi, pending_bull_lo, 1, new_hi_b, pending_bull_lo_b)
+        draw_fib(1, new_hi, pending_bull_lo, new_hi_b, pending_bull_lo_b)
+    pending_bull := false
 
-cITH = sw_h(stH)
-if cITH and not cITH[1]
-    itHicross := false
-    sw_up(itH, stH.p1, stH.i1)
-    if pending_bull and not na(pending_bull_lo)
-        new_hi = stH.p1
-        rng_ok = (new_hi - pending_bull_lo) / pending_bull_lo >= min_sw_pct / 100.0
-        n = array.size(s_dir)
-        if n > 0
-            for i = n - 1 to 0
-                if array.get(s_dir, i) == 1
-                    rem_setup(i)
-        purge_bull()
-        if rng_ok
-            add_setup(new_hi, pending_bull_lo, 1, stH.i1, pending_bull_lo_b)
-            draw_fib(1, new_hi, pending_bull_lo, stH.i1, pending_bull_lo_b)
-        pending_bull := false
+if not na(pl) and pending_bear and not na(pending_bear_hi)
+    new_lo  = pl
+    new_lo_b = bar_index - sw_len
+    rng_ok  = (pending_bear_hi - new_lo) / new_lo >= min_sw_pct / 100.0
+    n = array.size(s_dir)
+    if n > 0
+        for i = n - 1 to 0
+            if array.get(s_dir, i) == -1
+                rem_setup(i)
+    purge_bear()
+    if rng_ok
+        add_setup(pending_bear_hi, new_lo, -1, pending_bear_hi_b, new_lo_b)
+        draw_fib(-1, pending_bear_hi, new_lo, pending_bear_hi_b, new_lo_b)
+    pending_bear := false
 
-// ── CHoCH (pe IT swinguri, ca LuxAlgo) ───────────────────────
+// ── ACTUALIZEAZA PIVOTII ──────────────────────────────────────
+if not na(ph)
+    prevPH  := lastPH
+    prevPHi := lastPHi
+    lastPH  := ph
+    lastPHi := bar_index - sw_len
+    bullCross := false
 
-// BULL CHoCH
-if not na(itH.p2) and close > itH.p2 and not itHicross
-    itHicross := true
+if not na(pl)
+    prevPL  := lastPL
+    prevPLi := lastPLi
+    lastPL  := pl
+    lastPLi := bar_index - sw_len
+    bearCross := false
+
+// ── CHoCH (pret rupe pivot-ul anterior — exact ca LuxAlgo) ───
+
+// BULL CHoCH: close depaseste prevPH (high-ul anterior)
+if not na(prevPH) and close > prevPH and not bullCross and not na(lastPL)
+    bullCross := true
     if msDir != 1
-        msDir := 1
-        _lo_v = low
-        _lo_b = bar_index
-        _dist = bar_index - itH.i2
-        if _dist > 0
-            for i = 1 to math.min(_dist, 499)
-                if low[i] < _lo_v
-                    _lo_v := low[i]
-                    _lo_b := bar_index[i]
-        pending_bull_lo   := _lo_v
-        pending_bull_lo_b := _lo_b
+        msDir             := 1
+        pending_bull_lo   := lastPL
+        pending_bull_lo_b := lastPLi
         pending_bull      := true
         pending_bear      := false
-        array.push(choch_ln, line.new(itH.i2, itH.p2, bar_index, itH.p2,
+        array.push(choch_ln, line.new(prevPHi, prevPH, bar_index, prevPH,
              color=C_BULL, style=line.style_solid, width=2))
-        array.push(choch_bx, box.new(itH.i2, itH.p2, bar_index, itH.p2,
+        array.push(choch_bx, box.new(prevPHi, prevPH, bar_index, prevPH,
              border_color=color(na), bgcolor=color(na),
              text="CHoCH", text_size=size.tiny,
              text_halign=text.align_left, text_valign=text.align_bottom,
@@ -324,26 +284,18 @@ if not na(itH.p2) and close > itH.p2 and not itHicross
     else
         msDir := 1
 
-// BEAR CHoCH
-if not na(itL.p2) and close < itL.p2 and not itLocross
-    itLocross := true
+// BEAR CHoCH: close rupe prevPL (low-ul anterior)
+if not na(prevPL) and close < prevPL and not bearCross and not na(lastPH)
+    bearCross := true
     if msDir != -1
-        msDir := -1
-        _hi_v = high
-        _hi_b = bar_index
-        _dist = bar_index - itL.i2
-        if _dist > 0
-            for i = 1 to math.min(_dist, 499)
-                if high[i] > _hi_v
-                    _hi_v := high[i]
-                    _hi_b := bar_index[i]
-        pending_bear_hi   := _hi_v
-        pending_bear_hi_b := _hi_b
+        msDir             := -1
+        pending_bear_hi   := lastPH
+        pending_bear_hi_b := lastPHi
         pending_bear      := true
         pending_bull      := false
-        array.push(choch_ln, line.new(itL.i2, itL.p2, bar_index, itL.p2,
+        array.push(choch_ln, line.new(prevPLi, prevPL, bar_index, prevPL,
              color=C_BEAR, style=line.style_solid, width=2))
-        array.push(choch_bx, box.new(itL.i2, itL.p2, bar_index, itL.p2,
+        array.push(choch_bx, box.new(prevPLi, prevPL, bar_index, prevPL,
              border_color=color(na), bgcolor=color(na),
              text="CHoCH", text_size=size.tiny,
              text_halign=text.align_left, text_valign=text.align_top,
@@ -351,28 +303,7 @@ if not na(itL.p2) and close < itL.p2 and not itLocross
     else
         msDir := -1
 
-// ── HIT DETECTION (linii se opresc cand pretul le atinge) ────
-if array.size(ht_ln_bull) > 0
-    for i = 0 to array.size(ht_ln_bull) - 1
-        if not array.get(ht_ok_bull, i)
-            _ln = array.get(ht_ln_bull, i)
-            _pr = array.get(ht_pr_bull, i)
-            if low <= _pr and high >= _pr
-                line.set_x2(_ln, bar_index)
-                line.set_extend(_ln, extend.none)
-                array.set(ht_ok_bull, i, true)
-
-if array.size(ht_ln_bear) > 0
-    for i = 0 to array.size(ht_ln_bear) - 1
-        if not array.get(ht_ok_bear, i)
-            _ln = array.get(ht_ln_bear, i)
-            _pr = array.get(ht_pr_bear, i)
-            if low <= _pr and high >= _pr
-                line.set_x2(_ln, bar_index)
-                line.set_extend(_ln, extend.none)
-                array.set(ht_ok_bear, i, true)
-
-// ── ETICHETE DINAMICE (urmaresc marginea dreapta a graficului) ─
+// ── ETICHETE DINAMICE (urmaresc marginea dreapta) ────────────
 if barstate.islast
     _rx = bar_index + 5
     if array.size(vb_bull) > 0
@@ -392,7 +323,7 @@ if barstate.islast
 var int prev_cl = 0
 if strategy.closedtrades > prev_cl
     for i = prev_cl to strategy.closedtrades - 1
-        _eid = strategy.closedtrades.entry_id(i)
+        _eid  = strategy.closedtrades.entry_id(i)
         _prof = strategy.closedtrades.profit(i)
         _exp  = strategy.closedtrades.exit_price(i)
         _dc   = strategy.closedtrades.size(i) > 0 ? 1 : -1
@@ -416,11 +347,11 @@ if in_sess and day_trades < 2 and n_s > 0
     for idx = 0 to n_s - 1
         if day_trades >= 2
             break
-        _hi = array.get(s_hi, idx)
-        _lo = array.get(s_lo, idx)
-        _d  = array.get(s_dir,idx)
-        _e1 = array.get(s_e1, idx)
-        _e2 = array.get(s_e2, idx)
+        _hi  = array.get(s_hi,  idx)
+        _lo  = array.get(s_lo,  idx)
+        _d   = array.get(s_dir, idx)
+        _e1  = array.get(s_e1,  idx)
+        _e2  = array.get(s_e2,  idx)
         f75  = f_lvl(_d, _hi, _lo, fib_e1)
         f886 = f_lvl(_d, _hi, _lo, fib_e2)
         f100 = f_lvl(_d, _hi, _lo, 1.0)
