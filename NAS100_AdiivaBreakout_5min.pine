@@ -1,0 +1,239 @@
+//@version=5
+strategy("NAS100 AdiivaBreakout 5min – MT5/TTA", overlay=true,
+         default_qty_type=strategy.fixed, default_qty_value=0.01,
+         max_bars_back=500, calc_on_every_tick=false,
+         process_orders_on_close=true, max_labels_count=500,
+         pyramiding=1,
+         commission_type=strategy.commission.cash_per_order, commission_value=0)
+
+// ═══════════════════════════════════════════════════════════
+//  INPUTS
+// ═══════════════════════════════════════════════════════════
+i_slBuf    = input.float(0.0,   "SL Buffer (puncte)",      minval=0.0, step=0.25, group="Risk")
+i_tpR      = input.float(1.0,   "TP la (R)",               minval=0.5, step=0.5,  group="Exit Strategy")
+i_riskUSD  = input.float(100.0, "Risc per tranzactie ($)", minval=1,   step=10,   group="Sizing")
+i_maxLots  = input.float(5.0,   "Loturi maxime (cap)",     minval=0.01, step=0.01, group="Sizing")
+
+i_nyRSH    = input.int(9,  "Range Start Hour (ET)",   minval=0, maxval=23, group="New York Session")
+i_nyRSM    = input.int(30, "Range Start Min (ET)",    minval=0, maxval=59, group="New York Session")
+i_nyREH    = input.int(9,  "Range End Hour (ET)",     minval=0, maxval=23, group="New York Session")
+i_nyREM    = input.int(45, "Range End Min (ET)",      minval=0, maxval=59, group="New York Session")
+i_nyEEH    = input.int(11, "Entry cutoff Hour (ET)",  minval=0, maxval=23, group="New York Session")
+i_nyEEM    = input.int(0,  "Entry cutoff Min (ET)",   minval=0, maxval=59, group="New York Session")
+i_eodH     = input.int(16, "EOD Close Hour (ET)",     minval=9, maxval=22, group="New York Session")
+i_eodMin   = input.int(0,  "EOD Close Min (ET)",      minval=0, maxval=59, group="New York Session")
+
+// TTA alert format (seteaza in TradingView la crearea alertei pe strategie):
+// {{strategy.order.action}} NAS100 q={{strategy.order.contracts}}
+i_ttaSymbol = input.string("NAS100", "Simbol MT5",                                group="TTA / MT5")
+
+// ═══════════════════════════════════════════════════════════
+//  TIMEFRAME GUARD
+// ═══════════════════════════════════════════════════════════
+if timeframe.period != "5"
+    runtime.error("⚠️ Acest script functioneaza DOAR pe graficul de 5 MINUTE!")
+
+// ═══════════════════════════════════════════════════════════
+//  CONSTANTE NAS100 CFD
+//  tick=0.01, tickValue=$0.10/lot → 1 punct = $10/lot
+// ═══════════════════════════════════════════════════════════
+pointValue = 10.0
+
+// ═══════════════════════════════════════════════════════════
+//  SIZING – loturi cu pas 0.01
+// ═══════════════════════════════════════════════════════════
+calcLots(riskAmt) =>
+    raw  = i_riskUSD / (riskAmt * pointValue)
+    lots = math.max(0.01, math.floor(raw * 100) / 100)
+    math.min(lots, i_maxLots)
+
+// ═══════════════════════════════════════════════════════════
+//  TIME – New York (ET)
+// ═══════════════════════════════════════════════════════════
+nyH    = hour(time,   "America/New_York")
+nyM    = minute(time, "America/New_York")
+nyMins = nyH * 60 + nyM
+
+newDay  = ta.change(dayofmonth) != 0
+eodMins = i_eodH * 60 + i_eodMin
+eod     = nyMins >= eodMins
+
+nyRSMins = i_nyRSH * 60 + i_nyRSM
+nyREMins = i_nyREH * 60 + i_nyREM
+nyEEMins = i_nyEEH * 60 + i_nyEEM
+
+inRangeNY      = nyMins >= nyRSMins and nyMins <= nyREMins
+nyTradeActive  = nyMins > nyREMins and nyMins < eodMins
+nyEntryAllowed = nyTradeActive and nyMins < nyEEMins
+
+// ═══════════════════════════════════════════════════════════
+//  RANGE 1 – H/L din fereastra de range
+// ═══════════════════════════════════════════════════════════
+var float nyR1H = na
+var float nyR1L = na
+
+if newDay
+    nyR1H := na
+    nyR1L := na
+
+if inRangeNY
+    nyR1H := na(nyR1H) ? high : math.max(nyR1H, high)
+    nyR1L := na(nyR1L) ? low  : math.min(nyR1L, low)
+
+var bool _nyR1Done = false
+if newDay
+    _nyR1Done := false
+
+nyR1JustEnd = not _nyR1Done and not na(nyR1H) and not inRangeNY and nyMins > nyREMins and nyMins < eodMins
+if nyR1JustEnd
+    _nyR1Done := true
+
+// ═══════════════════════════════════════════════════════════
+//  STATE MACHINE
+//  0 = asteapta R1
+//  1 = R1 gata, asteapta lumanare care inchide in afara R1 (R2)
+//  2 = R2 format, asteapta entry
+//  3 = trade 1 activ
+//  4 = SL trade 1 hit, bara SL = R3, asteapta entry
+//  5 = trade 2 activ
+//  6 = sesiune inchisa
+// ═══════════════════════════════════════════════════════════
+var int   nyPhase    = 0
+var float nyActRH    = na
+var float nyActRL    = na
+var float nyEntryPx  = na
+var float nyRiskAmt  = na
+var int   nyDir      = 0
+var int   nyEntryBar = na
+
+if newDay
+    nyPhase    := 0
+    nyActRH    := na
+    nyActRL    := na
+    nyEntryPx  := na
+    nyRiskAmt  := na
+    nyDir      := 0
+    nyEntryBar := na
+
+if nyR1JustEnd
+    nyPhase := 1
+
+// Faza 1: prima lumanare care inchide in afara R1 → H/L ei = R2
+if nyPhase == 1 and nyEntryAllowed and not na(nyR1H) and not na(nyR1L)
+    if close > nyR1H or close < nyR1L
+        nyActRH := high
+        nyActRL := low
+        nyPhase := 2
+
+// Faza 2 sau 4: asteapta entry (close in afara range-ului activ)
+if (nyPhase == 2 or nyPhase == 4) and nyEntryAllowed and not na(nyActRH) and not na(nyActRL)
+    if close > nyActRH
+        sl       = nyActRL - i_slBuf
+        _riskAmt = close - sl
+        eqty     = calcLots(_riskAmt)
+        if eqty >= 0.01
+            tp         = close + _riskAmt * i_tpR
+            nyEntryPx  := close
+            nyRiskAmt  := _riskAmt
+            nyDir      := 1
+            nyEntryBar := bar_index
+            strategy.entry("NY Long",  strategy.long,  qty=eqty, comment="NAS L " + str.tostring(nyPhase == 2 ? 1 : 2))
+            strategy.exit("NY XL", "NY Long",  stop=sl, limit=tp)
+            nyPhase := nyPhase == 2 ? 3 : 5
+    else if close < nyActRL
+        sl       = nyActRH + i_slBuf
+        _riskAmt = sl - close
+        eqty     = calcLots(_riskAmt)
+        if eqty >= 0.01
+            tp         = close - _riskAmt * i_tpR
+            nyEntryPx  := close
+            nyRiskAmt  := _riskAmt
+            nyDir      := -1
+            nyEntryBar := bar_index
+            strategy.entry("NY Short", strategy.short, qty=eqty, comment="NAS S " + str.tostring(nyPhase == 2 ? 1 : 2))
+            strategy.exit("NY XS", "NY Short", stop=sl, limit=tp)
+            nyPhase := nyPhase == 2 ? 3 : 5
+
+// ═══════════════════════════════════════════════════════════
+//  OPEN TRADE DETECTOR
+// ═══════════════════════════════════════════════════════════
+var bool nyOpen = false
+nyOpen := false
+for _i = 0 to strategy.opentrades - 1
+    if strategy.opentrades.entry_id(_i) == "NY Long" or strategy.opentrades.entry_id(_i) == "NY Short"
+        nyOpen := true
+
+// Faza 3: trade 1 activ – detecteaza inchidere
+if nyPhase == 3 and not nyOpen and not na(nyEntryPx) and not eod and bar_index > nz(nyEntryBar, -1)
+    wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+    if wasLoss
+        nyActRH := high
+        nyActRL := low
+        nyPhase := 4
+    else
+        nyPhase := 6
+    nyEntryPx := na
+    nyRiskAmt := na
+
+// Faza 5: trade 2 activ – sesiune gata indiferent de rezultat
+if nyPhase == 5 and not nyOpen and not na(nyEntryPx) and not eod and bar_index > nz(nyEntryBar, -1)
+    nyPhase   := 6
+    nyEntryPx := na
+    nyRiskAmt := na
+
+// ═══════════════════════════════════════════════════════════
+//  EOD CLOSE
+// ═══════════════════════════════════════════════════════════
+if eod and nyOpen
+    strategy.close_all(comment="EOD")
+
+// ═══════════════════════════════════════════════════════════
+//  VISUALS
+// ═══════════════════════════════════════════════════════════
+bgcolor(inRangeNY ? color.new(color.blue,  88) : na, title="NY Range Window")
+bgcolor(nyOpen    ? color.new(color.green, 88) : na, title="NY Trade Activ")
+
+nySlBar = nyOpen[1] and not nyOpen and strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+bgcolor(nySlBar   ? color.new(color.red,   85) : na, title="SL Hit")
+
+plot(not na(nyR1H) ? nyR1H : na, "NY R1 H", color.new(color.blue, 0), 2, plot.style_linebr)
+plot(not na(nyR1L) ? nyR1L : na, "NY R1 L", color.new(color.blue, 0), 2, plot.style_linebr)
+
+plot(nyPhase >= 2 and nyPhase < 6 and not na(nyActRH) ? nyActRH : na, "NY Act RH", color.new(color.aqua, 0), 1, plot.style_linebr)
+plot(nyPhase >= 2 and nyPhase < 6 and not na(nyActRL) ? nyActRL : na, "NY Act RL", color.new(color.aqua, 0), 1, plot.style_linebr)
+
+// ═══════════════════════════════════════════════════════════
+//  INFO TABLE
+// ═══════════════════════════════════════════════════════════
+var table infoT = table.new(position.top_right, 2, 8,
+     bgcolor=color.new(color.black, 70),
+     border_color=color.gray, border_width=1,
+     frame_color=color.gray, frame_width=1)
+
+if barstate.islast
+    table.cell(infoT, 0, 0, "NAS100 Breakout",   text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 50))
+    table.cell(infoT, 1, 0, "5min · MT5/TTA",    text_color=color.yellow, text_size=size.small, bgcolor=color.new(color.blue, 50))
+    table.cell(infoT, 0, 1, "── NY ──",           text_color=color.blue,   text_size=size.small, bgcolor=color.new(color.blue, 85))
+    _pl = nyPhase == 0 ? "astept R1" : nyPhase == 1 ? "astept R2" : nyPhase == 2 ? "astept entry" : nyPhase == 3 ? "trade 1 activ" : nyPhase == 4 ? "astept entry R3" : nyPhase == 5 ? "trade 2 activ" : "done"
+    table.cell(infoT, 1, 1, _pl,                  text_color=color.white,  text_size=size.small, bgcolor=color.new(color.blue, 85))
+    table.cell(infoT, 0, 2, "R1 H",               text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 2, not na(nyR1H) ? str.tostring(nyR1H, "#.##") : "—", text_color=color.white, text_size=size.small)
+    table.cell(infoT, 0, 3, "R1 L",               text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 3, not na(nyR1L) ? str.tostring(nyR1L, "#.##") : "—", text_color=color.white, text_size=size.small)
+    table.cell(infoT, 0, 4, "Act RH",             text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 4, not na(nyActRH) ? str.tostring(nyActRH, "#.##") : "—", text_color=color.aqua, text_size=size.small)
+    table.cell(infoT, 0, 5, "Act RL",             text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 5, not na(nyActRL) ? str.tostring(nyActRL, "#.##") : "—", text_color=color.aqua, text_size=size.small)
+    table.cell(infoT, 0, 6, "TP / Risc",          text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 6, str.tostring(i_tpR, "#.#") + "R  |  $" + str.tostring(i_riskUSD, "#"), text_color=color.yellow, text_size=size.small)
+    _ttaMsg = "{{strategy.order.action}} " + i_ttaSymbol + " q={{strategy.order.contracts}}"
+    table.cell(infoT, 0, 7, "TTA msg",            text_color=color.gray,   text_size=size.small)
+    table.cell(infoT, 1, 7, _ttaMsg,              text_color=color.aqua,   text_size=size.small)
+
+// ═══════════════════════════════════════════════════════════
+//  ALERTS
+// ═══════════════════════════════════════════════════════════
+alertcondition(nyPhase[1] == 2 and nyPhase == 3 and nyDir ==  1, "NY Long Entry",  "NAS100 5m ↑ Long @ {{close}}")
+alertcondition(nyPhase[1] == 2 and nyPhase == 3 and nyDir == -1, "NY Short Entry", "NAS100 5m ↓ Short @ {{close}}")
+alertcondition(nyPhase[1] == 4 and nyPhase == 5 and nyDir ==  1, "NY Long 2 Entry",  "NAS100 5m ↑ Long #2 @ {{close}}")
+alertcondition(nyPhase[1] == 4 and nyPhase == 5 and nyDir == -1, "NY Short 2 Entry", "NAS100 5m ↓ Short #2 @ {{close}}")
