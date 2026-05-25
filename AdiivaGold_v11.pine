@@ -24,7 +24,7 @@ sw_len     = input.int(10,     "Swing Length (LuxAlgo)", group=G_FIB,  minval=2,
 fib_e1     = input.float(0.75, "Entry 1 (0.75)",         group=G_FIB,  step=0.001)
 fib_e2     = input.float(0.886,"Entry 2 (0.886)",        group=G_FIB,  step=0.001)
 sl_buf_tck = input.int(20,     "Buffer SL (ticks)",      group=G_FIB,  minval=1)
-min_sw_pct = input.float(0.3,  "Range minim (%)",        group=G_FIB,  minval=0.05, step=0.05)
+min_sw_pct = input.float(1.0,  "Range minim (%)",        group=G_FIB,  minval=0.1, step=0.1)
 sess_h_s   = input.int(8,  "Start ora Londra",           group=G_SES,  minval=0, maxval=23)
 sess_m_s   = input.int(0,  "Start minut",                group=G_SES,  minval=0, maxval=59)
 sess_h_e   = input.int(21, "Sfarsit ora NY",              group=G_SES,  minval=0, maxval=23)
