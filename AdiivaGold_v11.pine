@@ -20,7 +20,7 @@ G_SES  = "Sesiune"
 G_VIZ  = "Vizualizare"
 
 rr_ratio   = input.float(2.0,  "RR Ratio",              group=G_RISK, minval=0.5, step=0.5)
-sw_len     = input.int(5,      "Swing Length (LuxAlgo)", group=G_FIB,  minval=2, maxval=50)
+sw_len     = input.int(10,     "Swing Length (LuxAlgo)", group=G_FIB,  minval=2, maxval=50)
 fib_e1     = input.float(0.75, "Entry 1 (0.75)",         group=G_FIB,  step=0.001)
 fib_e2     = input.float(0.886,"Entry 2 (0.886)",        group=G_FIB,  step=0.001)
 sl_buf_tck = input.int(20,     "Buffer SL (ticks)",      group=G_FIB,  minval=1)
@@ -270,6 +270,13 @@ if not na(prevPH) and close > prevPH and not bullCross and not na(lastPL)
     bullCross := true
     if msDir != 1
         msDir             := 1
+        // trend opus confirmat → sterge Fibonacci bear activ
+        n_b = array.size(s_dir)
+        if n_b > 0
+            for _i = n_b - 1 to 0
+                if array.get(s_dir, _i) == -1
+                    rem_setup(_i)
+        purge_bear()
         pending_bull_lo   := lastPL
         pending_bull_lo_b := lastPLi
         pending_bull      := true
@@ -289,6 +296,13 @@ if not na(prevPL) and close < prevPL and not bearCross and not na(lastPH)
     bearCross := true
     if msDir != -1
         msDir             := -1
+        // trend opus confirmat → sterge Fibonacci bull activ
+        n_b = array.size(s_dir)
+        if n_b > 0
+            for _i = n_b - 1 to 0
+                if array.get(s_dir, _i) == 1
+                    rem_setup(_i)
+        purge_bull()
         pending_bear_hi   := lastPH
         pending_bear_hi_b := lastPHi
         pending_bear      := true
