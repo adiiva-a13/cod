@@ -153,6 +153,13 @@ if phase == 1 and tradeOpen
 // ═══════════════════════════════════════════════════════════
 //  PHASE 2: T1 activ → detecteaza inchidere
 // ═══════════════════════════════════════════════════════════
+// Anuleaza ordinul opus pe fiecare bara – previne re-fire la nivelul SL
+if phase == 2
+    if dir == -1
+        strategy.cancel("T1 Long")
+    else if dir == 1
+        strategy.cancel("T1 Short")
+
 if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
     wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_pmtEnabled and i_pmtToken != ""
