@@ -157,6 +157,8 @@ if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
     wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    if not wasLoss
+        strategy.close_all(comment="T1 TP")
     curEntryPx := na
     phase      := wasLoss ? 3 : 9
 
@@ -189,6 +191,8 @@ if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
     wasLoss = strategy.closedtrades > 0 and strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    if not wasLoss
+        strategy.close_all(comment="T2 TP")
     curEntryPx := na
     phase      := wasLoss ? 5 : 9
 
@@ -220,6 +224,7 @@ if phase == 5 and not tradeOpen and not eod
 if phase == 6 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryBar, -1)
     if i_pmtEnabled and i_pmtToken != ""
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
+    strategy.close_all(comment="T3 FINAL")
     curEntryPx := na
     phase      := 9
 
