@@ -17,7 +17,7 @@ i_eodMin     = input.int  (0,       "EOD minut (RO)",              minval=0, max
 i_autoSize   = input.bool  (true,   "Calcul automat din $ risc",                          group="Sizing")
 i_riskUSD    = input.float (100.0,  "Risc $ per trade",           minval=1,   step=10,   group="Sizing")
 i_riskMargin = input.float (30.0,   "Marja rotunjire $ (max +)",  minval=0,   step=5,    group="Sizing")
-i_pointValue = input.float (1.2,    "Valoare punct EUR/lot",      minval=0.01, step=0.1, group="Sizing")
+i_pointValue = input.float (10.0,   "Valoare punct EUR/lot",      minval=0.01, step=0.1, group="Sizing")
 i_qty        = input.int   (1,      "Loturi fixe (AUTO = off)",   minval=1,              group="Sizing")
 i_maxLots    = input.float (2.0,    "Loturi maxime (cap)",         minval=0.01, step=0.01, group="Sizing")
 
