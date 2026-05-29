@@ -55,7 +55,6 @@ var float rngH            = na
 var float rngL            = na
 var int   dir             = 0      // 1=long, -1=short
 var int   entryBar        = na
-var int   phaseChangeBar  = na
 var float curEntryPx      = na
 var float curSL           = na
 var float curTP           = na
@@ -77,7 +76,6 @@ if newDay
     rngL           := na
     dir            := 0
     entryBar       := na
-    phaseChangeBar := na
     curEntryPx     := na
     curSL          := na
     curTP          := na
@@ -166,15 +164,13 @@ if phase == 2 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     if not wasLoss
         strategy.close_all(comment="T1 TP")
-    curEntryPx     := na
-    phaseChangeBar := bar_index   // inregistreaza bara – T2 intra pe bara urmatoare
-    phase          := wasLoss ? 3 : 9
+    curEntryPx := na
+    phase      := wasLoss ? 3 : 9
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 3: T1 SL hit → plaseaza T2 in DIRECTIE OPUSA T1
-//  Delay 1 bara fata de T1 close (hedging mode – evita race condition)
 // ═══════════════════════════════════════════════════════════
-if phase == 3 and not tradeOpen and not eod and bar_index > nz(phaseChangeBar, -1)
+if phase == 3 and not tradeOpen and not eod
     if dir == 1  // T1 Long → T2 Short
         strategy.entry("T2 Short", strategy.short, qty=calcQty, comment="DAX T2 S")
         strategy.exit("T2S X", "T2 Short", stop=t1SSL, limit=t1STP)
@@ -202,15 +198,13 @@ if phase == 4 and not tradeOpen and not na(curEntryPx) and bar_index > nz(entryB
         alert('{"symbol":"' + i_pmtSymbol + '","data":"close","token":"' + i_pmtToken + '"}', alert.freq_once_per_bar_close)
     if not wasLoss
         strategy.close_all(comment="T2 TP")
-    curEntryPx     := na
-    phaseChangeBar := bar_index   // T3 intra pe bara urmatoare
-    phase          := wasLoss ? 5 : 9
+    curEntryPx := na
+    phase      := wasLoss ? 5 : 9
 
 // ═══════════════════════════════════════════════════════════
 //  PHASE 5: T2 SL hit → plaseaza T3 in DIRECTIE OPUSA T2
-//  Delay 1 bara fata de T2 close (hedging mode)
 // ═══════════════════════════════════════════════════════════
-if phase == 5 and not tradeOpen and not eod and bar_index > nz(phaseChangeBar, -1)
+if phase == 5 and not tradeOpen and not eod
     if dir == 1  // T1 Long, T2 Short → T3 Long
         strategy.entry("T3 Long", strategy.long,  qty=calcQty, comment="DAX T3 L")
         strategy.exit("T3L X", "T3 Long",  stop=t1LSL, limit=t1LTP)
