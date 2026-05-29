@@ -2,7 +2,7 @@
 strategy("DAX Range 915 (1min)", overlay=true,
          default_qty_type=strategy.fixed, default_qty_value=1,
          max_bars_back=500, calc_on_every_tick=false,
-         process_orders_on_close=false, max_labels_count=500,
+         process_orders_on_close=true, max_labels_count=500,
          pyramiding=1,
          commission_type=strategy.commission.cash_per_order, commission_value=0)
 
