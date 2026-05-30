@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //|  NAS100_AdiivaBreakout_EA.mq5                                    |
-//|  Adiiva Breakout NAS100 — max 2 trades/zi (M5)                  |
+//|  Adiiva Breakout NAS100 — 1 trade/zi (M5)                       |
 //|  Echivalent cu NAS100_AdiivaBreakout_5min.pine                   |
 //+------------------------------------------------------------------+
 //
@@ -8,7 +8,7 @@
 //  1. R1 = H/L fereastra 9:30-9:45 ET
 //  2. Prima bara care inchide in afara R1  → R2 (H/L bara respective)
 //  3. Bara care inchide in afara R2        → Trade 1 (market, SL opus R2, TP=1R)
-//  4. Daca T1 SL hit → R3 = H/L bara SL  → Trade 2 (aceeasi logica)
+//  4. T1 inchis (TP sau SL)               → sesiune done
 //  5. EOD la 16:00 ET → close all
 //
 #property copyright ""
@@ -44,7 +44,7 @@ input double i_ptVal   = 10.0;  // Valoare punct $/lot (NAS100: 10)
 CTrade g_trade;
 
 // Faze: 0=astept R1, 1=R1 gata astept R2, 2=R2 gata astept entry,
-//       3=trade1 activ, 4=SL1 hit astept entry T2, 5=trade2 activ, 6=done
+//       3=trade activ, 6=done
 int    g_phase   = 0;
 int    g_dir     = 0;    // 1=long, -1=short
 
@@ -183,8 +183,8 @@ void ProcessBarClose() {
         }
     }
 
-    //--- Faza 2 sau 4: bara care inchide in afara range activ → entry
-    if ((g_phase == 2 || g_phase == 4) && entryAllowed && g_actRH > 0) {
+    //--- Faza 2: bara care inchide in afara R2 → entry
+    if (g_phase == 2 && entryAllowed && g_actRH > 0) {
         if (barC > g_actRH) {
             double sl      = Norm(g_actRL - i_slBuf);
             double riskPts = barC - sl;
@@ -196,9 +196,9 @@ void ProcessBarClose() {
                 if (!g_trade.Buy(lots, _Symbol, ask, sl, tp, "NY Long"))
                     PrintFormat("Buy ERR %d: %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
                 else
-                    PrintFormat("T%d Long: lots=%.2f ask=%.2f SL=%.2f TP=%.2f  [ET %02d:%02d]",
-                                g_phase == 2 ? 1 : 2, lots, ask, sl, tp, dt.hour, dt.min);
-                g_phase = (g_phase == 2) ? 3 : 5;
+                    PrintFormat("T1 Long: lots=%.2f ask=%.2f SL=%.2f TP=%.2f  [ET %02d:%02d]",
+                                lots, ask, sl, tp, dt.hour, dt.min);
+                g_phase = 3;
             }
         } else if (barC < g_actRL) {
             double sl      = Norm(g_actRH + i_slBuf);
@@ -211,37 +211,19 @@ void ProcessBarClose() {
                 if (!g_trade.Sell(lots, _Symbol, bid, sl, tp, "NY Short"))
                     PrintFormat("Sell ERR %d: %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
                 else
-                    PrintFormat("T%d Short: lots=%.2f bid=%.2f SL=%.2f TP=%.2f  [ET %02d:%02d]",
-                                g_phase == 2 ? 1 : 2, lots, bid, sl, tp, dt.hour, dt.min);
-                g_phase = (g_phase == 2) ? 3 : 5;
+                    PrintFormat("T1 Short: lots=%.2f bid=%.2f SL=%.2f TP=%.2f  [ET %02d:%02d]",
+                                lots, bid, sl, tp, dt.hour, dt.min);
+                g_phase = 3;
             }
         }
     }
 
-    //--- Faza 3: Trade 1 activ → detecteaza inchidere
+    //--- Faza 3: Trade activ → detecteaza inchidere (TP sau SL → done)
     if (g_phase == 3) {
         string pfx = (g_dir == 1) ? "NY Long" : "NY Short";
         if (FindPos(pfx) == 0) {
-            if (LastDealWasLoss()) {
-                // SL hit → R3 = H/L bara pe care s-a inchis
-                g_actRH = barH;
-                g_actRL = barL;
-                g_phase = 4;
-                PrintFormat("T1 SL hit — R3: H=%.2f L=%.2f  [ET %02d:%02d]",
-                            g_actRH, g_actRL, dt.hour, dt.min);
-            } else {
-                g_phase = 6;
-                Print("T1 TP → sesiune done");
-            }
-        }
-    }
-
-    //--- Faza 5: Trade 2 → sesiune done indiferent de rezultat
-    if (g_phase == 5) {
-        string pfx = (g_dir == 1) ? "NY Long" : "NY Short";
-        if (FindPos(pfx) == 0) {
             g_phase = 6;
-            PrintFormat("T2 inchis → sesiune done  [ET %02d:%02d]", dt.hour, dt.min);
+            PrintFormat("T1 inchis → sesiune done  [ET %02d:%02d]", dt.hour, dt.min);
         }
     }
 }
