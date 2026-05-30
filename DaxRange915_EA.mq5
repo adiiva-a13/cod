@@ -143,24 +143,23 @@ bool LastDealWasLoss() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  HELPERS – range din barele M1 9:15–9:29 RO
+//  HELPERS – range din bara M15 9:15 RO (o singura candela)
 // ═══════════════════════════════════════════════════════════
 bool GetRange(double &rH, double &rL) {
     rH = 0; rL = DBL_MAX;
-    bool found = false;
-    for (int i = 1; i <= 90; i++) {   // bare inchise, index 1 = ultima bara inchisa
-        datetime bt = iTime(_Symbol, PERIOD_M1, i);
+    for (int i = 1; i <= 8; i++) {   // cauta bara M15 care s-a deschis la 9:15 RO
+        datetime bt = iTime(_Symbol, PERIOD_M15, i);
         if (!bt) continue;
         MqlDateTime d;
         TimeToStruct(bt + i_tzOffset * 3600, d);
-        if (d.hour == 9 && d.min >= 15 && d.min <= 29) {
-            rH = MathMax(rH, iHigh(_Symbol, PERIOD_M1, i));
-            rL = MathMin(rL,  iLow(_Symbol, PERIOD_M1, i));
-            found = true;
+        if (d.hour == 9 && d.min == 15) {
+            rH = iHigh(_Symbol, PERIOD_M15, i);
+            rL = iLow(_Symbol, PERIOD_M15, i);
+            return rH > 0 && rL < DBL_MAX / 2.0;
         }
         if (d.hour < 9) break;
     }
-    return found && rH > 0 && rL < DBL_MAX / 2.0;
+    return false;
 }
 
 // ═══════════════════════════════════════════════════════════
