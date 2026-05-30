@@ -147,11 +147,15 @@ bool LastDealWasLoss() {
 // ═══════════════════════════════════════════════════════════
 bool GetRange(double &rH, double &rL) {
     rH = 0; rL = DBL_MAX;
-    for (int i = 1; i <= 8; i++) {   // cauta bara M15 care s-a deschis la 9:15 RO
+    MqlDateTime todayRO;
+    TimeToStruct(TimeCurrent() + i_tzOffset * 3600, todayRO);
+    for (int i = 1; i <= 20; i++) {
         datetime bt = iTime(_Symbol, PERIOD_M15, i);
         if (!bt) continue;
         MqlDateTime d;
         TimeToStruct(bt + i_tzOffset * 3600, d);
+        // bara trebuie sa fie din ziua curenta (exclude barele dinainte de GAP)
+        if (d.day != todayRO.day || d.mon != todayRO.mon) break;
         if (d.hour == 9 && d.min == 15) {
             rH = iHigh(_Symbol, PERIOD_M15, i);
             rL = iLow(_Symbol, PERIOD_M15, i);
