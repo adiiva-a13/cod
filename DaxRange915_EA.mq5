@@ -53,6 +53,7 @@ double g_qty     = 1.0;
 
 bool     g_eodFired  = false;
 datetime g_today     = 0;
+bool     g_diagDone  = false;   // diagnostic print once per day
 
 // Break-Even
 double g_beEntryPx = 0;   // entry price trade curent
@@ -238,6 +239,7 @@ void ResetDay() {
     g_dir      = 0;
     g_rngH     = 0; g_rngL = 0;
     g_eodFired = false;
+    g_diagDone = false;
     g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false; g_curDir = 0;
     Print("Zi noua — stare resetata.");
 }
@@ -278,8 +280,34 @@ void OnTick() {
     //  FAZA 0 → 1 : Plaseaza T1 la 9:30
     // ════════════════════════════════════════════════════
     if (g_phase == 0 && (dt.hour > 9 || (dt.hour == 9 && dt.min >= 30))) {
+
+        // ── DIAGNOSTIC: afiseaza barele M15 si rezultatul GetRange (o data/zi) ──
+        if (!g_diagDone) {
+            g_diagDone = true;
+            MqlDateTime todayDiag;
+            TimeToStruct(TimeCurrent() + i_tzOffset * 3600, todayDiag);
+            PrintFormat("DIAG [%02d:%02d %02d.%02d]: caut bara M15 9:15 ...",
+                        dt.hour, dt.min, dt.day, dt.mon);
+            for (int di = 1; di <= 8; di++) {
+                datetime btt = iTime(_Symbol, PERIOD_M15, di);
+                if (!btt) { PrintFormat("  bar[%d]: null — date M15 lipsa!", di); break; }
+                MqlDateTime dd;
+                TimeToStruct(btt + i_tzOffset * 3600, dd);
+                PrintFormat("  bar[%d]: %04d.%02d.%02d %02d:%02d  (H=%.1f L=%.1f)",
+                            di, dd.year, dd.mon, dd.day, dd.hour, dd.min,
+                            iHigh(_Symbol, PERIOD_M15, di), iLow(_Symbol, PERIOD_M15, di));
+                if (dd.day != todayDiag.day || dd.mon != todayDiag.mon) { Print("  → alta zi, opresc"); break; }
+                if (dd.hour < 9) { Print("  → sub 9h, opresc"); break; }
+            }
+            double diagH, diagL;
+            if (GetRange(diagH, diagL))
+                PrintFormat("DIAG: GetRange OK → H=%.1f  L=%.1f", diagH, diagL);
+            else
+                Print("DIAG: GetRange ESUAT — bara 9:15 negasita in barele de mai sus!");
+        }
+
         double rH, rL;
-        if (!GetRange(rH, rL)) return;      // reincerca pe tick-ul urmator
+        if (!GetRange(rH, rL)) return;
 
         g_rngH  = rH; g_rngL = rL;
         g_t1BS  = Norm(rH + i_offset);
