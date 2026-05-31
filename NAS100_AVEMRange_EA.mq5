@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
 //|  NAS100_AVEMRange_EA.mq5                                         |
-//|  AVEM Range NAS100 — 1 trade/zi (M1)                            |
-//|  Echivalent cu AVEM_RangeBreakout.pine                           |
+//|  AVEM Range NAS100 — 1 trade/zi (M5)                            |
+//|  Echivalent cu AVEM_RangeBreakout_5min.pine                      |
 //+------------------------------------------------------------------+
 //
 //  LOGICA:
 //  1. Range + Volume Profile (VAH/POC/VAL) din intervalul 9:30-9:45 ET
-//  2. Prima bara M1 care inchide AFARA range → Breakout detectat
-//  3. Prima bara M1 care inchide INAPOI in range → Entry (Re-Test)
+//  2. Prima bara M5 care inchide AFARA range → Breakout detectat
+//  3. Prima bara M5 care inchide INAPOI in range → Entry (Re-Test)
 //     - Breakout sus  → Long  (SL sub VAL / waitLow)
 //     - Breakout jos  → Short (SL deasupra VAH / waitHigh)
 //  4. TP = 1R, 1 trade/zi, EOD 16:00 ET
@@ -229,11 +229,11 @@ void ResetDay() {
 //  PROCESEAZA LA INCHIDEREA FIECAREI BARE M1
 // ═══════════════════════════════════════════════════════════
 void ProcessBarClose() {
-    double   barH = iHigh (_Symbol, PERIOD_M1, 1);
-    double   barL = iLow  (_Symbol, PERIOD_M1, 1);
-    double   barC = iClose(_Symbol, PERIOD_M1, 1);
-    long     barV = iVolume(_Symbol, PERIOD_M1, 1);
-    datetime barT = iTime (_Symbol, PERIOD_M1, 1);
+    double   barH = iHigh (_Symbol, PERIOD_M5, 1);
+    double   barL = iLow  (_Symbol, PERIOD_M5, 1);
+    double   barC = iClose(_Symbol, PERIOD_M5, 1);
+    long     barV = iVolume(_Symbol, PERIOD_M5, 1);
+    datetime barT = iTime (_Symbol, PERIOD_M5, 1);
 
     MqlDateTime dt;
     TimeToStruct(barT + i_etOff * 3600, dt);
@@ -359,8 +359,8 @@ void OnTick() {
     }
     if (eod) return;
 
-    // proceseaza la fiecare bara M1 noua
-    datetime currentBar = iTime(_Symbol, PERIOD_M1, 0);
+    // proceseaza la fiecare bara M5 noua
+    datetime currentBar = iTime(_Symbol, PERIOD_M5, 0);
     if (currentBar == g_lastBar || currentBar == 0) return;
     g_lastBar = currentBar;
 
