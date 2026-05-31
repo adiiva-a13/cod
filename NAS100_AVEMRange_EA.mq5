@@ -193,42 +193,16 @@ void CalcVP() {
 //  SL CALCULATION
 // ═══════════════════════════════════════════════════════════
 double SlLong(double ref) {
-    double sl;
-    // Prioritate: waitLow < VAL < RL
-    if (g_waitLow > 0)
-        sl = g_waitLow - i_slBuf;
-    else if (g_vpOk)
-        sl = g_val - i_slBuf;
-    else
-        sl = g_rL - i_slBuf;
-
-    // Garanteaza SL <= VAL
-    if (g_vpOk) sl = MathMin(sl, g_val - i_slBuf);
-
-    // Garda: SL trebuie sa fie sub ref
+    double sl = (g_waitLow > 0) ? g_waitLow - i_slBuf : g_rL - i_slBuf;
     if (sl >= ref) sl = g_rL - i_slBuf;
     if (sl >= ref) sl = ref - 10.0 * i_tickSz;
-
     return Norm(sl);
 }
 
 double SlShort(double ref) {
-    double sl;
-    // Prioritate: waitHigh > VAH > RH
-    if (g_waitHigh > 0)
-        sl = g_waitHigh + i_slBuf;
-    else if (g_vpOk)
-        sl = g_vah + i_slBuf;
-    else
-        sl = g_rH + i_slBuf;
-
-    // Garanteaza SL >= VAH
-    if (g_vpOk) sl = MathMax(sl, g_vah + i_slBuf);
-
-    // Garda: SL trebuie sa fie deasupra ref
+    double sl = (g_waitHigh > 0) ? g_waitHigh + i_slBuf : g_rH + i_slBuf;
     if (sl <= ref) sl = g_rH + i_slBuf;
     if (sl <= ref) sl = ref + 10.0 * i_tickSz;
-
     return Norm(sl);
 }
 
@@ -311,14 +285,14 @@ void ProcessBarClose() {
     }
 
     // ── Dynamic SL tracking (in asteptarea retestului) ────
-    // Long: cel mai mic low sub VAL (indiferent daca e sub RL)
+    // Long: bara cu low in interiorul range-ului, SUB VAL (fara wick sub RL)
     if (g_state == 1 && g_vpOk && tradeActive) {
-        if (barL < g_val)
+        if (barL < g_val && barL >= g_rL)
             g_waitLow = (g_waitLow == 0) ? barL : MathMin(g_waitLow, barL);
     }
-    // Short: cel mai mare high peste VAH (inclusiv wicks peste RH)
+    // Short: bara cu high in interiorul range-ului, PESTE VAH (fara wick peste RH)
     if (g_state == 2 && g_vpOk && tradeActive) {
-        if (barH > g_vah)
+        if (barH > g_vah && barH <= g_rH)
             g_waitHigh = (g_waitHigh == 0) ? barH : MathMax(g_waitHigh, barH);
     }
 
