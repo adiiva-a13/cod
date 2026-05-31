@@ -193,14 +193,14 @@ void CalcVP() {
 //  SL CALCULATION
 // ═══════════════════════════════════════════════════════════
 double SlLong(double ref) {
-    double sl = (g_waitLow > 0) ? g_waitLow - i_slBuf : g_rL - i_slBuf;
+    double sl = (g_waitLow > 0) ? g_waitLow - i_slBuf : g_val - i_slBuf;
     if (sl >= ref) sl = g_rL - i_slBuf;
     if (sl >= ref) sl = ref - 10.0 * i_tickSz;
     return Norm(sl);
 }
 
 double SlShort(double ref) {
-    double sl = (g_waitHigh > 0) ? g_waitHigh + i_slBuf : g_rH + i_slBuf;
+    double sl = (g_waitHigh > 0) ? g_waitHigh + i_slBuf : g_vah + i_slBuf;
     if (sl <= ref) sl = g_rH + i_slBuf;
     if (sl <= ref) sl = ref + 10.0 * i_tickSz;
     return Norm(sl);
