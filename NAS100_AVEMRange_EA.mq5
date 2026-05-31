@@ -284,16 +284,14 @@ void ProcessBarClose() {
         }
     }
 
-    // ── Dynamic SL tracking (in asteptarea retestului) ────
-    // Long: bara cu low in interiorul range-ului, SUB VAL (fara wick sub RL)
-    if (g_state == 1 && g_vpOk && tradeActive) {
-        if (barL < g_val && barL >= g_rL)
-            g_waitLow = (g_waitLow == 0) ? barL : MathMin(g_waitLow, barL);
-    }
-    // Short: bara cu high in interiorul range-ului, PESTE VAH (fara wick peste RH)
-    if (g_state == 2 && g_vpOk && tradeActive) {
+    // ── Dynamic SL tracking — din momentul inchiderii range-ului ────
+    // Orice bara dupa range cu high in (VAH, RH] → referinta SL Short
+    // Orice bara dupa range cu low  in [RL, VAL) → referinta SL Long
+    if (g_rangeBuilt && g_vpOk && tradeActive) {
         if (barH > g_vah && barH <= g_rH)
             g_waitHigh = (g_waitHigh == 0) ? barH : MathMax(g_waitHigh, barH);
+        if (barL < g_val && barL >= g_rL)
+            g_waitLow = (g_waitLow == 0) ? barL : MathMin(g_waitLow, barL);
     }
 
     // ── Retest + Entry ────────────────────────────────────
