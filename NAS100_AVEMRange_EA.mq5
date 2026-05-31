@@ -311,12 +311,14 @@ void ProcessBarClose() {
     }
 
     // ── Dynamic SL tracking (in asteptarea retestului) ────
+    // Long: cel mai mic low sub VAL (indiferent daca e sub RL)
     if (g_state == 1 && g_vpOk && tradeActive) {
-        if (barL < g_val && barL > g_rL)
+        if (barL < g_val)
             g_waitLow = (g_waitLow == 0) ? barL : MathMin(g_waitLow, barL);
     }
+    // Short: cel mai mare high peste VAH (inclusiv wicks peste RH)
     if (g_state == 2 && g_vpOk && tradeActive) {
-        if (barH > g_vah && barH < g_rH)
+        if (barH > g_vah)
             g_waitHigh = (g_waitHigh == 0) ? barH : MathMax(g_waitHigh, barH);
     }
 
