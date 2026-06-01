@@ -243,7 +243,7 @@ void ProcessBarClose() {
     int eeMins  = i_eeH * 60 + i_eeM;
     int eodMins = i_eodH * 60 + i_eodM;
 
-    bool inRange      = etMins >= rsMins && etMins < reMins;
+    bool inRange      = etMins >= rsMins && etMins <= reMins;
     bool tradeActive  = etMins > reMins  && etMins < eodMins;
     bool entryAllowed = tradeActive && etMins < eeMins;
 
