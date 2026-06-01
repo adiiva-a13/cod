@@ -249,8 +249,8 @@ void ProcessBarClose() {
 
     // ── Colectare bare in range pentru VP ─────────────────
     if (inRange) {
-        g_rH = (g_rH == 0) ? barH : MathMax(g_rH, barH);
-        g_rL = (g_rL == 0) ? barL : MathMin(g_rL, barL);
+        g_rH = (g_rH == 0) ? barC : MathMax(g_rH, barC);   // range definit prin CLOSE, nu wick
+        g_rL = (g_rL == 0) ? barC : MathMin(g_rL, barC);
         g_vpN++;
         ArrayResize(g_vpH, g_vpN);
         ArrayResize(g_vpL, g_vpN);
