@@ -141,14 +141,15 @@ void CancelAll() {
 // ═══════════════════════════════════════════════════════════
 //  HELPERS – detectie loss din ultimul deal inchis al zilei
 // ═══════════════════════════════════════════════════════════
-bool LastDealWasLoss() {
+bool LastDealWasLoss(const string pfx) {
     HistorySelect(g_today, TimeCurrent() + 1);
     for (int i = HistoryDealsTotal()-1; i >= 0; i--) {
         ulong d = HistoryDealGetTicket(i);
         if (HistoryDealGetString(d, DEAL_SYMBOL) != _Symbol) continue;
         if ((int)HistoryDealGetInteger(d, DEAL_MAGIC) != MAGIC) continue;
-        if (HistoryDealGetInteger(d, DEAL_ENTRY) == DEAL_ENTRY_OUT)
-            return HistoryDealGetDouble(d, DEAL_PROFIT) < 0.0;
+        if (HistoryDealGetInteger(d, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
+        if (StringFind(HistoryDealGetString(d, DEAL_COMMENT), pfx) != 0) continue;
+        return HistoryDealGetDouble(d, DEAL_PROFIT) < 0.0;
     }
     return false;
 }
@@ -361,7 +362,7 @@ void OnTick() {
         if (FindPos(pfx) != 0) return;   // inca deschis
 
         // T1 s-a inchis
-        if (!LastDealWasLoss()) {
+        if (!LastDealWasLoss("T1")) {
             g_phase = 9;
             Print("T1 TP → sesiune done");
         } else {
@@ -391,7 +392,7 @@ void OnTick() {
         string pfx = (g_dir == 1) ? "T2S" : "T2L";
         if (FindPos(pfx) != 0) return;   // inca deschis
 
-        if (!LastDealWasLoss()) {
+        if (!LastDealWasLoss("T2")) {
             g_phase = 9;
             Print("T2 TP → sesiune done");
         } else {
