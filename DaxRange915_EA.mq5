@@ -25,9 +25,6 @@ input double i_pointValue = 10.0;  // Valoare punct EUR/lot (GER40: 10)
 input double i_qtyFixed   = 1.0;   // Loturi fixe (AUTO=off)
 input double i_maxLots    = 2.0;   // Loturi maxime (cap)
 
-input group "═══ Break-Even ═══"
-input bool   i_beEnabled  = true;  // Activa Break-Even
-input double i_beR        = 2.5;   // BE la (R)
 
 // ═══════════════════════════════════════════════════════════
 //  CONSTANTE & STARE GLOBALA
@@ -56,12 +53,6 @@ double g_qty     = 1.0;
 bool     g_eodFired  = false;
 datetime g_today     = 0;
 bool     g_diagDone  = false;   // diagnostic print once per day
-
-// Break-Even
-double g_beEntryPx = 0;   // entry price trade curent
-double g_beRisk    = 0;   // risc initial (SL distance)
-bool   g_beMoved   = false;
-int    g_curDir    = 0;   // directia trade-ului curent (1=long, -1=short)
 
 // ═══════════════════════════════════════════════════════════
 //  INIT
@@ -179,57 +170,6 @@ bool GetRange(double &rH, double &rL) {
     return false;
 }
 
-// ═══════════════════════════════════════════════════════════
-//  BREAK-EVEN
-// ═══════════════════════════════════════════════════════════
-void SetupBE(const string pfx) {
-    ulong t = FindPos(pfx);
-    if (!t) return;
-    if (!PositionSelectByTicket(t)) return;
-    g_beEntryPx = PositionGetDouble(POSITION_PRICE_OPEN);
-    double sl   = PositionGetDouble(POSITION_SL);
-    int    type = (int)PositionGetInteger(POSITION_TYPE);
-    g_curDir    = (type == POSITION_TYPE_BUY) ? 1 : -1;
-    g_beRisk    = (g_curDir == 1) ? g_beEntryPx - sl : sl - g_beEntryPx;
-    g_beMoved   = false;
-}
-
-void CheckBE() {
-    if (!i_beEnabled) return;
-    if (g_phase != 2 && g_phase != 4 && g_phase != 6) return;
-
-    string pfx = "";
-    if      (g_phase == 2) pfx = (g_dir == 1) ? "T1L" : "T1S";
-    else if (g_phase == 4) pfx = (g_dir == 1) ? "T2S" : "T2L";
-    else if (g_phase == 6) pfx = (g_dir == 1) ? "T3L" : "T3S";
-
-    if (g_beEntryPx == 0) SetupBE(pfx);   // prima initializare dupa entry
-    if (g_beMoved || g_beRisk <= 0 || g_beEntryPx == 0) return;
-
-    ulong ticket = FindPos(pfx);
-    if (!ticket) return;
-
-    double beLevel = (g_curDir == 1) ? g_beEntryPx + g_beRisk * i_beR
-                                     : g_beEntryPx - g_beRisk * i_beR;
-    double curPx   = (g_curDir == 1) ? SymbolInfoDouble(_Symbol, SYMBOL_BID)
-                                     : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-
-    if ((g_curDir == 1 && curPx < beLevel) || (g_curDir == -1 && curPx > beLevel)) return;
-
-    if (!PositionSelectByTicket(ticket)) return;
-    double curSL = PositionGetDouble(POSITION_SL);
-    double newSL = Norm(g_beEntryPx);
-
-    if ((g_curDir == 1 && newSL <= curSL) || (g_curDir == -1 && newSL >= curSL)) return;
-
-    if (g_trade.PositionModify(ticket, newSL, PositionGetDouble(POSITION_TP))) {
-        g_beMoved = true;
-        PrintFormat("BE: SL mutat la entry %.2f  [target=%.2f  risk=%.2f  %.1fR]",
-                    newSL, beLevel, g_beRisk, i_beR);
-    } else {
-        PrintFormat("BE ERR: %d %s", g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
-    }
-}
 
 // ═══════════════════════════════════════════════════════════
 //  RESET ZI NOUA
@@ -242,7 +182,6 @@ void ResetDay() {
     g_rngH     = 0; g_rngL = 0;
     g_eodFired = false;
     g_diagDone = false;
-    g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false; g_curDir = 0;
     g_t2Confirmed = false; g_t3Confirmed = false;
     Print("Zi noua — stare resetata.");
 }
@@ -276,8 +215,6 @@ void OnTick() {
         return;
     }
     if (g_phase == 9 || eod) return;
-
-    CheckBE();
 
     // ════════════════════════════════════════════════════
     //  FAZA 0 → 1 : Plaseaza T1 la 9:30
@@ -344,13 +281,11 @@ void OnTick() {
             g_dir = 1;
             CancelAll();   // anuleaza T1S pending
             g_phase = 2;
-            g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false;
             Print("T1 Long umplut — faza 2");
         } else if (FindPos("T1S") != 0) {
             g_dir = -1;
             CancelAll();   // anuleaza T1L pending
             g_phase = 2;
-            g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false;
             Print("T1 Short umplut — faza 2");
         }
         return;
@@ -383,7 +318,6 @@ void OnTick() {
                                   g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
             g_t2Confirmed = false;
             g_phase = 4;
-            g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false;
         }
         return;
     }
@@ -415,7 +349,6 @@ void OnTick() {
                                   g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
             g_t3Confirmed = false;
             g_phase = 6;
-            g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false;
         }
         return;
     }
