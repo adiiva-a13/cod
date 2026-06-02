@@ -40,6 +40,8 @@ CTrade g_trade;
 //       4=T2 activ, 6=T3 activ, 9=done
 int    g_phase   = 0;
 int    g_dir     = 0;    // 1=long, -1=short
+bool   g_t2Confirmed = false;  // T2 confirmat deschis (anti race-condition)
+bool   g_t3Confirmed = false;  // T3 confirmat deschis (anti race-condition)
 
 double g_rngH    = 0;
 double g_rngL    = 0;
@@ -141,14 +143,13 @@ void CancelAll() {
 // ═══════════════════════════════════════════════════════════
 //  HELPERS – detectie loss din ultimul deal inchis al zilei
 // ═══════════════════════════════════════════════════════════
-bool LastDealWasLoss(const string pfx) {
+bool LastDealWasLoss() {
     HistorySelect(g_today, TimeCurrent() + 1);
     for (int i = HistoryDealsTotal()-1; i >= 0; i--) {
         ulong d = HistoryDealGetTicket(i);
         if (HistoryDealGetString(d, DEAL_SYMBOL) != _Symbol) continue;
         if ((int)HistoryDealGetInteger(d, DEAL_MAGIC) != MAGIC) continue;
         if (HistoryDealGetInteger(d, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
-        if (StringFind(HistoryDealGetString(d, DEAL_COMMENT), pfx) != 0) continue;
         return HistoryDealGetInteger(d, DEAL_REASON) == DEAL_REASON_SL;
     }
     return false;
@@ -242,6 +243,7 @@ void ResetDay() {
     g_eodFired = false;
     g_diagDone = false;
     g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false; g_curDir = 0;
+    g_t2Confirmed = false; g_t3Confirmed = false;
     Print("Zi noua — stare resetata.");
 }
 
@@ -362,7 +364,7 @@ void OnTick() {
         if (FindPos(pfx) != 0) return;   // inca deschis
 
         // T1 s-a inchis
-        if (!LastDealWasLoss("T1")) {
+        if (!LastDealWasLoss()) {
             g_phase = 9;
             Print("T1 TP → sesiune done");
         } else {
@@ -379,6 +381,7 @@ void OnTick() {
             }
             if (!ok) PrintFormat("T2 ERR: %d %s",
                                   g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
+            g_t2Confirmed = false;
             g_phase = 4;
             g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false;
         }
@@ -390,9 +393,10 @@ void OnTick() {
     // ════════════════════════════════════════════════════
     if (g_phase == 4) {
         string pfx = (g_dir == 1) ? "T2S" : "T2L";
-        if (FindPos(pfx) != 0) return;   // inca deschis
+        if (FindPos(pfx) != 0) { g_t2Confirmed = true; return; }   // inca deschis
+        if (!g_t2Confirmed) return;   // race-condition: T2 nu e inca confirmat deschis
 
-        if (!LastDealWasLoss("T2")) {
+        if (!LastDealWasLoss()) {
             g_phase = 9;
             Print("T2 TP → sesiune done");
         } else {
@@ -409,6 +413,7 @@ void OnTick() {
             }
             if (!ok) PrintFormat("T3 ERR: %d %s",
                                   g_trade.ResultRetcode(), g_trade.ResultRetcodeDescription());
+            g_t3Confirmed = false;
             g_phase = 6;
             g_beEntryPx = 0; g_beRisk = 0; g_beMoved = false;
         }
@@ -420,7 +425,8 @@ void OnTick() {
     // ════════════════════════════════════════════════════
     if (g_phase == 6) {
         string pfx = (g_dir == 1) ? "T3L" : "T3S";
-        if (FindPos(pfx) != 0) return;   // inca deschis
+        if (FindPos(pfx) != 0) { g_t3Confirmed = true; return; }   // inca deschis
+        if (!g_t3Confirmed) return;   // race-condition: T3 nu e inca confirmat deschis
         g_phase = 9;
         Print("T3 inchis → sesiune done");
     }
