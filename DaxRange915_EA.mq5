@@ -149,7 +149,7 @@ bool LastDealWasLoss(const string pfx) {
         if ((int)HistoryDealGetInteger(d, DEAL_MAGIC) != MAGIC) continue;
         if (HistoryDealGetInteger(d, DEAL_ENTRY) != DEAL_ENTRY_OUT) continue;
         if (StringFind(HistoryDealGetString(d, DEAL_COMMENT), pfx) != 0) continue;
-        return HistoryDealGetDouble(d, DEAL_PROFIT) < 0.0;
+        return HistoryDealGetInteger(d, DEAL_REASON) == DEAL_REASON_SL;
     }
     return false;
 }
